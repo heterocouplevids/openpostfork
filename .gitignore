@@ -76,3 +76,4 @@ devenv.lock
 
 .pre-commit-config.yaml
 .codex
+TODO.md

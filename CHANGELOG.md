@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-05-09
+
+### Added
+- Documentation page explaining why to self-host OpenPost, plus clearer provider/platform limitations coverage.
+- Capacitor app asset generation and refreshed Android launcher/splash assets derived from the project brand icon.
+- PWA manifest configuration for the frontend build.
+
+### Changed
+- Refreshed launch messaging across the README and docs site around the self-hosted Buffer/Hootsuite positioning, target users, and current product limitations.
+- Android release builds now use the consolidated `build:capacitor` flow so frontend build, Capacitor sync, and mobile asset generation stay in one path.
+- Asset sync now prepares the frontend logo source used by Capacitor asset generation.
+
+### Fixed
+- Stopped tracking the repository root `TODO.md` while ignoring the local file, so personal launch notes can remain in the working directory without showing up in git.
+- Corrected Bluesky token expiry handling by deriving expiry times from the JWT on login and refresh, which keeps automatic refresh jobs scheduled correctly instead of relying on a hardcoded login window or stale timestamps.
+
 ## [1.0.3] - 2026-05-04
 
 ### Fixed
