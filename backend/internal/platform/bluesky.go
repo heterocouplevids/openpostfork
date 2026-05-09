@@ -3,9 +3,11 @@ package platform
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -24,7 +26,7 @@ func (b *BlueskyAdapter) GenerateAuthURL(_ string) (string, map[string]string) {
 	return "", nil
 }
 
-func (b *BlueskyAdapter) CreateSession(ctx context.Context, handle, appPassword string) (did string, accessToken string, refreshToken string, err error) {
+func (b *BlueskyAdapter) CreateSession(ctx context.Context, handle, appPassword string) (did string, accessToken string, refreshToken string, expiresIn int, err error) {
 	payload := map[string]string{
 		"identifier": handle,
 		"password":   appPassword,
@@ -32,14 +34,14 @@ func (b *BlueskyAdapter) CreateSession(ctx context.Context, handle, appPassword 
 
 	body, err := jsonMarshal(payload)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", 0, err
 	}
 
 	respBody, err := DoRequest(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.server.createSession", bytes.NewReader(body), map[string]string{
 		"Content-Type": "application/json",
 	})
 	if err != nil {
-		return "", "", "", fmt.Errorf("bluesky create session: %w", err)
+		return "", "", "", 0, fmt.Errorf("bluesky create session: %w", err)
 	}
 
 	var session struct {
@@ -49,10 +51,15 @@ func (b *BlueskyAdapter) CreateSession(ctx context.Context, handle, appPassword 
 		RefreshJwt string `json:"refreshJwt"`
 	}
 	if err := json.Unmarshal(respBody, &session); err != nil {
-		return "", "", "", fmt.Errorf("decoding bluesky session: %w", err)
+		return "", "", "", 0, fmt.Errorf("decoding bluesky session: %w", err)
 	}
 
-	return session.Did, session.AccessJwt, session.RefreshJwt, nil
+	expiresIn, err = blueskyJWTExpiresIn(session.AccessJwt)
+	if err != nil {
+		return "", "", "", 0, err
+	}
+
+	return session.Did, session.AccessJwt, session.RefreshJwt, expiresIn, nil
 }
 
 func (b *BlueskyAdapter) ExchangeCode(_ context.Context, _ string, _ map[string]string) (*TokenResult, error) {
@@ -86,10 +93,45 @@ func (b *BlueskyAdapter) RefreshToken(ctx context.Context, input RefreshTokenInp
 		return nil, fmt.Errorf("decoding bluesky refresh: %w", err)
 	}
 
+	expiresIn, err := blueskyJWTExpiresIn(session.AccessJwt)
+	if err != nil {
+		return nil, err
+	}
+
 	return &TokenResult{
 		AccessToken:  session.AccessJwt,
 		RefreshToken: session.RefreshJwt,
+		ExpiresIn:    expiresIn,
 	}, nil
+}
+
+func blueskyJWTExpiresIn(token string) (int, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return 0, fmt.Errorf("invalid bluesky jwt format")
+	}
+
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return 0, fmt.Errorf("decode bluesky jwt payload: %w", err)
+	}
+
+	var payload struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return 0, fmt.Errorf("decode bluesky jwt claims: %w", err)
+	}
+	if payload.Exp == 0 {
+		return 0, fmt.Errorf("bluesky jwt missing exp claim")
+	}
+
+	expiresIn := int(time.Until(time.Unix(payload.Exp, 0).UTC()).Seconds())
+	if expiresIn <= 0 {
+		return 0, fmt.Errorf("bluesky jwt already expired")
+	}
+
+	return expiresIn, nil
 }
 
 func (b *BlueskyAdapter) GetProfile(ctx context.Context, accessToken string) (*UserProfile, error) {

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -476,7 +475,7 @@ func (h *OAuthHandler) BlueskyLogin(api huma.API) {
 			return nil, huma.Error500InternalServerError("bluesky adapter type mismatch")
 		}
 
-		did, accessToken, refreshToken, err := blueskyAdapter.CreateSession(ctx, input.Body.Handle, input.Body.AppPassword)
+		did, accessToken, refreshToken, expiresIn, err := blueskyAdapter.CreateSession(ctx, input.Body.Handle, input.Body.AppPassword)
 		if err != nil {
 			return nil, huma.Error500InternalServerError(fmt.Sprintf("bluesky login failed: %s", err.Error()))
 		}
@@ -485,7 +484,7 @@ func (h *OAuthHandler) BlueskyLogin(api huma.API) {
 		tokenResp := &platform.TokenResult{
 			AccessToken:  accessToken,
 			RefreshToken: refreshToken,
-			ExpiresIn:    int(2 * time.Hour / time.Second),
+			ExpiresIn:    expiresIn,
 			Extra:        nil,
 		}
 

@@ -202,3 +202,55 @@ func TestForceRefreshAccessTokenUsesMastodonInstanceURLProviderKey(t *testing.T)
 	require.Equal(t, "new-mastodon-access-token", token)
 	require.Equal(t, "old-mastodon-refresh-token", adapter.gotInput.RefreshToken)
 }
+
+func TestForceRefreshAccessTokenUpdatesExpiryFromBlueskyRefresh(t *testing.T) {
+	t.Parallel()
+
+	db := createTestDB(t)
+	encryptor := crypto.NewTokenEncryptor("test-secret-key")
+	manager := NewTokenManager(db, encryptor)
+	adapter := &stubAdapter{
+		capability: platform.RefreshCapability{
+			Supported:        true,
+			CredentialSource: platform.RefreshCredentialRefreshToken,
+		},
+		tokenResp: &platform.TokenResult{
+			AccessToken:  "new-bluesky-access-token",
+			RefreshToken: "new-bluesky-refresh-token",
+			ExpiresIn:    7200,
+		},
+	}
+	manager.SetProvider("bluesky", adapter)
+
+	account := &models.SocialAccount{
+		ID:             "acc-bluesky",
+		Platform:       "bluesky",
+		AccountID:      "did:plc:test",
+		WorkspaceID:    "ws-1",
+		IsActive:       true,
+		TokenExpiresAt: time.Now().UTC().Add(1 * time.Minute),
+	}
+	insertAccount(t, db, encryptor, account, "old-bluesky-access-token", "old-bluesky-refresh-token")
+
+	beforeRefresh := time.Now().UTC()
+	token, err := manager.ForceRefreshAccessToken(context.Background(), account.ID)
+	require.NoError(t, err)
+	require.Equal(t, "new-bluesky-access-token", token)
+	require.Equal(t, "old-bluesky-refresh-token", adapter.gotInput.RefreshToken)
+
+	stored := new(models.SocialAccount)
+	err = db.NewSelect().Model(stored).Where("id = ?", account.ID).Scan(context.Background())
+	require.NoError(t, err)
+	require.WithinDuration(t, beforeRefresh.Add(2*time.Hour), stored.TokenExpiresAt, 10*time.Second)
+
+	var pendingJob models.Job
+	err = db.NewSelect().
+		Model(&pendingJob).
+		Where("type = ?", "refresh_token").
+		Where("status = ?", "pending").
+		Order("run_at DESC").
+		Limit(1).
+		Scan(context.Background())
+	require.NoError(t, err)
+	require.WithinDuration(t, stored.TokenExpiresAt.Add(-refreshLeadTime), pendingJob.RunAt, 10*time.Second)
+}
