@@ -4,9 +4,11 @@
 	"version": "1.0.3",
 	"type": "module",
 	"scripts": {
-		"dev": "node ../scripts/sync-assets.mjs && vite dev",
-		"build": "node ../scripts/sync-assets.mjs && vite build",
-		"build:capacitor": "node ../scripts/sync-assets.mjs && VITE_APP_MODE=capacitor vite build && npx cap sync android",
+		"sync:assets": "node ../scripts/sync-assets.mjs",
+		"generate:app-assets:android": "bun run sync:assets && npx @capacitor/assets generate --assetPath assets --android --iconBackgroundColor '#f97316' --splashBackgroundColor '#0f0f10'",
+		"dev": "bun run sync:assets && vite dev",
+		"build": "bun run sync:assets && vite build",
+		"build:capacitor": "bun run sync:assets && VITE_APP_MODE=capacitor vite build && npx cap sync android && bun run generate:app-assets:android",
 		"preview": "vite preview",
 		"generate:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
 		"generate:artifacts": "bun run generate:i18n && bun run generate:types",
@@ -52,6 +54,8 @@
 		"typescript-eslint": "^8.54.0",
 		"vaul-svelte": "^1.0.0-next.7",
 		"vite": "^7.3.1",
+		"vite-plugin-pwa": "^1.1.0",
+		"@capacitor/assets": "^3.0.5",
 		"vitest": "^4.1.0",
 		"vitest-browser-svelte": "^2.0.2"
 	},

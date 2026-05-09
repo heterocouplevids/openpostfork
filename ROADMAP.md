@@ -6,6 +6,13 @@ OpenPost is a lightweight, self-hosted social media scheduler. This roadmap outl
 
 ---
 
+## ✅ Completed
+
+- **2FA (TOTP)**: Account-level two-factor authentication with time-based one-time passwords.
+- **Passkeys**: WebAuthn-based passwordless login support.
+
+---
+
 ## 🚀 Upcoming Features
 
 1.  **Per-Platform Media Overrides (Frontend)**  

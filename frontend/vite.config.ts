@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
 	define: {
@@ -11,7 +12,28 @@ export default defineConfig({
 	plugins: [
 		tailwindcss(),
 		sveltekit(),
-		paraglideVitePlugin({ project: './project.inlang', outdir: './src/lib/paraglide' })
+		paraglideVitePlugin({ project: './project.inlang', outdir: './src/lib/paraglide' }),
+		VitePWA({
+			registerType: 'autoUpdate',
+			injectRegister: 'auto',
+			manifest: {
+				name: 'OpenPost',
+				short_name: 'OpenPost',
+				description: 'Schedule and publish content across multiple social platforms.',
+				theme_color: '#f97316',
+				background_color: '#0f0f10',
+				display: 'standalone',
+				start_url: '/',
+				icons: [
+					{
+						src: '/assets/brand/icon.svg',
+						sizes: 'any',
+						type: 'image/svg+xml',
+						purpose: 'any maskable'
+					}
+				]
+			}
+		})
 	],
 	server: {
 		proxy: {

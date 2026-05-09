@@ -48,17 +48,18 @@ frontend/
 
 ## Scripts
 
-| Command                   | Description                                                 |
-| ------------------------- | ----------------------------------------------------------- |
-| `bun run dev`             | Start dev server with hot reload                            |
-| `bun run build`           | Production build (static output for embedding in Go binary) |
-| `bun run build:capacitor` | Build for Android mobile app                                |
-| `bun run preview`         | Preview production build locally                            |
-| `bun run check`           | TypeScript type checking                                    |
-| `bun run lint`            | Prettier + ESLint check                                     |
-| `bun run format`          | Auto-format code with Prettier                              |
-| `bun run test`            | Run Vitest unit tests                                       |
-| `bun run generate:types`  | Generate TypeScript types from OpenAPI spec                 |
+| Command                               | Description                                                                |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| `bun run dev`                         | Start dev server with hot reload                                           |
+| `bun run build`                       | Production build (includes automatic asset sync + PWA manifest generation) |
+| `bun run build:capacitor`             | Build for Android + sync native project + generate Android app icons       |
+| `bun run generate:app-assets:android` | Generate Android launcher/splash assets from OpenPost logo                 |
+| `bun run preview`                     | Preview production build locally                                           |
+| `bun run check`                       | TypeScript type checking                                                   |
+| `bun run lint`                        | Prettier + ESLint check                                                    |
+| `bun run format`                      | Auto-format code with Prettier                                             |
+| `bun run test`                        | Run Vitest unit tests                                                      |
+| `bun run generate:types`              | Generate TypeScript types from OpenAPI spec                                |
 
 ## API Client
 
@@ -89,6 +90,8 @@ bun run build:capacitor
 cd android
 ./gradlew assembleDebug
 ```
+
+Branding assets are generated automatically from `assets/brand/icon.svg` during build, so both PWA icons and Android launcher icons stay aligned with the OpenPost logo.
 
 ## Development
 

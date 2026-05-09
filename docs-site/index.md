@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: OpenPost
-  text: Self-hosted social media scheduling.
-  tagline: Post to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server. One binary or container. Your data stays on your machine.
+  text: Self-hosted Buffer/Hootsuite alternative.
+  tagline: Schedule posts to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server. One binary or container. No Redis, no Postgres, no external queue.
   image:
     src: /assets/brand/logo-docs.svg
     alt: OpenPost logo
@@ -17,12 +17,9 @@ hero:
       link: https://github.com/rodrgds/openpost
 
 features:
-  - icon: 🌐
-    title: One post, many networks
-    details: Publish from one place to X, Mastodon, Bluesky, Threads, and LinkedIn.
   - icon: ✍️
-    title: Account-specific variants
-    details: Start from one canonical post, then tailor copy per connected destination account when needed.
+    title: Typefully-like composer
+    details: Write once, customize per platform. Tailor copy for each connected account when needed.
   - icon: 🧵
     title: Thread composer
     details: Build multi-post threads and publish them in sequence instead of stitching replies together manually.
@@ -35,6 +32,9 @@ features:
   - icon: 🗂️
     title: Workspaces for separate brands
     details: Keep accounts, media, prompts, and schedules organized per workspace.
+  - icon: 🌐
+    title: One post, many networks
+    details: Publish from one place to X, Mastodon, Bluesky, Threads, and LinkedIn.
   - icon: 🔐
     title: Your server, your credentials
     details: Keep content, schedules, and connected account tokens under your own control.
@@ -50,6 +50,20 @@ features:
     style="width: 100%; max-width: 1200px; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
   >
 </p>
+
+<div style="margin-top: 24px;">
+  <iframe
+    width="100%"
+    max-width="1200px"
+    height="500"
+    src="https://www.youtube.com/embed/dqTTojTija8"
+    title="OpenPost Demo"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen
+    style="border-radius: 16px; border: 1px solid var(--vp-c-divider);"
+  ></iframe>
+</div>
 
 <div
   style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start;"

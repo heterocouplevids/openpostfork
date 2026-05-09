@@ -10,6 +10,7 @@ const docsSidebar = [
 		collapsed: false,
 		items: [
 			{ text: 'What is OpenPost?', link: '/guide/what-is-openpost' },
+			{ text: 'Why self-host?', link: '/guide/why-selfhost' },
 			{ text: 'Quickstart', link: '/guide/quickstart' },
 			{ text: 'Concepts', link: '/guide/concepts' },
 		],
@@ -39,6 +40,7 @@ const docsSidebar = [
 		collapsed: false,
 		items: [
 			{ text: 'Overview', link: '/providers/overview' },
+			{ text: 'Supported Platforms & Limits', link: '/providers/platform-limits' },
 			{ text: 'X', link: '/providers/x' },
 			{ text: 'Mastodon', link: '/providers/mastodon' },
 			{ text: 'Bluesky', link: '/providers/bluesky' },
@@ -87,7 +89,7 @@ const developmentSidebar = [
 
 export default defineConfig({
 	title: 'OpenPost',
-	description: 'A lightweight, self-hosted social media scheduler.',
+	description: 'Self-hosted Buffer/Hootsuite alternative. Schedule posts to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server.',
 	base: docsBase,
 	cleanUrls: true,
 	lastUpdated: true,
@@ -95,7 +97,7 @@ export default defineConfig({
 		['link', { rel: 'icon', href: `${docsBase}assets/brand/icon.svg` }],
 		['meta', { property: 'og:type', content: 'website' }],
 		['meta', { property: 'og:title', content: 'OpenPost' }],
-		['meta', { property: 'og:description', content: 'A lightweight, self-hosted social media scheduler.' }],
+		['meta', { property: 'og:description', content: 'Self-hosted Buffer/Hootsuite alternative. Schedule posts to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server.' }],
 		['meta', { property: 'og:image', content: `${docsBase}assets/brand/og-image.svg` }],
 	],
 	themeConfig: {

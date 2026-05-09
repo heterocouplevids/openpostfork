@@ -24,10 +24,9 @@
 
 <div align="center">
   <strong>
-    <h2>A lightweight, self-hosted social media scheduler</h2>
+    <h2>Self-hosted Buffer/Hootsuite alternative</h2>
   </strong>
-  Post to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server.<br/>
-  One binary or container. Your data stays on your machine.
+  Schedule posts to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server. One binary or container. No Redis, no Postgres, no external queue.
 </div>
 
 <div align="center">
@@ -73,13 +72,32 @@
 
 ## Why OpenPost
 
-- Self-hosted: your data stays on your server.
-- Single binary or container: no Redis, no Postgres, no external queue.
-- SQLite-backed scheduling: queued posts survive restarts.
-- Multi-platform publishing: X, Mastodon, Bluesky, Threads, and LinkedIn.
-- Encrypted tokens: OAuth tokens are encrypted at rest with AES-256-GCM.
-- Security-first: Account-level MFA with TOTP and Passkeys support.
-- Thread support: publish multi-post threads in sequence.
+OpenPost is for people who want the core social media scheduling workflow without relying on another hosted SaaS.
+
+- **Typefully-like composer**: write once, customize per platform with account-specific variants
+- **Thread support**: publish multi-post threads in sequence
+- **Scheduling that stays queued**: plan posts ahead, queued posts survive restarts
+- **Workspaces**: separate brands, projects, or clients into different workspaces
+- **Reusable media library**: upload once, reuse across posts
+- **Self-hosted**: your data, schedules, and tokens stay on your server
+
+**Under the hood**: Built with Go, Svelte, and SQLite. Runs as a single binary or container — no Redis, no Postgres, no external queue. OAuth tokens are encrypted at rest with AES-256-GCM. Account-level 2FA and passkeys supported.
+
+## Who is this for?
+
+OpenPost is especially useful for:
+
+- **Indie hackers** who want a cheaper or free alternative to Typefully, Buffer, or Hootsuite
+- **Small teams** that want control over credentials and data
+- **Open-source maintainers** managing multiple platform presences
+- **Self-hosters** who want a lightweight tool instead of a full marketing suite
+- **Agencies** managing separate brand workspaces
+
+## Current Limitations
+
+- **No video support yet** — video uploads are not implemented
+- **No full feature parity guarantee** — each platform has different capabilities
+- **Analytics not built yet** — engagement tracking is on the roadmap
 
 ## Quickstart
 

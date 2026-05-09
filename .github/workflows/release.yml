@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 env:
@@ -64,11 +64,11 @@ jobs:
           - os: linux
             arch: amd64
             runner: ubuntu-latest
-            ext: ''
+            ext: ""
           - os: darwin
             arch: arm64
             runner: macos-latest
-            ext: ''
+            ext: ""
 
     steps:
       - name: Checkout repository
@@ -123,7 +123,7 @@ jobs:
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v1
@@ -133,8 +133,8 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version: "21"
+          distribution: "temurin"
 
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -145,15 +145,11 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('frontend/android/**/*.gradle*', 'frontend/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Build frontend (Capacitor mode)
+      - name: Build frontend + sync Capacitor + generate Android app assets
         working-directory: frontend
         run: |
           bun install --frozen-lockfile
-          VITE_APP_MODE=capacitor bun run build
-
-      - name: Sync Capacitor assets
-        working-directory: frontend
-        run: npx cap sync android
+          bun run build:capacitor
 
       - name: Check signing secret
         id: signing
