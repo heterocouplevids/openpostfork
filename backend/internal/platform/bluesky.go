@@ -38,7 +38,7 @@ func (b *BlueskyAdapter) CreateSession(ctx context.Context, handle, appPassword 
 	}
 
 	respBody, err := DoRequest(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.server.createSession", bytes.NewReader(body), map[string]string{
-		"Content-Type": "application/json",
+		headerContentType: contentTypeJSON,
 	})
 	if err != nil {
 		return "", "", "", 0, fmt.Errorf("bluesky create session: %w", err)
@@ -79,7 +79,7 @@ func (b *BlueskyAdapter) RefreshToken(ctx context.Context, input RefreshTokenInp
 	}
 
 	respBody, err := DoRequest(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.server.refreshSession", nil, map[string]string{
-		"Authorization": "Bearer " + input.RefreshToken,
+		headerAuthorization: bearerPrefix + input.RefreshToken,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("bluesky refresh: %w", err)
@@ -153,8 +153,8 @@ func (b *BlueskyAdapter) GetProfile(ctx context.Context, accessToken string) (*U
 
 func (b *BlueskyAdapter) UploadMedia(ctx context.Context, accessToken, _ string, mimeType string, reader io.Reader) (string, error) {
 	respBody, err := DoRequest(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.repo.uploadBlob", reader, map[string]string{
-		"Authorization": "Bearer " + accessToken,
-		"Content-Type":  mimeType,
+		headerAuthorization: bearerPrefix + accessToken,
+		headerContentType:   mimeType,
 	})
 	if err != nil {
 		return "", fmt.Errorf("bluesky upload blob: %w", err)
@@ -184,9 +184,9 @@ func (b *BlueskyAdapter) UploadMedia(ctx context.Context, accessToken, _ string,
 
 func (b *BlueskyAdapter) Publish(ctx context.Context, accessToken, accountID string, req *PublishRequest) (string, error) {
 	record := map[string]interface{}{
-		"$type":     "app.bsky.feed.post",
-		"text":      req.Content,
-		"createdAt": time.Now().UTC().Format(time.RFC3339Nano),
+		"$type":       "app.bsky.feed.post",
+		jsonFieldText: req.Content,
+		"createdAt":   time.Now().UTC().Format(time.RFC3339Nano),
 	}
 
 	if len(req.PlatformMediaIDs) > 0 {
@@ -241,7 +241,7 @@ func (b *BlueskyAdapter) Publish(ctx context.Context, accessToken, accountID str
 	}
 
 	respBody, err := DoJSON(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.repo.createRecord", payload, map[string]string{
-		"Authorization": "Bearer " + accessToken,
+		headerAuthorization: bearerPrefix + accessToken,
 	})
 	if err != nil {
 		return "", fmt.Errorf("posting to bluesky: %w", err)

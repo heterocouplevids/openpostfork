@@ -213,7 +213,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/posts",
 		Summary:     "Create a new post",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *CreatePostInput) (*CreatePostOutput, error) {
@@ -252,7 +252,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 				ID:              uuid.New().String(),
 				PostID:          post.ID,
 				SocialAccountID: accID,
-				Status:          "pending",
+				Status:          postStatusPending,
 			})
 		}
 
@@ -280,7 +280,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 				}
 			}
 			if post.Status == statusScheduled {
-				payload, err := json.Marshal(map[string]string{"post_id": post.ID})
+				payload, err := json.Marshal(map[string]string{postIDKey: post.ID})
 				if err != nil {
 					return fmt.Errorf("failed to marshal job payload: %w", err)
 				}
@@ -289,7 +289,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 				post.ActualRunAt = jobRunAt
 				job := &models.Job{
 					ID:      uuid.New().String(),
-					Type:    "publish_post",
+					Type:    jobTypePublishPost,
 					Payload: string(payload),
 					RunAt:   jobRunAt,
 				}
@@ -332,7 +332,7 @@ func (h *PostHandler) ListPosts(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/posts",
 		Summary:     "List posts for a workspace",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *ListPostsInput) (*ListPostsOutput, error) {
 		var posts []models.Post
@@ -475,7 +475,7 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/posts/schedule-overview",
 		Summary:     "Get monthly schedule overview",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403},
 	}, func(ctx context.Context, input *ScheduleOverviewInput) (*ScheduleOverviewOutput, error) {
@@ -784,7 +784,7 @@ func (h *PostHandler) CreateThread(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/posts/thread",
 		Summary:     "Create a thread of posts",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *CreateThreadInput) (*CreateThreadOutput, error) {
@@ -844,7 +844,7 @@ func (h *PostHandler) CreateThread(api huma.API) {
 					ID:              uuid.New().String(),
 					PostID:          post.ID,
 					SocialAccountID: accID,
-					Status:          "pending",
+					Status:          postStatusPending,
 				})
 			}
 
@@ -874,7 +874,7 @@ func (h *PostHandler) CreateThread(api huma.API) {
 				}
 			}
 			if status == statusScheduled {
-				payload, _ := json.Marshal(map[string]string{"post_id": posts[0].ID})
+				payload, _ := json.Marshal(map[string]string{postIDKey: posts[0].ID})
 				// Apply random delay to job run time (using first post's delay setting)
 				jobRunAt := applyRandomDelay(*input.Body.ScheduledAt, input.Body.RandomDelayMinutes)
 				// Update all posts with actual_run_at
@@ -883,7 +883,7 @@ func (h *PostHandler) CreateThread(api huma.API) {
 				}
 				job := &models.Job{
 					ID:      uuid.New().String(),
-					Type:    "publish_post",
+					Type:    jobTypePublishPost,
 					Payload: string(payload),
 					RunAt:   jobRunAt,
 				}
@@ -948,9 +948,9 @@ func (h *PostHandler) GetPost(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-post",
 		Method:      http.MethodGet,
-		Path:        "/posts/{id}",
+		Path:        postPathByID,
 		Summary:     "Get a single post",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{404},
 	}, func(ctx context.Context, input *GetPostInput) (*GetPostOutput, error) {
@@ -1118,9 +1118,9 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "update-post",
 		Method:      http.MethodPatch,
-		Path:        "/posts/{id}",
+		Path:        postPathByID,
 		Summary:     "Update a post",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403, 404},
 	}, func(ctx context.Context, input *UpdatePostInput) (*UpdatePostOutput, error) {
@@ -1227,7 +1227,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 									ID:              uuid.New().String(),
 									PostID:          child.ID,
 									SocialAccountID: accID,
-									Status:          "pending",
+									Status:          postStatusPending,
 								}
 								if _, err := tx.NewInsert().Model(&dest).Exec(txCtx); err != nil {
 									return err
@@ -1288,10 +1288,10 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 							return fmt.Errorf("failed to cancel old job: %w", err)
 						}
 					}
-					payload, _ := json.Marshal(map[string]string{"post_id": post.ID})
+					payload, _ := json.Marshal(map[string]string{postIDKey: post.ID})
 					job := &models.Job{
 						ID:      uuid.New().String(),
-						Type:    "publish_post",
+						Type:    jobTypePublishPost,
 						Payload: string(payload),
 						RunAt:   jobRunAt,
 					}
@@ -1316,10 +1316,10 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 					if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to cancel old job: %w", err)
 					}
-					payload, _ := json.Marshal(map[string]string{"post_id": post.ID})
+					payload, _ := json.Marshal(map[string]string{postIDKey: post.ID})
 					job := &models.Job{
 						ID:      uuid.New().String(),
-						Type:    "publish_post",
+						Type:    jobTypePublishPost,
 						Payload: string(payload),
 						RunAt:   jobRunAt,
 					}
@@ -1358,7 +1358,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 						ID:              uuid.New().String(),
 						PostID:          post.ID,
 						SocialAccountID: accID,
-						Status:          "pending",
+						Status:          postStatusPending,
 					}
 					if _, err := tx.NewInsert().Model(&dest).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to add destination: %w", err)
@@ -1379,7 +1379,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 								ID:              uuid.New().String(),
 								PostID:          childID,
 								SocialAccountID: accID,
-								Status:          "pending",
+								Status:          postStatusPending,
 							}
 							if _, err := tx.NewInsert().Model(&dest).Exec(txCtx); err != nil {
 								return fmt.Errorf("failed to add thread destination: %w", err)
@@ -1506,9 +1506,9 @@ func (h *PostHandler) DeletePost(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-post",
 		Method:      http.MethodDelete,
-		Path:        "/posts/{id}",
+		Path:        postPathByID,
 		Summary:     "Delete a post",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403, 404},
 	}, func(ctx context.Context, input *DeletePostInput) (*DeletePostOutput, error) {
@@ -1605,9 +1605,9 @@ func (h *PostHandler) UpsertVariants(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "upsert-post-variants",
 		Method:      http.MethodPut,
-		Path:        "/posts/{id}/variants",
+		Path:        postPathVariants,
 		Summary:     "Upsert per-platform content variants for a post",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403, 404},
 	}, func(ctx context.Context, input *UpsertVariantsInput) (*UpsertVariantsOutput, error) {
@@ -1744,9 +1744,9 @@ func (h *PostHandler) GetVariants(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-post-variants",
 		Method:      http.MethodGet,
-		Path:        "/posts/{id}/variants",
+		Path:        postPathVariants,
 		Summary:     "Get per-platform content variants for a post",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *GetVariantsInput) (*GetVariantsOutput, error) {
@@ -1810,9 +1810,9 @@ func (h *PostHandler) DeleteVariants(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-post-variants",
 		Method:      http.MethodDelete,
-		Path:        "/posts/{id}/variants",
+		Path:        postPathVariants,
 		Summary:     "Delete all variants for a post (reset to unified content)",
-		Tags:        []string{"Posts"},
+		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *DeleteVariantsInput) (*DeleteVariantsOutput, error) {

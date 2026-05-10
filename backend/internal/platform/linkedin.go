@@ -48,22 +48,22 @@ func (l *LinkedInAdapter) GenerateAuthURL(state string) (string, map[string]stri
 	}
 
 	params := map[string]string{
-		"response_type": "code",
-		"client_id":     l.clientID,
-		"redirect_uri":  l.redirectURI,
-		"scope":         scope,
-		"state":         state,
+		"response_type":       oauthResponseType,
+		oauthParamClientID:    l.clientID,
+		oauthParamRedirectURI: l.redirectURI,
+		"scope":               scope,
+		"state":               state,
 	}
 	return "https://www.linkedin.com/oauth/v2/authorization?" + encodeQueryString(params), nil
 }
 
 func (l *LinkedInAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
 	values := map[string]string{
-		"grant_type":    "authorization_code",
-		"code":          code,
-		"redirect_uri":  l.redirectURI,
-		"client_id":     l.clientID,
-		"client_secret": l.clientSecret,
+		"grant_type":           oauthGrantAuthCode,
+		oauthParamCode:         code,
+		oauthParamRedirectURI:  l.redirectURI,
+		oauthParamClientID:     l.clientID,
+		oauthParamClientSecret: l.clientSecret,
 	}
 
 	respBody, err := DoFormURLEncoded(ctx, "POST", "https://www.linkedin.com/oauth/v2/accessToken", values, nil)
@@ -85,7 +85,7 @@ func (l *LinkedInAdapter) ExchangeCode(ctx context.Context, code string, _ map[s
 		AccessToken:  tokenResp.AccessToken,
 		RefreshToken: tokenResp.RefreshToken,
 		ExpiresIn:    tokenResp.ExpiresIn,
-		TokenType:    "Bearer",
+		TokenType:    tokenTypeBearer,
 	}, nil
 }
 
@@ -102,10 +102,10 @@ func (l *LinkedInAdapter) RefreshToken(ctx context.Context, input RefreshTokenIn
 	}
 
 	values := map[string]string{
-		"grant_type":    "refresh_token",
-		"refresh_token": input.RefreshToken,
-		"client_id":     l.clientID,
-		"client_secret": l.clientSecret,
+		"grant_type":                          oauthGrantRefresh,
+		string(RefreshCredentialRefreshToken): input.RefreshToken,
+		oauthParamClientID:                    l.clientID,
+		oauthParamClientSecret:                l.clientSecret,
 	}
 
 	respBody, err := DoFormURLEncoded(ctx, "POST", "https://www.linkedin.com/oauth/v2/accessToken", values, nil)
@@ -127,13 +127,13 @@ func (l *LinkedInAdapter) RefreshToken(ctx context.Context, input RefreshTokenIn
 		AccessToken:  tokenResp.AccessToken,
 		RefreshToken: tokenResp.RefreshToken,
 		ExpiresIn:    tokenResp.ExpiresIn,
-		TokenType:    "Bearer",
+		TokenType:    tokenTypeBearer,
 	}, nil
 }
 
 func (l *LinkedInAdapter) GetProfile(ctx context.Context, accessToken string) (*UserProfile, error) {
 	respBody, err := DoJSON(ctx, "GET", "https://api.linkedin.com/v2/userinfo", nil, map[string]string{
-		"Authorization": "Bearer " + accessToken,
+		headerAuthorization: bearerPrefix + accessToken,
 	})
 	if err != nil {
 		return nil, err
@@ -234,12 +234,12 @@ func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string
 	}
 
 	headers := map[string]string{
-		"Authorization": "Bearer " + accessToken,
-		"Content-Type":  "application/octet-stream",
+		headerAuthorization: bearerPrefix + accessToken,
+		headerContentType:   contentTypeOctet,
 	}
 	extraHeaders := registerResult.Value.UploadInstructions.UploadMechanism.MediaUploadHTTPRequest.Headers
-	if auth, ok := extraHeaders["Authorization"]; ok {
-		headers["Authorization"] = auth
+	if auth, ok := extraHeaders[headerAuthorization]; ok {
+		headers[headerAuthorization] = auth
 	}
 
 	_, err := DoRequest(ctx, "PUT", uploadURL, bytes.NewReader(data), headers)
@@ -317,7 +317,7 @@ func (l *LinkedInAdapter) postComment(ctx context.Context, accessToken, actorURN
 		"actor":  actorURN,
 		"object": activityURN,
 		"message": map[string]interface{}{
-			"text": content,
+			jsonFieldText: content,
 		},
 	}
 
@@ -338,8 +338,8 @@ func (l *LinkedInAdapter) postComment(ctx context.Context, accessToken, actorURN
 
 func linkedinHeaders(accessToken, apiVersion string) map[string]string {
 	return map[string]string{
-		"Authorization":             "Bearer " + accessToken,
-		"Content-Type":              "application/json",
+		headerAuthorization:         bearerPrefix + accessToken,
+		headerContentType:           contentTypeJSON,
 		"X-Restli-Protocol-Version": "2.0.0",
 		"Linkedin-Version":          apiVersion,
 	}
@@ -366,8 +366,8 @@ func DoJSONWithHeaders(ctx context.Context, method, url string, payload any, hea
 	if headers == nil {
 		headers = make(map[string]string)
 	}
-	if _, ok := headers["Content-Type"]; !ok {
-		headers["Content-Type"] = "application/json"
+	if _, ok := headers[headerContentType]; !ok {
+		headers[headerContentType] = contentTypeJSON
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)

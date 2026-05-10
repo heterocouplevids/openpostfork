@@ -205,7 +205,7 @@ func (h *AuthHandler) Register(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/register",
 		Summary:     "Register a new user",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.RequestMetadataMiddleware()},
 		Errors:      []int{400, 409},
 	}, func(ctx context.Context, input *RegisterInput) (*AuthOutput, error) {
@@ -281,7 +281,7 @@ func (h *AuthHandler) Login(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/login",
 		Summary:     "Login with email and password",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.RequestMetadataMiddleware()},
 		Errors:      []int{401},
 	}, func(ctx context.Context, input *LoginInput) (*AuthOutput, error) {
@@ -334,7 +334,7 @@ func (h *AuthHandler) VerifyTOTPLogin(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/login/totp",
 		Summary:     "Complete MFA login with a TOTP code",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.RequestMetadataMiddleware()},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *VerifyTOTPLoginInput) (*AuthOutput, error) {
@@ -395,7 +395,7 @@ func (h *AuthHandler) BeginPasskeyLogin(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/login/passkey/options",
 		Summary:     "Begin MFA login with a passkey",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *BeginPasskeyLoginInput) (*PasskeyCeremonyOutput, error) {
 		challenge, err := h.getChallenge(ctx, input.Body.MFAToken, authChallengeLoginMFA)
@@ -451,7 +451,7 @@ func (h *AuthHandler) FinishPasskeyLogin(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/login/passkey/verify",
 		Summary:     "Complete MFA login with a passkey",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *FinishPasskeyLoginInput) (*AuthOutput, error) {
 		challenge, err := h.getChallenge(ctx, input.Body.ChallengeID, authChallengePasskeyLogin)
@@ -506,7 +506,7 @@ func (h *AuthHandler) Me(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/auth/me",
 		Summary:     "Get current authenticated user",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, _ *struct{}) (*MeOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -526,7 +526,7 @@ func (h *AuthHandler) SecurityStatus(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/auth/security",
 		Summary:     "Get account security settings",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, _ *struct{}) (*SecurityStatusOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -560,7 +560,7 @@ func (h *AuthHandler) BeginTOTPSetup(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/security/totp/setup",
 		Summary:     "Start TOTP enrollment for the current user",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 401, 409},
 	}, func(ctx context.Context, input *SetupTOTPInput) (*SetupTOTPOutput, error) {
@@ -612,7 +612,7 @@ func (h *AuthHandler) ConfirmTOTPSetup(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/security/totp/confirm",
 		Summary:     "Confirm TOTP enrollment with a verification code",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *ConfirmTOTPSetupInput) (*SecurityStatusOutput, error) {
@@ -663,7 +663,7 @@ func (h *AuthHandler) DisableTOTP(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/security/totp/disable",
 		Summary:     "Disable TOTP for the current user",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *DisableTOTPInput) (*SecurityStatusOutput, error) {
@@ -698,7 +698,7 @@ func (h *AuthHandler) BeginPasskeyRegistration(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/security/passkeys/begin",
 		Summary:     "Begin passkey registration for the current user",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *BeginPasskeyRegistrationInput) (*PasskeyCeremonyOutput, error) {
@@ -755,7 +755,7 @@ func (h *AuthHandler) FinishPasskeyRegistration(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/security/passkeys/finish",
 		Summary:     "Finish passkey registration for the current user",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *FinishPasskeyRegistrationInput) (*SecurityStatusOutput, error) {
@@ -839,7 +839,7 @@ func (h *AuthHandler) RemovePasskey(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/auth/security/passkeys/{passkey_id}/remove",
 		Summary:     "Remove a passkey from the current user",
-		Tags:        []string{"Auth"},
+		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 401, 404},
 	}, func(ctx context.Context, input *RemovePasskeyInput) (*SecurityStatusOutput, error) {

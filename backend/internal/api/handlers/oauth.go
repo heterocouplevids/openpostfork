@@ -150,7 +150,7 @@ func (h *OAuthHandler) ListMastodonServers(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/accounts/mastodon/servers",
 		Summary:     "List configured Mastodon servers",
-		Tags:        []string{"Accounts"},
+		Tags:        []string{tagAccounts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(_ context.Context, _ *struct{}) (*ListMastodonServersOutput, error) {
 		var servers []MastodonServerInfo
@@ -186,7 +186,7 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/accounts/{platform}/auth-url",
 		Summary:     "Get OAuth authorization URL for a platform",
-		Tags:        []string{"Accounts"},
+		Tags:        []string{tagAccounts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *GetAuthURLInput) (*GetAuthURLOutput, error) {
@@ -194,7 +194,7 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 			return nil, huma.Error400BadRequest("bluesky uses app passwords, not OAuth redirect")
 		}
 		if input.WorkspaceID == "" {
-			return nil, huma.Error400BadRequest("workspace_id is required")
+			return nil, huma.Error400BadRequest(errWorkspaceIDRequired)
 		}
 
 		userID := middleware.GetUserID(ctx)
@@ -260,7 +260,7 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/accounts/{platform}/callback",
 		Summary:     "Handle OAuth callback from provider",
-		Tags:        []string{"Accounts"},
+		Tags:        []string{tagAccounts},
 		Errors:      []int{400},
 		Hidden:      true,
 	}, func(ctx context.Context, input *OAuthCallbackInput) (*huma.StreamResponse, error) {
@@ -404,7 +404,7 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/accounts/mastodon/exchange",
 		Summary:     "Exchange Mastodon OOB authorization code",
-		Tags:        []string{"Accounts"},
+		Tags:        []string{tagAccounts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *ExchangeCodeInput) (*struct{}, error) {
@@ -456,7 +456,7 @@ func (h *OAuthHandler) BlueskyLogin(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/accounts/bluesky/login",
 		Summary:     "Connect Bluesky account using app password",
-		Tags:        []string{"Accounts"},
+		Tags:        []string{tagAccounts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
 	}, func(ctx context.Context, input *BlueskyLoginInput) (*struct{}, error) {
@@ -517,7 +517,7 @@ func (h *OAuthHandler) ListAccounts(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/accounts",
 		Summary:     "List connected social accounts for a workspace",
-		Tags:        []string{"Accounts"},
+		Tags:        []string{tagAccounts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *ListAccountsInput) (*ListAccountsOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -576,7 +576,7 @@ func (h *OAuthHandler) DisconnectAccount(api huma.API) {
 		Method:      http.MethodDelete,
 		Path:        "/accounts/{account_id}",
 		Summary:     "Disconnect a social account",
-		Tags:        []string{"Accounts"},
+		Tags:        []string{tagAccounts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{404},
 	}, func(ctx context.Context, input *DisconnectAccountInput) (*struct{}, error) {

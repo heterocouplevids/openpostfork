@@ -60,8 +60,8 @@ func DoJSON(ctx context.Context, method, url string, payload any, headers map[st
 	if headers == nil {
 		headers = make(map[string]string)
 	}
-	if _, ok := headers["Content-Type"]; !ok {
-		headers["Content-Type"] = "application/json"
+	if _, ok := headers[headerContentType]; !ok {
+		headers[headerContentType] = contentTypeJSON
 	}
 
 	return DoRequest(ctx, method, url, bodyReader, headers)
@@ -70,7 +70,7 @@ func DoJSON(ctx context.Context, method, url string, payload any, headers map[st
 // DoBearerJSON executes a JSON request with bearer auth and decodes the response.
 func DoBearerJSON[T any](ctx context.Context, method, url, accessToken string, payload any, label string) (*T, error) {
 	respBody, err := DoJSON(ctx, method, url, payload, map[string]string{
-		"Authorization": "Bearer " + accessToken,
+		headerAuthorization: bearerPrefix + accessToken,
 	})
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func DoMultipart(ctx context.Context, url string, fieldName string, reader io.Re
 	if headers == nil {
 		headers = make(map[string]string)
 	}
-	headers["Content-Type"] = writer.FormDataContentType()
+	headers[headerContentType] = writer.FormDataContentType()
 
 	return DoRequest(ctx, "POST", url, &buf, headers)
 }
@@ -121,8 +121,8 @@ func DoFormURLEncoded(ctx context.Context, method, url string, values map[string
 	if headers == nil {
 		headers = make(map[string]string)
 	}
-	if _, ok := headers["Content-Type"]; !ok {
-		headers["Content-Type"] = "application/x-www-form-urlencoded"
+	if _, ok := headers[headerContentType]; !ok {
+		headers[headerContentType] = contentTypeForm
 	}
 
 	body := encodeFormValues(values)
@@ -134,8 +134,8 @@ func DoFormURLEncodedValues(ctx context.Context, method, url string, values url.
 	if headers == nil {
 		headers = make(map[string]string)
 	}
-	if _, ok := headers["Content-Type"]; !ok {
-		headers["Content-Type"] = "application/x-www-form-urlencoded"
+	if _, ok := headers[headerContentType]; !ok {
+		headers[headerContentType] = contentTypeForm
 	}
 
 	return DoRequest(ctx, method, url, strings.NewReader(values.Encode()), headers)
@@ -159,7 +159,7 @@ func sanitizeURL(rawURL string) string {
 	}
 
 	query := parsed.Query()
-	for _, key := range []string{"access_token", "token", "refresh_token", "client_secret"} {
+	for _, key := range []string{string(RefreshCredentialAccessToken), "token", string(RefreshCredentialRefreshToken), oauthParamClientSecret} {
 		if query.Has(key) {
 			query.Set(key, "[redacted]")
 		}

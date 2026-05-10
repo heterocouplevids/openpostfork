@@ -32,9 +32,9 @@ func (m *MastodonAdapter) InstanceURL() string {
 
 func (m *MastodonAdapter) GenerateAuthURL(state string) (string, map[string]string) {
 	params := url.Values{}
-	params.Set("client_id", m.clientID)
-	params.Set("redirect_uri", m.redirectURI)
-	params.Set("response_type", "code")
+	params.Set(oauthParamClientID, m.clientID)
+	params.Set(oauthParamRedirectURI, m.redirectURI)
+	params.Set("response_type", oauthResponseType)
 	params.Set("scope", "read write")
 	params.Set("state", state)
 
@@ -43,11 +43,11 @@ func (m *MastodonAdapter) GenerateAuthURL(state string) (string, map[string]stri
 
 func (m *MastodonAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
 	values := map[string]string{
-		"grant_type":    "authorization_code",
-		"code":          code,
-		"redirect_uri":  m.redirectURI,
-		"client_id":     m.clientID,
-		"client_secret": m.clientSecret,
+		"grant_type":           oauthGrantAuthCode,
+		oauthParamCode:         code,
+		oauthParamRedirectURI:  m.redirectURI,
+		oauthParamClientID:     m.clientID,
+		oauthParamClientSecret: m.clientSecret,
 	}
 
 	respBody, err := DoFormURLEncoded(ctx, "POST", m.instanceURL+"/oauth/token", values, nil)
@@ -105,7 +105,7 @@ func (m *MastodonAdapter) UploadMedia(ctx context.Context, accessToken, _ string
 		"upload"+ext,
 		nil,
 		map[string]string{
-			"Authorization": "Bearer " + accessToken,
+			headerAuthorization: bearerPrefix + accessToken,
 		},
 	)
 	if err != nil {
@@ -135,7 +135,7 @@ func (m *MastodonAdapter) waitForMediaProcessing(ctx context.Context, accessToke
 		time.Sleep(2 * time.Second)
 
 		respBody, err := DoJSON(ctx, "GET", m.instanceURL+"/api/v1/media/"+mediaID, nil, map[string]string{
-			"Authorization": "Bearer " + accessToken,
+			headerAuthorization: bearerPrefix + accessToken,
 		})
 		if err != nil {
 			return "", fmt.Errorf("mastodon media status: %w", err)
@@ -168,7 +168,7 @@ func (m *MastodonAdapter) Publish(ctx context.Context, accessToken, _ string, re
 			_, err := DoFormURLEncoded(ctx, "PUT", m.instanceURL+"/api/v1/media/"+mediaID, map[string]string{
 				"description": altText,
 			}, map[string]string{
-				"Authorization": "Bearer " + accessToken,
+				headerAuthorization: bearerPrefix + accessToken,
 			})
 			if err != nil {
 				return "", fmt.Errorf("updating mastodon media alt text: %w", err)
@@ -189,7 +189,7 @@ func (m *MastodonAdapter) Publish(ctx context.Context, accessToken, _ string, re
 	}
 
 	respBody, err := DoFormURLEncodedValues(ctx, "POST", m.instanceURL+"/api/v1/statuses", formValues, map[string]string{
-		"Authorization": "Bearer " + accessToken,
+		headerAuthorization: bearerPrefix + accessToken,
 	})
 	if err != nil {
 		return "", fmt.Errorf("posting to mastodon: %w", err)

@@ -294,7 +294,7 @@ func (x *XAdapter) uploadMediaSimple(ctx context.Context, accessToken string, da
 	}
 
 	respBody, err := x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", &body, map[string]string{
-		"Content-Type": writer.FormDataContentType(),
+		headerContentType: writer.FormDataContentType(),
 	})
 	if err != nil {
 		return "", err
@@ -320,7 +320,7 @@ func (x *XAdapter) uploadMediaChunked(ctx context.Context, accessToken, mimeType
 	initValues.Set("media_category", mediaCategory)
 
 	respBody, err := x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", strings.NewReader(initValues.Encode()), map[string]string{
-		"Content-Type": "application/x-www-form-urlencoded",
+		headerContentType: contentTypeForm,
 	})
 	if err != nil {
 		return "", fmt.Errorf("x INIT failed: %w", err)
@@ -363,7 +363,7 @@ func (x *XAdapter) uploadMediaChunked(ctx context.Context, accessToken, mimeType
 		}
 
 		_, err = x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", &body, map[string]string{
-			"Content-Type": writer.FormDataContentType(),
+			headerContentType: writer.FormDataContentType(),
 		})
 		if err != nil {
 			return "", fmt.Errorf("x APPEND segment %d: %w", segmentIndex, err)
@@ -376,7 +376,7 @@ func (x *XAdapter) uploadMediaChunked(ctx context.Context, accessToken, mimeType
 	finalizeValues.Set("media_id", mediaID)
 
 	respBody, err = x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/upload.json", strings.NewReader(finalizeValues.Encode()), map[string]string{
-		"Content-Type": "application/x-www-form-urlencoded",
+		headerContentType: contentTypeForm,
 	})
 	if err != nil {
 		return "", fmt.Errorf("x FINALIZE: %w", err)
@@ -454,7 +454,7 @@ func (x *XAdapter) Publish(ctx context.Context, accessToken, _ string, req *Publ
 			metaPayload := map[string]interface{}{
 				"media_id": mediaID,
 				"alt_text": map[string]string{
-					"text": altText,
+					jsonFieldText: altText,
 				},
 			}
 			metaBody, err := jsonMarshal(metaPayload)
@@ -462,7 +462,7 @@ func (x *XAdapter) Publish(ctx context.Context, accessToken, _ string, req *Publ
 				return "", fmt.Errorf("marshaling X media metadata: %w", err)
 			}
 			_, err = x.doSignedRequest(ctx, accessToken, "POST", "https://upload.twitter.com/1.1/media/metadata/create.json", bytes.NewReader(metaBody), map[string]string{
-				"Content-Type": "application/json",
+				headerContentType: contentTypeJSON,
 			})
 			if err != nil {
 				return "", fmt.Errorf("setting X media alt text: %w", err)
@@ -471,7 +471,7 @@ func (x *XAdapter) Publish(ctx context.Context, accessToken, _ string, req *Publ
 	}
 
 	payload := map[string]interface{}{
-		"text": req.Content,
+		jsonFieldText: req.Content,
 	}
 
 	if len(req.PlatformMediaIDs) > 0 {
@@ -492,7 +492,7 @@ func (x *XAdapter) Publish(ctx context.Context, accessToken, _ string, req *Publ
 	}
 
 	respBody, err := x.doSignedRequest(ctx, accessToken, "POST", "https://api.twitter.com/2/tweets", bytes.NewReader(body), map[string]string{
-		"Content-Type": "application/json",
+		headerContentType: contentTypeJSON,
 	})
 	if err != nil {
 		return "", fmt.Errorf("posting to X: %w", err)

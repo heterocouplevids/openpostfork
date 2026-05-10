@@ -154,14 +154,14 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/media",
 		Summary:     "List media attachments for a workspace",
-		Tags:        []string{"Media"},
+		Tags:        []string{tagMedia},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403},
 	}, func(ctx context.Context, input *ListMediaInput) (*ListMediaOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
 		if input.WorkspaceID == "" {
-			return nil, huma.Error400BadRequest("workspace_id is required")
+			return nil, huma.Error400BadRequest(errWorkspaceIDRequired)
 		}
 
 		var memberCount int
@@ -169,10 +169,10 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		limit := input.Limit
@@ -201,7 +201,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		switch input.Sort {
 		case "oldest":
 			query = query.Order("created_at ASC")
-		case "size":
+		case mediaSortSize:
 			query = query.Order("size DESC")
 		default:
 			query = query.Order("created_at DESC")
@@ -259,7 +259,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/media/{id}/usage",
 		Summary:     "Get posts that use a media attachment",
-		Tags:        []string{"Media"},
+		Tags:        []string{tagMedia},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *GetMediaUsageInput) (*GetMediaUsageOutput, error) {
@@ -269,7 +269,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		err := h.db.NewSelect().Model(&media).Where("id = ?", input.PathID).Scan(ctx)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil, huma.Error404NotFound("media not found")
+				return nil, huma.Error404NotFound(errMediaNotFound)
 			}
 			return nil, huma.Error500InternalServerError("failed to fetch media")
 		}
@@ -279,7 +279,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil || memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		var postMedia []models.PostMedia
@@ -322,7 +322,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Method:      http.MethodDelete,
 		Path:        "/media/{id}",
 		Summary:     "Delete a media attachment (only if not used in any post)",
-		Tags:        []string{"Media"},
+		Tags:        []string{tagMedia},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *DeleteMediaInput) (*DeleteMediaOutput, error) {
@@ -332,7 +332,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		err := h.db.NewSelect().Model(&media).Where("id = ?", input.PathID).Scan(ctx)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil, huma.Error404NotFound("media not found")
+				return nil, huma.Error404NotFound(errMediaNotFound)
 			}
 			return nil, huma.Error500InternalServerError("failed to fetch media")
 		}
@@ -342,7 +342,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil || memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		var usageCount int
@@ -375,7 +375,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/media/batch-delete",
 		Summary:     "Delete multiple media attachments at once (only unused ones)",
-		Tags:        []string{"Media"},
+		Tags:        []string{tagMedia},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403},
 	}, func(ctx context.Context, input *BatchDeleteMediaInput) (*BatchDeleteMediaOutput, error) {
@@ -449,7 +449,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Method:      http.MethodPatch,
 		Path:        "/media/{id}/favorite",
 		Summary:     "Toggle favorite status of a media attachment",
-		Tags:        []string{"Media"},
+		Tags:        []string{tagMedia},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *UpdateMediaFavoriteInput) (*UpdateMediaFavoriteOutput, error) {
@@ -459,7 +459,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		err := h.db.NewSelect().Model(&media).Where("id = ?", input.PathID).Scan(ctx)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil, huma.Error404NotFound("media not found")
+				return nil, huma.Error404NotFound(errMediaNotFound)
 			}
 			return nil, huma.Error500InternalServerError("failed to fetch media")
 		}
@@ -469,7 +469,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil || memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		media.IsFavorite = !media.IsFavorite
@@ -488,7 +488,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Method:      http.MethodPatch,
 		Path:        "/media/{id}",
 		Summary:     "Update media metadata (alt text)",
-		Tags:        []string{"Media"},
+		Tags:        []string{tagMedia},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *UpdateMediaInput) (*UpdateMediaOutput, error) {
@@ -498,7 +498,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		err := h.db.NewSelect().Model(&media).Where("id = ?", input.PathID).Scan(ctx)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil, huma.Error404NotFound("media not found")
+				return nil, huma.Error404NotFound(errMediaNotFound)
 			}
 			return nil, huma.Error500InternalServerError("failed to fetch media")
 		}
@@ -508,7 +508,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil || memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		media.AltText = input.Body.AltText
@@ -584,7 +584,7 @@ func (h *MediaHandler) uploadMedia(c echo.Context) error {
 
 	workspaceID := c.FormValue("workspace_id")
 	if workspaceID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "workspace_id is required"})
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: errWorkspaceIDRequired})
 	}
 
 	var memberCount int
@@ -592,20 +592,20 @@ func (h *MediaHandler) uploadMedia(c echo.Context) error {
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
 		Count(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to validate workspace access"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: errValidateWorkspaceAccess})
 	}
 	if memberCount == 0 {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "you do not have access to this workspace"})
+		return c.JSON(http.StatusForbidden, map[string]string{fieldError: errWorkspaceAccessDenied})
 	}
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "file is required"})
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: "file is required"})
 	}
 
 	result, err := h.processUpload(workspaceID, fileHeader, c.FormValue("alt_text"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, result)
@@ -616,7 +616,7 @@ func (h *MediaHandler) batchUploadMedia(c echo.Context) error {
 
 	workspaceID := c.FormValue("workspace_id")
 	if workspaceID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "workspace_id is required"})
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: errWorkspaceIDRequired})
 	}
 
 	var memberCount int
@@ -624,24 +624,24 @@ func (h *MediaHandler) batchUploadMedia(c echo.Context) error {
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
 		Count(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to validate workspace access"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: errValidateWorkspaceAccess})
 	}
 	if memberCount == 0 {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "you do not have access to this workspace"})
+		return c.JSON(http.StatusForbidden, map[string]string{fieldError: errWorkspaceAccessDenied})
 	}
 
 	form, err := c.MultipartForm()
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "failed to parse multipart form"})
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: "failed to parse multipart form"})
 	}
 
 	files := form.File["files"]
 	if len(files) == 0 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "no files provided"})
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: "no files provided"})
 	}
 
 	if len(files) > 10 {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "max 10 files at once"})
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: "max 10 files at once"})
 	}
 
 	results := []map[string]interface{}{}
@@ -681,6 +681,14 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 	hash := sha256.Sum256(content)
 	fileHash := hex.EncodeToString(hash[:])
 
+	mimeType := http.DetectContentType(content)
+	if strings.HasPrefix(mimeType, "application/octet-stream") {
+		mimeType = fileHeader.Header.Get("Content-Type")
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+	}
+
 	var existing models.MediaAttachment
 	err = h.db.NewSelect().Model(&existing).
 		Where("workspace_id = ? AND file_hash = ?", workspaceID, fileHash).
@@ -693,14 +701,6 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 			"size":      existing.Size,
 			"deduped":   true,
 		}, nil
-	}
-
-	mimeType := http.DetectContentType(content)
-	if strings.HasPrefix(mimeType, "application/octet-stream") {
-		mimeType = fileHeader.Header.Get("Content-Type")
-		if mimeType == "" {
-			mimeType = "application/octet-stream"
-		}
 	}
 
 	mediaID := uuid.New().String()
@@ -820,7 +820,7 @@ func (h *MediaHandler) serveMedia(c echo.Context) error {
 
 	media := new(models.MediaAttachment)
 	if err := h.db.NewSelect().Model(media).Where("id = ?", mediaID).Scan(c.Request().Context()); err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "media not found"})
+		return c.JSON(http.StatusNotFound, map[string]string{fieldError: errMediaNotFound})
 	}
 	if err := h.authorizeMediaAccess(c, media); err != nil {
 		return err
@@ -828,7 +828,7 @@ func (h *MediaHandler) serveMedia(c echo.Context) error {
 
 	file, err := h.storage.Open(filepath.Base(media.FilePath))
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "media file not found"})
+		return c.JSON(http.StatusNotFound, map[string]string{fieldError: "media file not found"})
 	}
 	defer file.Close()
 
@@ -860,7 +860,7 @@ func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
 
 	media := new(models.MediaAttachment)
 	if err := h.db.NewSelect().Model(media).Where("id = ?", mediaID).Scan(c.Request().Context()); err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "media not found"})
+		return c.JSON(http.StatusNotFound, map[string]string{fieldError: errMediaNotFound})
 	}
 	if err := h.authorizeMediaAccess(c, media); err != nil {
 		return err
@@ -882,12 +882,12 @@ func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
 	}
 
 	if thumbFilename == "" {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "thumbnail not found"})
+		return c.JSON(http.StatusNotFound, map[string]string{fieldError: "thumbnail not found"})
 	}
 
 	file, err := h.storage.Open(thumbFilename)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "thumbnail file not found"})
+		return c.JSON(http.StatusNotFound, map[string]string{fieldError: "thumbnail file not found"})
 	}
 	defer file.Close()
 
@@ -917,16 +917,16 @@ func (h *MediaHandler) optionalMediaAuth() echo.MiddlewareFunc {
 
 func (h *MediaHandler) authorizeMediaAccess(c echo.Context, media *models.MediaAttachment) error {
 	if media == nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "media not found"})
+		return c.JSON(http.StatusNotFound, map[string]string{fieldError: errMediaNotFound})
 	}
 
 	if userID, _ := c.Get(string(middleware.UserIDKey)).(string); userID != "" {
 		allowed, err := h.userCanAccessWorkspace(c.Request().Context(), media.WorkspaceID, userID)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to validate workspace access"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: errValidateWorkspaceAccess})
 		}
 		if !allowed {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "you do not have access to this workspace"})
+			return c.JSON(http.StatusForbidden, map[string]string{fieldError: errWorkspaceAccessDenied})
 		}
 		return nil
 	}
@@ -936,19 +936,19 @@ func (h *MediaHandler) authorizeMediaAccess(c echo.Context, media *models.MediaA
 		if err == nil && claims != nil && claims.UserID != "" {
 			allowed, err := h.userCanAccessWorkspace(c.Request().Context(), media.WorkspaceID, claims.UserID)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to validate workspace access"})
+				return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: errValidateWorkspaceAccess})
 			}
 			if allowed {
 				return nil
 			}
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "you do not have access to this workspace"})
+			return c.JSON(http.StatusForbidden, map[string]string{fieldError: errWorkspaceAccessDenied})
 		}
 	}
 
 	expiresAtUnix, _ := strconv.ParseInt(c.QueryParam("exp"), 10, 64)
 	signature := c.QueryParam("sig")
 	if signature == "" || h.signer == nil || !h.signer.Verify(media.ID, signature, expiresAtUnix) {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{fieldError: "authentication required"})
 	}
 
 	return nil

@@ -160,7 +160,7 @@ func (h *SetHandler) CreateSet(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/sets",
 		Summary:     "Create a social media set",
-		Tags:        []string{"Sets"},
+		Tags:        []string{tagSets},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403},
 	}, func(ctx context.Context, input *CreateSetInput) (*CreateSetOutput, error) {
@@ -232,7 +232,7 @@ func (h *SetHandler) ListSets(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/sets",
 		Summary:     "List social media sets for a workspace",
-		Tags:        []string{"Sets"},
+		Tags:        []string{tagSets},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *ListSetsInput) (*ListSetsOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -293,9 +293,9 @@ func (h *SetHandler) GetSet(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-set",
 		Method:      http.MethodGet,
-		Path:        "/sets/{id}",
+		Path:        setPathByID,
 		Summary:     "Get a single social media set",
-		Tags:        []string{"Sets"},
+		Tags:        []string{tagSets},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{404},
 	}, func(ctx context.Context, input *GetSetInput) (*GetSetOutput, error) {
@@ -349,9 +349,9 @@ func (h *SetHandler) UpdateSet(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "update-set",
 		Method:      http.MethodPatch,
-		Path:        "/sets/{id}",
+		Path:        setPathByID,
 		Summary:     "Update a social media set",
-		Tags:        []string{"Sets"},
+		Tags:        []string{tagSets},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403, 404},
 		//nolint:errcheck
@@ -435,9 +435,9 @@ func (h *SetHandler) DeleteSet(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-set",
 		Method:      http.MethodDelete,
-		Path:        "/sets/{id}",
+		Path:        setPathByID,
 		Summary:     "Delete a social media set",
-		Tags:        []string{"Sets"},
+		Tags:        []string{tagSets},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *DeleteSetInput) (*DeleteSetOutput, error) {
@@ -496,7 +496,7 @@ func (h *SetHandler) AddSetAccounts(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/sets/{id}/accounts",
 		Summary:     "Add accounts to a social media set",
-		Tags:        []string{"Sets"},
+		Tags:        []string{tagSets},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403, 404},
 		//nolint:errcheck
@@ -587,7 +587,7 @@ func (h *SetHandler) RemoveSetAccount(api huma.API) {
 		Method:      http.MethodDelete,
 		Path:        "/sets/{id}/accounts/{account_id}",
 		Summary:     "Remove an account from a social media set",
-		Tags:        []string{"Sets"},
+		Tags:        []string{tagSets},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 		//nolint:errcheck

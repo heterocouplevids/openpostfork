@@ -15,6 +15,16 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	jobTypePublishPost  = "publish_post"
+	jobStatusPending    = "pending"
+	jobTypeMediaCleanup = "media_cleanup"
+	jobTypeRefreshToken = "refresh_token"
+	jobStatusProcessing = "processing"
+	jobStatusFailed     = "failed"
+	jobStatusCompleted  = "completed"
+)
+
 // BackgroundWorker polls the SQLite database for pending jobs.
 type BackgroundWorker struct {
 	db        *bun.DB
@@ -75,15 +85,15 @@ func (w *BackgroundWorker) processNextJobIfAvailable(ctx context.Context) bool {
 
 	err := w.db.NewRaw(`
 		UPDATE jobs
-		SET status = 'processing', locked_at = CURRENT_TIMESTAMP, locked_by = ?
+		SET status = ?, locked_at = CURRENT_TIMESTAMP, locked_by = ?
 		WHERE id = (
 			SELECT id FROM jobs 
-			WHERE status = 'pending' AND run_at <= CURRENT_TIMESTAMP
+			WHERE status = ? AND run_at <= CURRENT_TIMESTAMP
 			ORDER BY run_at ASC 
 			LIMIT 1
 		)
 		RETURNING *
-	`, w.workerID).Scan(ctx, job)
+	`, jobStatusProcessing, w.workerID, jobStatusPending).Scan(ctx, job)
 
 	if err != nil {
 		if err.Error() != "sql: no rows in result set" {
@@ -105,9 +115,9 @@ func (w *BackgroundWorker) handleLockedJob(ctx context.Context, job *models.Job)
 		log.Printf("[Worker %s] job %s failed: %v\n", w.workerID, job.ID, processErr)
 		job.Attempts++
 		if job.Attempts >= job.MaxAttempts {
-			job.Status = "failed"
+			job.Status = jobStatusFailed
 		} else {
-			job.Status = "pending"
+			job.Status = jobStatusPending
 			backoff := time.Duration(1<<(job.Attempts-1)) * time.Minute
 			job.RunAt = time.Now().Add(backoff)
 		}
@@ -123,7 +133,7 @@ func (w *BackgroundWorker) handleLockedJob(ctx context.Context, job *models.Job)
 	}
 
 	if _, dbErr := w.db.NewUpdate().Model(job).
-		Set("status = ?", "completed").
+		Set("status = ?", jobStatusCompleted).
 		Where("id = ?", job.ID).
 		Exec(ctx); dbErr != nil {
 		log.Printf("[Worker %s] failed to mark job %s as completed: %v\n", w.workerID, job.ID, dbErr)
@@ -135,11 +145,11 @@ func (w *BackgroundWorker) handleLockedJob(ctx context.Context, job *models.Job)
 func (w *BackgroundWorker) executeJob(ctx context.Context, job *models.Job) error {
 	// Job handlers will be injected or called from here based on Type
 	switch job.Type {
-	case "publish_post":
+	case jobTypePublishPost:
 		return w.publisher.HandlePublishJob(ctx, job.Payload)
-	case "refresh_token":
+	case jobTypeRefreshToken:
 		return w.handleRefreshTokenJob(ctx, job.Payload)
-	case "media_cleanup":
+	case jobTypeMediaCleanup:
 		return w.handleMediaCleanup(ctx, job.Payload)
 	default:
 		return nil
@@ -281,7 +291,7 @@ func (w *BackgroundWorker) scheduleMediaCleanup(ctx context.Context, workspaceID
 		ID:      uuid.New().String(),
 		Type:    "media_cleanup",
 		Payload: string(payload),
-		Status:  "pending",
+		Status:  jobStatusPending,
 		RunAt:   time.Now().Add(24 * time.Hour),
 	}
 
@@ -327,7 +337,7 @@ func ScheduleMediaCleanup(db *bun.DB, workspaceID string, days int) error {
 		ID:      uuid.New().String(),
 		Type:    "media_cleanup",
 		Payload: string(payload),
-		Status:  "pending",
+		Status:  jobStatusPending,
 		RunAt:   time.Now().Add(24 * time.Hour),
 	}
 

@@ -56,7 +56,7 @@ func (h *PostingScheduleHandler) ListSchedules(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/posting-schedules",
 		Summary:     "List posting schedules for a workspace",
-		Tags:        []string{"Posting Schedules"},
+		Tags:        []string{tagPostingSchedules},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403},
 	}, func(ctx context.Context, input *ListPostingSchedulesInput) (*ListPostingSchedulesOutput, error) {
@@ -68,10 +68,10 @@ func (h *PostingScheduleHandler) ListSchedules(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		var workspace models.Workspace
@@ -132,7 +132,7 @@ func (h *PostingScheduleHandler) CreateSchedule(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/posting-schedules",
 		Summary:     "Create a new posting schedule slot",
-		Tags:        []string{"Posting Schedules"},
+		Tags:        []string{tagPostingSchedules},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403},
 	}, func(ctx context.Context, input *CreatePostingScheduleInput) (*CreatePostingScheduleOutput, error) {
@@ -155,10 +155,10 @@ func (h *PostingScheduleHandler) CreateSchedule(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", input.Body.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		var workspace models.Workspace
@@ -231,7 +231,7 @@ func (h *PostingScheduleHandler) UpdateSchedule(api huma.API) {
 		Method:      http.MethodPatch,
 		Path:        "/posting-schedules/{id}",
 		Summary:     "Update a posting schedule slot",
-		Tags:        []string{"Posting Schedules"},
+		Tags:        []string{tagPostingSchedules},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403, 404},
 	}, func(ctx context.Context, input *UpdatePostingScheduleInput) (*UpdatePostingScheduleOutput, error) {
@@ -255,10 +255,10 @@ func (h *PostingScheduleHandler) UpdateSchedule(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", schedule.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		// Validate and update fields
@@ -314,7 +314,7 @@ func (h *PostingScheduleHandler) DeleteSchedule(api huma.API) {
 		Method:      http.MethodDelete,
 		Path:        "/posting-schedules/{id}",
 		Summary:     "Delete a posting schedule slot",
-		Tags:        []string{"Posting Schedules"},
+		Tags:        []string{tagPostingSchedules},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *DeletePostingScheduleInput) (*DeletePostingScheduleOutput, error) {
@@ -338,10 +338,10 @@ func (h *PostingScheduleHandler) DeleteSchedule(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", schedule.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		if _, err := h.db.NewDelete().Model(&schedule).Where("id = ?", input.PathID).Exec(ctx); err != nil {
@@ -507,7 +507,7 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/posting-schedules/suggest",
 		Summary:     "Generate a suggested posting schedule",
-		Tags:        []string{"Posting Schedules"},
+		Tags:        []string{tagPostingSchedules},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403},
 	}, func(ctx context.Context, input *SuggestScheduleInput) (*SuggestScheduleOutput, error) {
@@ -523,10 +523,10 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", input.Body.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		// Get workspace timezone
@@ -542,16 +542,16 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 			Minute int
 			Label  string
 		}{
-			1:  {{10, 0, "Late Morning"}},
-			2:  {{8, 0, "Morning"}, {18, 0, "Evening"}},
-			3:  {{8, 0, "Morning"}, {12, 0, "Lunch"}, {18, 0, "Evening"}},
-			4:  {{8, 0, "Morning"}, {11, 0, "Late Morning"}, {14, 0, "Afternoon"}, {18, 0, "Evening"}},
-			5:  {{8, 0, "Morning"}, {11, 0, "Late Morning"}, {14, 0, "Afternoon"}, {17, 0, "Late Afternoon"}, {20, 0, "Night"}},
-			6:  {{8, 0, "Morning"}, {10, 0, "Late Morning"}, {12, 0, "Lunch"}, {15, 0, "Afternoon"}, {18, 0, "Evening"}, {21, 0, "Night"}},
-			7:  {{7, 0, "Early Morning"}, {9, 0, "Morning"}, {11, 0, "Late Morning"}, {13, 0, "Lunch"}, {15, 0, "Afternoon"}, {18, 0, "Evening"}, {21, 0, "Night"}},
-			8:  {{7, 0, "Early Morning"}, {9, 0, "Morning"}, {11, 0, "Late Morning"}, {13, 0, "Lunch"}, {15, 0, "Afternoon"}, {17, 0, "Late Afternoon"}, {19, 0, "Evening"}, {21, 0, "Night"}},
-			9:  {{7, 0, "Early Morning"}, {9, 0, "Morning"}, {11, 0, "Late Morning"}, {13, 0, "Lunch"}, {14, 0, "Afternoon"}, {16, 0, "Late Afternoon"}, {18, 0, "Evening"}, {20, 0, "Night"}, {22, 0, "Late Night"}},
-			10: {{7, 0, "Early Morning"}, {9, 0, "Morning"}, {10, 0, "Late Morning"}, {12, 0, "Lunch"}, {13, 0, "Afternoon"}, {15, 0, "Late Afternoon"}, {17, 0, "Late Afternoon"}, {18, 0, "Evening"}, {20, 0, "Night"}, {22, 0, "Late Night"}},
+			1:  {{10, 0, postingLabelLateMorning}},
+			2:  {{8, 0, postingLabelMorning}, {18, 0, postingLabelEvening}},
+			3:  {{8, 0, postingLabelMorning}, {12, 0, postingLabelLunch}, {18, 0, postingLabelEvening}},
+			4:  {{8, 0, postingLabelMorning}, {11, 0, postingLabelLateMorning}, {14, 0, postingLabelAfternoon}, {18, 0, postingLabelEvening}},
+			5:  {{8, 0, postingLabelMorning}, {11, 0, postingLabelLateMorning}, {14, 0, postingLabelAfternoon}, {17, 0, postingLabelLateAfternoon}, {20, 0, postingLabelNight}},
+			6:  {{8, 0, postingLabelMorning}, {10, 0, postingLabelLateMorning}, {12, 0, postingLabelLunch}, {15, 0, postingLabelAfternoon}, {18, 0, postingLabelEvening}, {21, 0, postingLabelNight}},
+			7:  {{7, 0, postingLabelEarlyMorning}, {9, 0, postingLabelMorning}, {11, 0, postingLabelLateMorning}, {13, 0, postingLabelLunch}, {15, 0, postingLabelAfternoon}, {18, 0, postingLabelEvening}, {21, 0, postingLabelNight}},
+			8:  {{7, 0, postingLabelEarlyMorning}, {9, 0, postingLabelMorning}, {11, 0, postingLabelLateMorning}, {13, 0, postingLabelLunch}, {15, 0, postingLabelAfternoon}, {17, 0, postingLabelLateAfternoon}, {19, 0, postingLabelEvening}, {21, 0, postingLabelNight}},
+			9:  {{7, 0, postingLabelEarlyMorning}, {9, 0, postingLabelMorning}, {11, 0, postingLabelLateMorning}, {13, 0, postingLabelLunch}, {14, 0, postingLabelAfternoon}, {16, 0, postingLabelLateAfternoon}, {18, 0, postingLabelEvening}, {20, 0, postingLabelNight}, {22, 0, postingLabelLateNight}},
+			10: {{7, 0, postingLabelEarlyMorning}, {9, 0, postingLabelMorning}, {10, 0, postingLabelLateMorning}, {12, 0, postingLabelLunch}, {13, 0, postingLabelAfternoon}, {15, 0, postingLabelLateAfternoon}, {17, 0, postingLabelLateAfternoon}, {18, 0, postingLabelEvening}, {20, 0, postingLabelNight}, {22, 0, postingLabelLateNight}},
 		}
 
 		templates := suggestionTemplates[input.Body.PostsPerDay]
@@ -616,7 +616,7 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/posting-schedules/next-slot",
 		Summary:     "Get the next available posting time slot",
-		Tags:        []string{"Posting Schedules"},
+		Tags:        []string{tagPostingSchedules},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403},
 	}, func(ctx context.Context, input *NextAvailableSlotInput) (*NextAvailableSlotOutput, error) {
@@ -628,10 +628,10 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		// Get workspace timezone

@@ -53,7 +53,7 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/workspaces",
 		Summary:       "Create a new workspace",
-		Tags:          []string{"Workspaces"},
+		Tags:          []string{tagWorkspaces},
 		DefaultStatus: http.StatusOK,
 		Middlewares:   huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *CreateWorkspaceInput) (*CreateWorkspaceOutput, error) {
@@ -98,7 +98,7 @@ func (h *WorkspaceHandler) ListWorkspaces(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/workspaces",
 		Summary:     "List workspaces for the current user",
-		Tags:        []string{"Workspaces"},
+		Tags:        []string{tagWorkspaces},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, _ *struct{}) (*ListWorkspacesOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -183,7 +183,7 @@ func (h *WorkspaceHandler) GetWorkspaceSettings(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/workspaces/{id}/settings",
 		Summary:     "Get workspace settings",
-		Tags:        []string{"Workspaces"},
+		Tags:        []string{tagWorkspaces},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *GetWorkspaceSettingsInput) (*GetWorkspaceSettingsOutput, error) {
@@ -194,10 +194,10 @@ func (h *WorkspaceHandler) GetWorkspaceSettings(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", input.PathID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		var workspace models.Workspace
@@ -238,7 +238,7 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 		Method:      http.MethodPatch,
 		Path:        "/workspaces/{id}/settings",
 		Summary:     "Update workspace settings",
-		Tags:        []string{"Workspaces"},
+		Tags:        []string{tagWorkspaces},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403, 404},
 	}, func(ctx context.Context, input *UpdateWorkspaceSettingsInput) (*UpdateWorkspaceSettingsOutput, error) {
@@ -249,10 +249,10 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 			Where("workspace_id = ? AND user_id = ?", input.PathID, userID).
 			Count(ctx)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to validate workspace access")
+			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
 		}
 		if memberCount == 0 {
-			return nil, huma.Error403Forbidden("you do not have access to this workspace")
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		var workspace models.Workspace

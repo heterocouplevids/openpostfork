@@ -59,11 +59,11 @@ func (t *ThreadsAdapter) GetWorkspaceID(state string) (string, bool) {
 
 func (t *ThreadsAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
 	values := map[string]string{
-		"client_id":     t.config.ClientID,
-		"client_secret": t.config.ClientSecret,
-		"redirect_uri":  t.config.RedirectURL,
-		"code":          code,
-		"grant_type":    "authorization_code",
+		oauthParamClientID:     t.config.ClientID,
+		oauthParamClientSecret: t.config.ClientSecret,
+		oauthParamRedirectURI:  t.config.RedirectURL,
+		oauthParamCode:         code,
+		"grant_type":           oauthGrantAuthCode,
 	}
 
 	respBody, err := DoFormURLEncoded(ctx, "POST", t.config.Endpoint.TokenURL, values, nil)
@@ -95,9 +95,9 @@ func (t *ThreadsAdapter) ExchangeCode(ctx context.Context, code string, _ map[st
 
 func (t *ThreadsAdapter) exchangeLongLivedToken(ctx context.Context, shortLivedToken string) (*TokenResult, error) {
 	params := url.Values{
-		"grant_type":    {"th_exchange_token"},
-		"client_secret": {t.config.ClientSecret},
-		"access_token":  {shortLivedToken},
+		"grant_type":                         {"th_exchange_token"},
+		oauthParamClientSecret:               {t.config.ClientSecret},
+		string(RefreshCredentialAccessToken): {shortLivedToken},
 	}
 
 	respBody, err := DoRequest(ctx, "GET", "https://graph.threads.net/access_token?"+params.Encode(), nil, nil)
@@ -116,7 +116,7 @@ func (t *ThreadsAdapter) exchangeLongLivedToken(ctx context.Context, shortLivedT
 	return &TokenResult{
 		AccessToken: tokenResp.AccessToken,
 		ExpiresIn:   tokenResp.ExpiresIn,
-		TokenType:   "Bearer",
+		TokenType:   tokenTypeBearer,
 		Extra:       map[string]string{"user_id": t.lastUserID},
 	}, nil
 }
@@ -134,8 +134,8 @@ func (t *ThreadsAdapter) RefreshToken(ctx context.Context, input RefreshTokenInp
 	}
 
 	params := url.Values{
-		"grant_type":   {"th_refresh_token"},
-		"access_token": {input.AccessToken},
+		"grant_type":                         {"th_refresh_token"},
+		string(RefreshCredentialAccessToken): {input.AccessToken},
 	}
 
 	respBody, err := DoRequest(ctx, "GET", "https://graph.threads.net/refresh_access_token?"+params.Encode(), nil, nil)
@@ -154,7 +154,7 @@ func (t *ThreadsAdapter) RefreshToken(ctx context.Context, input RefreshTokenInp
 	return &TokenResult{
 		AccessToken: tokenResp.AccessToken,
 		ExpiresIn:   tokenResp.ExpiresIn,
-		TokenType:   "Bearer",
+		TokenType:   tokenTypeBearer,
 	}, nil
 }
 
@@ -162,7 +162,7 @@ func (t *ThreadsAdapter) GetProfile(ctx context.Context, accessToken string) (*U
 	endpoint := "https://graph.threads.net/v1.0/me?fields=id,username,name"
 
 	respBody, err := DoRequest(ctx, "GET", endpoint, nil, map[string]string{
-		"Authorization": "Bearer " + accessToken,
+		headerAuthorization: bearerPrefix + accessToken,
 	})
 	if err != nil {
 		return nil, err
@@ -221,7 +221,7 @@ func (t *ThreadsAdapter) waitForContainerReady(ctx context.Context, accessToken,
 		statusURL := "https://graph.threads.net/v1.0/" + containerID + "?fields=status,error_message"
 
 		respBody, err := DoRequest(ctx, "GET", statusURL, nil, map[string]string{
-			"Authorization": "Bearer " + accessToken,
+			headerAuthorization: bearerPrefix + accessToken,
 		})
 		if err != nil {
 			if attempt == maxAttempts {
@@ -259,8 +259,8 @@ func (t *ThreadsAdapter) waitForContainerReady(ctx context.Context, accessToken,
 
 func (t *ThreadsAdapter) createContainer(ctx context.Context, accessToken, userID, content, mediaURL string, isVideo bool, replyToID string) (string, error) {
 	payload := map[string]string{
-		"text":         content,
-		"access_token": accessToken,
+		jsonFieldText:         content,
+		oauthParamAccessToken: accessToken,
 	}
 
 	if mediaURL != "" {
@@ -308,8 +308,8 @@ func (t *ThreadsAdapter) publishContainer(ctx context.Context, accessToken, user
 	publishURL := "https://graph.threads.net/v1.0/" + userID + "/threads_publish"
 
 	payload := map[string]string{
-		"creation_id":  creationID,
-		"access_token": accessToken,
+		"creation_id":         creationID,
+		oauthParamAccessToken: accessToken,
 	}
 
 	var respBody []byte

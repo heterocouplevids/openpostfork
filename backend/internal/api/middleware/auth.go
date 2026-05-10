@@ -20,6 +20,7 @@ const (
 	EmailKey       contextKey = "email"
 	WorkspaceIDKey contextKey = "workspace_id"
 	ClientIPKey    contextKey = "client_ip"
+	errorKey       contextKey = "error"
 )
 
 func AuthMiddleware(api huma.API, authService *auth.Service) func(ctx huma.Context, next func(huma.Context)) {
@@ -110,17 +111,17 @@ func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
 			if authHeader == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing authorization header"})
+				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "missing authorization header"})
 			}
 
 			tokenParts := strings.Split(authHeader, " ")
 			if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid authorization header format"})
+				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "invalid authorization header format"})
 			}
 
 			claims, err := authService.ValidateToken(tokenParts[1])
 			if err != nil {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
+				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "invalid or expired token"})
 			}
 
 			c.Set(string(UserIDKey), claims.UserID)
