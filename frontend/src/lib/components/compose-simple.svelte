@@ -9,7 +9,7 @@
 	import * as Popover from '$lib/components/ui/popover';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import PlatformPreview from './platform-preview.svelte';
+	import ComposePreviewPanel, { type PreviewGroup } from './compose-preview-panel.svelte';
 	import PlatformIcon from './platform-icon.svelte';
 	import { getPlatformKey, getPlatformName } from '$lib/utils';
 	import { CalendarDate, getLocalTimeZone, today, isEqualDay } from '@internationalized/date';
@@ -41,7 +41,8 @@
 		isThreadDraft,
 		decodeThreadDraft,
 		getDraftSnapshot,
-		hasAnyContent
+		hasAnyContent,
+		type VariantPost
 	} from './compose/draft-utils';
 
 	// --------------------------------------------------------------------------
@@ -114,7 +115,7 @@
 	let currentPrompt = $state<{ text: string; category: string } | null>(null);
 	let loadingPrompt = $state(false);
 
-	let variants = $state<Map<string, Record<string, string>>>(new Map());
+	let variants = $state<Map<string, Record<string, VariantPost>>>(new Map());
 	let activeVariantAccountId = $state<string | null>(null);
 
 	let isDraggingFile = $state(false);
@@ -185,24 +186,6 @@
 			: activePost.content
 	);
 
-	const selectedPlatformLimits = $derived.by(() => {
-		const seen = new Set<string>();
-		return selectedAccounts
-			.map((a) => {
-				const key = getPlatformKey(a.platform);
-				return {
-					platform: getPlatformName(a.platform),
-					key,
-					limit: PLATFORM_CHAR_LIMITS[key] ?? 280
-				};
-			})
-			.filter((item) => {
-				if (seen.has(item.key)) return false;
-				seen.add(item.key);
-				return true;
-			});
-	});
-
 	const editorTargetAccounts = $derived.by(() => {
 		if (activeVariantAccountId) {
 			const activeAccount = accounts.find((a) => a.id === activeVariantAccountId);
@@ -238,6 +221,46 @@
 		return Math.min(...limits);
 	});
 
+	const previewGroups = $derived.by<PreviewGroup[]>(() => {
+		const groups: PreviewGroup[] = [];
+		const seenPlatforms = new Set<string>();
+		const sourcePosts = isThread ? posts : activePost ? [activePost] : [];
+
+		for (const account of selectedAccounts) {
+			const platformKey = getPlatformKey(account.platform);
+			if (seenPlatforms.has(platformKey)) continue;
+			seenPlatforms.add(platformKey);
+			const previewPosts = sourcePosts
+				.map((post) => ({
+					key: post.key,
+					content: getVariantContent(account.id, post.key) ?? post.content,
+					mediaIds: getVariantMediaIds(account.id, post.key) ?? post.mediaIds
+				}))
+				.filter((post) => !isThread || post.content.trim().length > 0 || post.mediaIds.length > 0);
+
+			groups.push({
+				key: `${account.id}:${platformKey}`,
+				platformKey,
+				platformName: getPlatformName(account.platform),
+				username: account.account_username || 'username',
+				displayName: account.account_username || 'Display Name',
+				isUnsynced: variants.has(account.id),
+				posts: previewPosts
+			});
+		}
+
+		return groups;
+	});
+
+	const editorResizeSignature = $derived.by(() =>
+		posts
+			.map((post, index) => {
+				const mediaIds = getEditorMediaIdsForPost(post);
+				return `${post.key}:${index}:${getEditorContentForPost(post).length}:${mediaIds.join(',')}`;
+			})
+			.join('|')
+	);
+
 	// --------------------------------------------------------------------------
 	// Helpers
 	// --------------------------------------------------------------------------
@@ -260,7 +283,7 @@
 			selectedAccountIds = nextSelectedIds;
 		}
 
-		const nextVariants = new Map<string, Record<string, string>>();
+		const nextVariants = new Map<string, Record<string, VariantPost>>();
 		for (const [accountID, value] of variants.entries()) {
 			if (validIds.has(accountID)) {
 				nextVariants.set(accountID, value);
@@ -329,38 +352,74 @@
 		return getPlatformKey(account.platform) !== 'linkedin';
 	}
 
-	function getVariantContent(accountId: string, postKey: string): string | null {
+	function getVariantPost(accountId: string, postKey: string): VariantPost | null {
 		const values = variants.get(accountId);
 		if (!values) return null;
-		return values[postKey] ?? posts.find((post) => post.key === postKey)?.content ?? '';
+		return values[postKey] ?? null;
 	}
 
-	function getVariantPayloadForSave(): Record<string, Record<string, string>> {
+	function getVariantContent(accountId: string, postKey: string): string | null {
+		const variant = getVariantPost(accountId, postKey);
+		if (!variant) return null;
+		return variant.content;
+	}
+
+	function getVariantMediaIds(accountId: string, postKey: string): string[] | null {
+		const variant = getVariantPost(accountId, postKey);
+		if (!variant) return null;
+		return variant.mediaIds;
+	}
+
+	function getVariantPayloadForSave(): Record<string, Record<string, VariantPost>> {
 		return Object.fromEntries(
 			Array.from(variants.entries()).map(([accountId, values]) => [accountId, values])
 		);
 	}
 
-	function makeVariantRecord(sourcePosts: PostItem[]): Record<string, string> {
-		return Object.fromEntries(sourcePosts.map((post) => [post.key, post.content]));
+	function makeVariantRecord(sourcePosts: PostItem[]): Record<string, VariantPost> {
+		return Object.fromEntries(
+			sourcePosts.map((post) => [
+				post.key,
+				{
+					content: post.content,
+					mediaIds: [...post.mediaIds]
+				}
+			])
+		);
 	}
 
 	function normalizeVariantRecord(
-		record: Record<string, string> | undefined,
+		record: Record<string, VariantPost> | undefined,
 		sourcePosts: PostItem[]
-	): Record<string, string> {
+	): Record<string, VariantPost> {
 		return Object.fromEntries(
-			sourcePosts.map((post) => [post.key, record?.[post.key] ?? post.content])
+			sourcePosts.map((post) => {
+				const value = record?.[post.key];
+				return [
+					post.key,
+					{
+						content: value?.content ?? post.content,
+						mediaIds: value?.mediaIds ? [...value.mediaIds] : [...post.mediaIds]
+					}
+				];
+			})
 		);
 	}
 
 	function variantRecordEquals(
-		left: Record<string, string> | undefined,
-		right: Record<string, string>,
+		left: Record<string, VariantPost> | undefined,
+		right: Record<string, VariantPost>,
 		sourcePosts: PostItem[]
 	): boolean {
 		if (Object.keys(left ?? {}).length !== Object.keys(right).length) return false;
-		return sourcePosts.every((post) => (left?.[post.key] ?? post.content) === right[post.key]);
+		return sourcePosts.every((post) => {
+			const leftValue = left?.[post.key];
+			const rightValue = right[post.key];
+			return (
+				(leftValue?.content ?? post.content) === rightValue.content &&
+				arraysEqual(leftValue?.mediaIds ?? post.mediaIds, rightValue.mediaIds)
+			);
+		});
 	}
 
 	function getEditorContentForPost(post: PostItem): string {
@@ -368,11 +427,16 @@
 		return getVariantContent(activeVariantAccountId, post.key) ?? post.content;
 	}
 
+	function getEditorMediaIdsForPost(post: PostItem): string[] {
+		if (!activeVariantAccountId) return post.mediaIds;
+		return getVariantMediaIds(activeVariantAccountId, post.key) ?? post.mediaIds;
+	}
+
 	function normalizeVariantsMap(
-		nextVariants: Map<string, Record<string, string>>,
+		nextVariants: Map<string, Record<string, VariantPost>>,
 		sourcePosts: PostItem[] = posts
-	): Map<string, Record<string, string>> {
-		const normalized = new Map<string, Record<string, string>>();
+	): Map<string, Record<string, VariantPost>> {
+		const normalized = new Map<string, Record<string, VariantPost>>();
 		for (const accountId of selectedAccountIds) {
 			const values = nextVariants.get(accountId);
 			if (values) {
@@ -485,6 +549,7 @@
 	});
 
 	$effect(() => {
+		String(editorResizeSignature);
 		tick().then(() => {
 			textareaRefs.forEach((el) => {
 				if (el) autoResize(el);
@@ -504,7 +569,7 @@
 	$effect(() => {
 		const selected = new Set(selectedAccountIds);
 		let changed = false;
-		const nextVariants = new Map<string, Record<string, string>>();
+		const nextVariants = new Map<string, Record<string, VariantPost>>();
 		for (const [accountId, value] of variants.entries()) {
 			if (selected.has(accountId)) {
 				const normalized = normalizeVariantRecord(value, posts);
@@ -865,7 +930,9 @@
 		try {
 			for (const file of Array.from(files)) {
 				if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) continue;
-				if (posts[targetPostIndex].mediaIds.length >= 4) break;
+				const targetPost = posts[targetPostIndex];
+				if (!targetPost) break;
+				if (getEditorMediaIdsForPost(targetPost).length >= 4) break;
 
 				const formData = new FormData();
 				formData.append('file', file);
@@ -880,9 +947,7 @@
 
 				const data = await resp.json();
 				if (resp.ok) {
-					posts = posts.map((p, i) =>
-						i === targetPostIndex ? { ...p, mediaIds: [...p.mediaIds, data.id] } : p
-					);
+					addMediaToPost(targetPostIndex, data.id);
 					scheduleAutoSave();
 				} else {
 					error = data.error || 'Failed to upload media';
@@ -932,16 +997,57 @@
 	}
 
 	function removeMedia(postIndex: number, mediaIndex: number) {
-		const mediaId = posts[postIndex]?.mediaIds[mediaIndex];
-		posts = posts.map((p, i) =>
-			i === postIndex ? { ...p, mediaIds: p.mediaIds.filter((_, mi) => mi !== mediaIndex) } : p
-		);
+		const post = posts[postIndex];
+		if (!post) return;
+		const mediaIds = getEditorMediaIdsForPost(post);
+		const mediaId = mediaIds[mediaIndex];
+		if (activeVariantAccountId && activeVariantIsUnsynced) {
+			setVariantMediaIds(
+				activeVariantAccountId,
+				postIndex,
+				mediaIds.filter((_, mi) => mi !== mediaIndex)
+			);
+		} else {
+			posts = posts.map((p, i) =>
+				i === postIndex ? { ...p, mediaIds: p.mediaIds.filter((_, mi) => mi !== mediaIndex) } : p
+			);
+		}
 		if (mediaId) {
 			const newAlts = new Map(mediaAltTexts);
 			newAlts.delete(mediaId);
 			mediaAltTexts = newAlts;
 		}
 		scheduleAutoSave();
+	}
+
+	function addMediaToPost(postIndex: number, mediaId: string) {
+		const post = posts[postIndex];
+		if (!post) return;
+		if (activeVariantAccountId && activeVariantIsUnsynced) {
+			setVariantMediaIds(activeVariantAccountId, postIndex, [
+				...getEditorMediaIdsForPost(post),
+				mediaId
+			]);
+			return;
+		}
+		posts = posts.map((p, i) =>
+			i === postIndex ? { ...p, mediaIds: [...p.mediaIds, mediaId] } : p
+		);
+	}
+
+	function setVariantMediaIds(accountId: string, index: number, mediaIds: string[]) {
+		const postKey = posts[index]?.key;
+		if (!postKey) return;
+		const newVariants = new Map(variants);
+		const current = {
+			...normalizeVariantRecord(newVariants.get(accountId), posts),
+			[postKey]: {
+				content: getVariantContent(accountId, postKey) ?? posts[index].content,
+				mediaIds
+			}
+		};
+		newVariants.set(accountId, current);
+		variants = newVariants;
 	}
 
 	function setMediaAltText(mediaId: string, alt: string) {
@@ -1000,7 +1106,10 @@
 		if (!postKey) return;
 		const current = {
 			...normalizeVariantRecord(newVariants.get(accountId), posts),
-			[postKey]: value
+			[postKey]: {
+				content: value,
+				mediaIds: getVariantMediaIds(accountId, postKey) ?? [...posts[index].mediaIds]
+			}
 		};
 		newVariants.set(accountId, current);
 		variants = newVariants;
@@ -1013,11 +1122,25 @@
 				params: { path: { id: postId } }
 			});
 			if (err) throw err;
-			const nextVariants = new Map<string, Record<string, string>>();
+			const nextVariants = new Map<string, Record<string, VariantPost>>();
 			for (const variant of data?.variants ?? []) {
 				if (variant.is_unsynced) {
+					let mediaIds = [...(posts[0]?.mediaIds ?? [])];
+					if (typeof variant.media_ids === 'string' && variant.media_ids !== '') {
+						try {
+							const parsed = JSON.parse(variant.media_ids);
+							if (Array.isArray(parsed)) {
+								mediaIds = parsed.map(String);
+							}
+						} catch (e) {
+							console.error('Failed to parse variant media IDs:', e);
+						}
+					}
 					nextVariants.set(variant.social_account_id, {
-						[posts[0]?.key ?? makeEmptyPost().key]: variant.content
+						[posts[0]?.key ?? makeEmptyPost().key]: {
+							content: variant.content,
+							mediaIds
+						}
 					});
 				}
 			}
@@ -1042,7 +1165,8 @@
 
 		const variantPayload = Array.from(variants.entries()).map(([accountId, values]) => ({
 			social_account_id: accountId,
-			content: values[posts[0]?.key ?? ''] ?? posts[0]?.content ?? '',
+			content: values[posts[0]?.key ?? '']?.content ?? posts[0]?.content ?? '',
+			media_ids: JSON.stringify(values[posts[0]?.key ?? '']?.mediaIds ?? posts[0]?.mediaIds ?? []),
 			is_unsynced: true
 		}));
 		const { error: upsertErr } = await (client as any).PUT('/posts/{id}/variants', {
@@ -1081,7 +1205,8 @@
 			if (!postKey) continue;
 			const payload = Array.from(variants.entries()).map(([accountId, values]) => ({
 				social_account_id: accountId,
-				content: values[postKey] ?? sourcePosts[index]?.content ?? '',
+				content: values[postKey]?.content ?? sourcePosts[index]?.content ?? '',
+				media_ids: JSON.stringify(values[postKey]?.mediaIds ?? sourcePosts[index]?.mediaIds ?? []),
 				is_unsynced: true
 			}));
 			if (payload.length === 0) continue;
@@ -1722,12 +1847,15 @@
 										</div>
 
 										<!-- Media grid -->
-										{#if post.mediaIds.length > 0}
+										{#if getEditorMediaIdsForPost(post).length > 0}
 											<div
-												class="mb-3 {post.mediaIds.length === 1 ? '' : 'grid grid-cols-2 gap-1.5'}"
+												class="mb-3 {getEditorMediaIdsForPost(post).length === 1
+													? ''
+													: 'grid grid-cols-2 gap-1.5'}"
 											>
-												{#each post.mediaIds as mediaId, mi (mediaId)}
-													{@const isFirstOfThree = post.mediaIds.length === 3 && mi === 0}
+												{#each getEditorMediaIdsForPost(post) as mediaId, mi (mediaId)}
+													{@const isFirstOfThree =
+														getEditorMediaIdsForPost(post).length === 3 && mi === 0}
 													<div
 														class="group/media relative overflow-hidden rounded-lg {isFirstOfThree
 															? 'col-span-2'
@@ -1736,7 +1864,7 @@
 														<img
 															src={getAuthenticatedMediaByID(mediaId)}
 															alt={mediaAltTexts.get(mediaId) || ''}
-															class="{post.mediaIds.length === 1
+															class="{getEditorMediaIdsForPost(post).length === 1
 																? 'aspect-video'
 																: 'aspect-square'} w-full object-cover"
 														/>
@@ -1805,11 +1933,16 @@
 													>#{i + 1}</span
 												>{/if}
 
-											<label class="cursor-pointer">
+											<label
+												class={activeVariantAccountId && !activeVariantIsUnsynced
+													? 'cursor-not-allowed opacity-50'
+													: 'cursor-pointer'}
+											>
 												<input
 													type="file"
 													accept="image/*,video/*"
 													multiple
+													disabled={!!activeVariantAccountId && !activeVariantIsUnsynced}
 													class="hidden"
 													onchange={(e) => {
 														const target = e.target as HTMLInputElement;
@@ -1936,45 +2069,7 @@
 							onclick={() => (showPreview = false)}>{m.compose_hide()}</button
 						>
 					</div>
-					<div class="space-y-5">
-						{#each selectedPlatformLimits as pl (pl.key)}
-							{@const account = selectedAccounts.find((a) => getPlatformKey(a.platform) === pl.key)}
-							{#if account}
-								<div>
-									<div class="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-										<PlatformIcon platform={pl.key} class="h-3 w-3" />
-										<span>{pl.platform}</span>
-										{#if account.account_username}<span class="text-muted-foreground/60"
-												>@{account.account_username}</span
-											>{/if}
-									</div>
-									{#if isThread}
-										<div class="space-y-3">
-											{#each posts.filter((p) => p.content.trim().length > 0 || p.mediaIds.length > 0) as post (post.key)}
-												<PlatformPreview
-													platform={pl.key}
-													content={getVariantContent(account.id, post.key) ?? post.content}
-													mediaIds={post.mediaIds}
-													username={account.account_username || 'username'}
-													displayName={account.account_username || 'Display Name'}
-												/>
-											{/each}
-										</div>
-									{:else}
-										<PlatformPreview
-											platform={pl.key}
-											content={activePost.content}
-											mediaIds={activePost.mediaIds}
-											username={account.account_username || 'username'}
-											displayName={account.account_username || 'Display Name'}
-											variantContent={getVariantContent(account.id, activePost.key) ?? null}
-											isUnsynced={variants.has(account.id)}
-										/>
-									{/if}
-								</div>
-							{/if}
-						{/each}
-					</div>
+					<ComposePreviewPanel groups={previewGroups} />
 				</div>
 			</div>
 		{:else if !showPreview && selectedAccounts.length > 0}
@@ -2003,45 +2098,7 @@
 			<Sheet.Title class="text-sm font-medium">Preview</Sheet.Title>
 		</Sheet.Header>
 		<div class="overflow-y-auto px-4 py-4">
-			<div class="space-y-5">
-				{#each selectedPlatformLimits as pl (pl.key)}
-					{@const account = selectedAccounts.find((a) => getPlatformKey(a.platform) === pl.key)}
-					{#if account}
-						<div>
-							<div class="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-								<PlatformIcon platform={pl.key} class="h-3 w-3" />
-								<span>{pl.platform}</span>
-								{#if account.account_username}<span class="text-muted-foreground/60"
-										>@{account.account_username}</span
-									>{/if}
-							</div>
-							{#if isThread}
-								<div class="space-y-3">
-									{#each posts.filter((p) => p.content.trim().length > 0 || p.mediaIds.length > 0) as post (post.key)}
-										<PlatformPreview
-											platform={pl.key}
-											content={getVariantContent(account.id, post.key) ?? post.content}
-											mediaIds={post.mediaIds}
-											username={account.account_username || 'username'}
-											displayName={account.account_username || 'Display Name'}
-										/>
-									{/each}
-								</div>
-							{:else}
-								<PlatformPreview
-									platform={pl.key}
-									content={activePost.content}
-									mediaIds={activePost.mediaIds}
-									username={account.account_username || 'username'}
-									displayName={account.account_username || 'Display Name'}
-									variantContent={getVariantContent(account.id, activePost.key) ?? null}
-									isUnsynced={variants.has(account.id)}
-								/>
-							{/if}
-						</div>
-					{/if}
-				{/each}
-			</div>
+			<ComposePreviewPanel groups={previewGroups} />
 		</div>
 	</Sheet.Content>
 </Sheet.Root>

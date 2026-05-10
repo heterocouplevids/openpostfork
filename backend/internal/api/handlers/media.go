@@ -417,9 +417,8 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 				failedIDs = append(failedIDs, mediaID)
 				continue
 			}
-
-			err = h.deleteMediaFiles(&media)
-			if err != nil {
+			usedByVariant, err := h.mediaUsedByVariant(ctx, media.WorkspaceID, mediaID)
+			if err != nil || usedByVariant {
 				failedIDs = append(failedIDs, mediaID)
 				continue
 			}
@@ -522,6 +521,33 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			Message string `json:"message" doc:"Success message"`
 		}{Message: "media updated successfully"}}, nil
 	})
+}
+
+func (h *MediaHandler) mediaUsedByVariant(ctx context.Context, workspaceID, mediaID string) (bool, error) {
+	var rows []struct {
+		MediaIDs string `bun:"media_ids"`
+	}
+	if err := h.db.NewSelect().
+		TableExpr("post_variants AS pv").
+		ColumnExpr("pv.media_ids").
+		Join("JOIN posts AS p ON p.id = pv.post_id").
+		Where("p.workspace_id = ?", workspaceID).
+		Where("pv.media_ids != ''").
+		Scan(ctx, &rows); err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		var ids []string
+		if err := json.Unmarshal([]byte(row.MediaIDs), &ids); err != nil {
+			continue
+		}
+		for _, id := range ids {
+			if id == mediaID {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func (h *MediaHandler) deleteMediaFiles(media *models.MediaAttachment) error {

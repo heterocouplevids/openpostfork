@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-05-10
+
+### Changed
+- Refactored composer preview rendering so desktop and mobile previews share the same derived Svelte state model.
+- Extended account-specific post variants to track media attachments independently from the synced post media.
+
+### Fixed
+- Fixed stale composer preview and textarea sizing when switching between synced and account-specific social media variants.
+- Prevented media that is only attached to account-specific variants from being deleted as unused media.
+
 ## [1.0.4] - 2026-05-09
 
 ### Added

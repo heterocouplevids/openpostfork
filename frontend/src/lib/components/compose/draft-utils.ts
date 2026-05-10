@@ -5,7 +5,12 @@ export interface PostItem {
 	mediaIds: string[];
 }
 
-export type ThreadVariantMap = Record<string, Record<string, string>>;
+export interface VariantPost {
+	content: string;
+	mediaIds: string[];
+}
+
+export type ThreadVariantMap = Record<string, Record<string, VariantPost>>;
 
 export interface DecodedThreadDraft {
 	posts: { key: string; content: string; mediaIds: string[] }[];
@@ -69,19 +74,39 @@ export function decodeThreadDraft(content: string): DecodedThreadDraft | null {
 	}
 }
 
-function normalizeVariantValue(value: unknown): Record<string, string> {
+function normalizeVariantValue(value: unknown): Record<string, VariantPost> {
 	if (Array.isArray(value)) {
-		return Object.fromEntries(value.map((item, index) => [String(index), String(item ?? '')]));
+		return Object.fromEntries(
+			value.map((item, index) => [String(index), normalizeVariantPost(item)])
+		);
 	}
 	if (!value || typeof value !== 'object') {
 		return {};
 	}
 	return Object.fromEntries(
-		Object.entries(value as Record<string, unknown>).map(([postKey, content]) => [
+		Object.entries(value as Record<string, unknown>).map(([postKey, variant]) => [
 			postKey,
-			String(content ?? '')
+			normalizeVariantPost(variant)
 		])
 	);
+}
+
+function normalizeVariantPost(value: unknown): VariantPost {
+	if (value && typeof value === 'object' && !Array.isArray(value)) {
+		const record = value as Record<string, unknown>;
+		return {
+			content: String(record.content ?? record.c ?? ''),
+			mediaIds: Array.isArray(record.mediaIds)
+				? record.mediaIds.map(String)
+				: Array.isArray(record.m)
+					? record.m.map(String)
+					: []
+		};
+	}
+	return {
+		content: String(value ?? ''),
+		mediaIds: []
+	};
 }
 
 export function getDraftSnapshot(posts: PostItem[]): string {

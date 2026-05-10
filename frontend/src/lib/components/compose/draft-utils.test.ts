@@ -44,8 +44,8 @@ describe('draft-utils', () => {
 			];
 			const encoded = encodeThreadDraft(posts, {
 				acc1: {
-					a: 'Olá',
-					b: 'Mundo'
+					a: { content: 'Olá', mediaIds: [] },
+					b: { content: 'Mundo', mediaIds: [] }
 				}
 			});
 			expect(decodeThreadDraft(encoded)).toEqual({
@@ -55,10 +55,27 @@ describe('draft-utils', () => {
 				],
 				variants: {
 					acc1: {
-						a: 'Olá',
-						b: 'Mundo'
+						a: { content: 'Olá', mediaIds: [] },
+						b: { content: 'Mundo', mediaIds: [] }
 					}
 				}
+			});
+		});
+
+		it('preserves per-account thread media variants', () => {
+			const posts = [
+				{ key: 'a', content: 'Hello', mediaIds: ['m1'] },
+				{ key: 'b', content: 'World', mediaIds: [] }
+			];
+			const encoded = encodeThreadDraft(posts, {
+				acc1: {
+					a: { content: 'Olá', mediaIds: [] },
+					b: { content: 'Mundo', mediaIds: ['m2'] }
+				}
+			});
+			expect(decodeThreadDraft(encoded)?.variants.acc1.b).toEqual({
+				content: 'Mundo',
+				mediaIds: ['m2']
 			});
 		});
 	});
@@ -100,8 +117,8 @@ describe('draft-utils', () => {
 				],
 				variants: {
 					acc1: {
-						'0': 'Olá',
-						'1': 'Mundo'
+						'0': { content: 'Olá', mediaIds: [] },
+						'1': { content: 'Mundo', mediaIds: [] }
 					}
 				}
 			});

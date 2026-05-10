@@ -186,34 +186,16 @@ func (w *BackgroundWorker) handleMediaCleanup(ctx context.Context, payload strin
 		return err
 	}
 
+	variantMediaIDs, err := w.variantMediaIDs(ctx, cleanupJob.WorkspaceID)
+	if err != nil {
+		return err
+	}
+
 	for _, m := range media {
-		if err := w.storage.Delete(filepath.Base(m.FilePath)); err != nil {
-			log.Printf("Failed to delete media file %s: %v", m.ID, err)
+		if _, usedByVariant := variantMediaIDs[m.ID]; usedByVariant {
+			continue
 		}
-
-		var thumbs struct {
-			SM string `json:"sm,omitempty"`
-			MD string `json:"md,omitempty"`
-		}
-		if m.ThumbnailsJSON != "" {
-			if err := json.Unmarshal([]byte(m.ThumbnailsJSON), &thumbs); err == nil {
-				if thumbs.SM != "" {
-					if err := w.storage.Delete(thumbs.SM); err != nil {
-						log.Printf("Failed to delete thumbnail %s: %v", thumbs.SM, err)
-					}
-				}
-				if thumbs.MD != "" {
-					if err := w.storage.Delete(thumbs.MD); err != nil {
-						log.Printf("Failed to delete thumbnail %s: %v", thumbs.MD, err)
-					}
-				}
-			}
-		}
-
-		if _, err := w.db.NewDelete().Model(&m).Where("id = ?", m.ID).Exec(ctx); err != nil {
-			log.Printf("Failed to delete media record %s: %v", m.ID, err)
-		}
-		log.Printf("Cleaned up media %s for workspace %s", m.ID, cleanupJob.WorkspaceID)
+		w.deleteUnusedMedia(ctx, m, cleanupJob.WorkspaceID)
 	}
 
 	var workspace models.Workspace
@@ -222,6 +204,64 @@ func (w *BackgroundWorker) handleMediaCleanup(ctx context.Context, payload strin
 	}
 
 	return nil
+}
+
+func (w *BackgroundWorker) deleteUnusedMedia(ctx context.Context, media models.MediaAttachment, workspaceID string) {
+	if err := w.storage.Delete(filepath.Base(media.FilePath)); err != nil {
+		log.Printf("Failed to delete media file %s: %v", media.ID, err)
+	}
+
+	var thumbs struct {
+		SM string `json:"sm,omitempty"`
+		MD string `json:"md,omitempty"`
+	}
+	if media.ThumbnailsJSON != "" {
+		if err := json.Unmarshal([]byte(media.ThumbnailsJSON), &thumbs); err == nil {
+			if thumbs.SM != "" {
+				if err := w.storage.Delete(thumbs.SM); err != nil {
+					log.Printf("Failed to delete thumbnail %s: %v", thumbs.SM, err)
+				}
+			}
+			if thumbs.MD != "" {
+				if err := w.storage.Delete(thumbs.MD); err != nil {
+					log.Printf("Failed to delete thumbnail %s: %v", thumbs.MD, err)
+				}
+			}
+		}
+	}
+
+	if _, err := w.db.NewDelete().Model(&media).Where("id = ?", media.ID).Exec(ctx); err != nil {
+		log.Printf("Failed to delete media record %s: %v", media.ID, err)
+	}
+	log.Printf("Cleaned up media %s for workspace %s", media.ID, workspaceID)
+}
+
+func (w *BackgroundWorker) variantMediaIDs(ctx context.Context, workspaceID string) (map[string]struct{}, error) {
+	var variantRows []struct {
+		MediaIDs string `bun:"media_ids"`
+	}
+	if err := w.db.NewSelect().
+		TableExpr("post_variants AS pv").
+		ColumnExpr("pv.media_ids").
+		Join("JOIN posts AS p ON p.id = pv.post_id").
+		Where("p.workspace_id = ?", workspaceID).
+		Where("pv.media_ids != ''").
+		Scan(ctx, &variantRows); err != nil {
+		return nil, err
+	}
+
+	variantMediaIDs := make(map[string]struct{})
+	for _, row := range variantRows {
+		var ids []string
+		if err := json.Unmarshal([]byte(row.MediaIDs), &ids); err != nil {
+			log.Printf("Failed to parse variant media IDs during cleanup: %v", err)
+			continue
+		}
+		for _, id := range ids {
+			variantMediaIDs[id] = struct{}{}
+		}
+	}
+	return variantMediaIDs, nil
 }
 
 func (w *BackgroundWorker) scheduleMediaCleanup(ctx context.Context, workspaceID string, days int) error {
