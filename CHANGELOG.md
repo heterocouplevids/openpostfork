@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Known Issues
+- **Bluesky video**: `com.atproto.server.getServiceAuth` returns 501 on `bsky.social` PDS, preventing video uploads to `video.bsky.app`.
+- **LinkedIn video**: `POST /rest/posts` returns 400 `FIELD_VALUE_UPDATE_NOT_ALLOWED` / `field override not supported for category` when posting with a video URN.
+- **Language picker**: The dropdown sub-menu gets clipped at the right edge of the quick-settings card in production builds.
+
 ## [1.0.6] - 2026-05-14
 
 ### Changed
