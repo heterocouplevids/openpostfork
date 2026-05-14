@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-05-14
+
 ### Changed
 - Clarified the README and docs to reflect the actual provider-by-provider video implementation state instead of treating video support as universally absent.
 
