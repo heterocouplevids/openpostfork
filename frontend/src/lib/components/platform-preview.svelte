@@ -12,6 +12,7 @@
 		platform: string;
 		content: string;
 		mediaIds: string[];
+		mediaMimeTypes?: Record<string, string>;
 		username?: string;
 		displayName?: string;
 		avatarUrl?: string;
@@ -23,6 +24,7 @@
 		platform,
 		content,
 		mediaIds,
+		mediaMimeTypes = {},
 		username = 'username',
 		displayName = 'Display Name',
 		avatarUrl,
@@ -52,7 +54,19 @@
 		if (mediaIds.length === 3) return 'grid-3';
 		return 'grid-4';
 	});
+
+	function isVideo(id: string): boolean {
+		return mediaMimeTypes[id]?.startsWith('video/') ?? false;
+	}
 </script>
+
+{#snippet mediaElement(id: string, classes: string)}
+	{#if isVideo(id)}
+		<video src={getAuthenticatedMediaByID(id)} class={classes} controls muted playsinline></video>
+	{:else}
+		<img src={getAuthenticatedMediaByID(id)} alt="" class={classes} />
+	{/if}
+{/snippet}
 
 {#if platformKey === 'x'}
 	<!-- X/Twitter Preview -->
@@ -84,47 +98,23 @@
 				{#if mediaIds.length > 0}
 					<div class="mt-3 overflow-hidden rounded-xl border border-border/60">
 						{#if mediaLayout === 'single'}
-							<img
-								src={getAuthenticatedMediaByID(mediaIds[0])}
-								alt=""
-								class="h-auto w-full object-cover"
-							/>
+							{@render mediaElement(mediaIds[0], 'h-auto w-full object-cover')}
 						{:else if mediaLayout === 'grid-2'}
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id (id)}
-									<img
-										src={getAuthenticatedMediaByID(id)}
-										alt=""
-										class="aspect-square w-full object-cover"
-									/>
+									{@render mediaElement(id, 'aspect-square w-full object-cover')}
 								{/each}
 							</div>
 						{:else if mediaLayout === 'grid-3'}
 							<div class="grid grid-cols-2 gap-0.5">
-								<img
-									src={getAuthenticatedMediaByID(mediaIds[0])}
-									alt=""
-									class="col-span-2 aspect-video w-full object-cover"
-								/>
-								<img
-									src={getAuthenticatedMediaByID(mediaIds[1])}
-									alt=""
-									class="aspect-square w-full object-cover"
-								/>
-								<img
-									src={getAuthenticatedMediaByID(mediaIds[2])}
-									alt=""
-									class="aspect-square w-full object-cover"
-								/>
+								{@render mediaElement(mediaIds[0], 'col-span-2 aspect-video w-full object-cover')}
+								{@render mediaElement(mediaIds[1], 'aspect-square w-full object-cover')}
+								{@render mediaElement(mediaIds[2], 'aspect-square w-full object-cover')}
 							</div>
 						{:else}
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id (id)}
-									<img
-										src={getAuthenticatedMediaByID(id)}
-										alt=""
-										class="aspect-square w-full object-cover"
-									/>
+									{@render mediaElement(id, 'aspect-square w-full object-cover')}
 								{/each}
 							</div>
 						{/if}
@@ -179,12 +169,7 @@
 				{#if mediaIds.length > 0}
 					<div class="mt-3 grid grid-cols-2 gap-2">
 						{#each mediaIds as id (id)}
-							<img
-								src={getAuthenticatedMediaByID(id)}
-								alt=""
-								class="rounded-lg object-cover"
-								style="max-height: 260px;"
-							/>
+							{@render mediaElement(id, 'max-h-[260px] rounded-lg object-cover')}
 						{/each}
 					</div>
 				{/if}
@@ -245,19 +230,11 @@
 				{#if mediaIds.length > 0}
 					<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
 						{#if mediaLayout === 'single'}
-							<img
-								src={getAuthenticatedMediaByID(mediaIds[0])}
-								alt=""
-								class="h-auto w-full object-cover"
-							/>
+							{@render mediaElement(mediaIds[0], 'h-auto w-full object-cover')}
 						{:else}
 							<div class="grid grid-cols-2 gap-0.5">
 								{#each mediaIds as id (id)}
-									<img
-										src={getAuthenticatedMediaByID(id)}
-										alt=""
-										class="aspect-square w-full object-cover"
-									/>
+									{@render mediaElement(id, 'aspect-square w-full object-cover')}
 								{/each}
 							</div>
 						{/if}
@@ -313,11 +290,7 @@
 		</div>
 		{#if mediaIds.length > 0}
 			<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
-				<img
-					src={getAuthenticatedMediaByID(mediaIds[0])}
-					alt=""
-					class="h-auto w-full object-cover"
-				/>
+				{@render mediaElement(mediaIds[0], 'h-auto w-full object-cover')}
 			</div>
 			{#if mediaIds.length > 1}
 				<div class="mt-2 text-xs text-muted-foreground">
@@ -379,11 +352,7 @@
 				</div>
 				{#if mediaIds.length > 0}
 					<div class="mt-3 overflow-hidden rounded-lg border border-border/40">
-						<img
-							src={getAuthenticatedMediaByID(mediaIds[0])}
-							alt=""
-							class="h-auto w-full object-cover"
-						/>
+						{@render mediaElement(mediaIds[0], 'h-auto w-full object-cover')}
 					</div>
 					{#if mediaIds.length > 1}
 						<div class="mt-2 text-xs text-muted-foreground">
@@ -428,7 +397,7 @@
 		{#if mediaIds.length > 0}
 			<div class="mt-3 grid grid-cols-2 gap-2">
 				{#each mediaIds as id (id)}
-					<img src={getAuthenticatedMediaByID(id)} alt="" class="rounded-lg object-cover" />
+					{@render mediaElement(id, 'rounded-lg object-cover')}
 				{/each}
 			</div>
 		{/if}

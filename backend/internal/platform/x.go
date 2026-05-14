@@ -553,3 +553,44 @@ func splitXCombinedToken(combined string) (string, string, error) {
 	}
 	return parts[0], parts[1], nil
 }
+
+func validateXMedia(media []MediaItem) []MediaValidationIssue {
+	if len(media) == 0 {
+		return nil
+	}
+
+	var videos int
+	for _, item := range media {
+		if isVideoMime(item.MimeType) {
+			videos++
+		}
+	}
+
+	if videos == 0 {
+		if len(media) > 4 {
+			return []MediaValidationIssue{{
+				Provider: "x",
+				Severity: "error",
+				Message:  "X supports up to 4 images per post.",
+			}}
+		}
+		return nil
+	}
+
+	if videos > 1 || len(media) > 1 {
+		return []MediaValidationIssue{{
+			Provider: "x",
+			Severity: "error",
+			Message:  "X supports one video per post and cannot mix video with images.",
+		}}
+	}
+	if !strings.EqualFold(media[0].MimeType, videoTypeMP4) {
+		return []MediaValidationIssue{{
+			Provider: "x",
+			MediaID:  media[0].ID,
+			Severity: "warning",
+			Message:  "X video publishing is most reliable with MP4 video.",
+		}}
+	}
+	return nil
+}

@@ -101,6 +101,27 @@ type GetMediaUsageOutput struct {
 	}
 }
 
+type MediaMetadataItem struct {
+	ID        string `json:"id" doc:"Media ID"`
+	MimeType  string `json:"mime_type" doc:"MIME type"`
+	AltText   string `json:"alt_text" doc:"Alt text"`
+	Width     int    `json:"width" doc:"Image width"`
+	Height    int    `json:"height" doc:"Image height"`
+	URL       string `json:"url" doc:"URL to access the media"`
+	Thumbnail string `json:"thumbnail_url" doc:"Thumbnail URL"`
+}
+
+type MediaMetadataInput struct {
+	WorkspaceID string   `query:"workspace_id" required:"true" doc:"Workspace ID"`
+	MediaIDs    []string `query:"media_ids" doc:"Comma-separated list of media IDs"`
+}
+
+type MediaMetadataOutput struct {
+	Body struct {
+		Media []MediaMetadataItem `json:"media" doc:"Media metadata list"`
+	}
+}
+
 type DeleteMediaInput struct {
 	PathID string `path:"id" doc:"Media ID"`
 }
@@ -550,6 +571,67 @@ func (h *MediaHandler) mediaUsedByVariant(ctx context.Context, workspaceID, medi
 	return false, nil
 }
 
+func (h *MediaHandler) mediaMetadata(c echo.Context) error {
+	userID := c.Get(string(middleware.UserIDKey)).(string)
+
+	workspaceID := c.QueryParam("workspace_id")
+	if workspaceID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: errWorkspaceIDRequired})
+	}
+
+	mediaIDsRaw := c.QueryParam("media_ids")
+	if mediaIDsRaw == "" {
+		return c.JSON(http.StatusOK, map[string]interface{}{"media": []MediaMetadataItem{}})
+	}
+
+	mediaIDs := strings.Split(mediaIDsRaw, ",")
+	for i := range mediaIDs {
+		mediaIDs[i] = strings.TrimSpace(mediaIDs[i])
+		if mediaIDs[i] == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{fieldError: "media_ids must not contain empty values"})
+		}
+	}
+
+	var memberCount int
+	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: "failed to validate workspace access"})
+	}
+	if memberCount == 0 {
+		return c.JSON(http.StatusForbidden, map[string]string{fieldError: errWorkspaceAccessDenied})
+	}
+
+	var media []models.MediaAttachment
+	if err := h.db.NewSelect().Model(&media).
+		Where("workspace_id = ? AND id IN (?)", workspaceID, bun.List(mediaIDs)).
+		Scan(c.Request().Context()); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: "failed to fetch media"})
+	}
+
+	result := make([]MediaMetadataItem, 0, len(media))
+	for _, m := range media {
+		item := MediaMetadataItem{
+			ID:       m.ID,
+			MimeType: m.MimeType,
+			AltText:  m.AltText,
+			Width:    m.Width,
+			Height:   m.Height,
+			URL:      "/media/" + m.ID,
+		}
+		if thumbsJSON := m.ThumbnailsJSON; thumbsJSON != "" {
+			var thumbs Thumbnails
+			if json.Unmarshal([]byte(thumbsJSON), &thumbs) == nil && thumbs.SM != "" {
+				item.Thumbnail = "/media/" + m.ID + "/thumb/sm"
+			}
+		}
+		result = append(result, item)
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"media": result})
+}
+
 func (h *MediaHandler) deleteMediaFiles(media *models.MediaAttachment) error {
 	if err := h.storage.Delete(filepath.Base(media.FilePath)); err != nil {
 		return err
@@ -573,6 +655,7 @@ func (h *MediaHandler) deleteMediaFiles(media *models.MediaAttachment) error {
 func (h *MediaHandler) RegisterLegacyRoutes(e *echo.Echo) {
 	e.POST("/api/v1/media/upload", h.uploadMedia, middleware.JWTMiddleware(h.auth))
 	e.POST("/api/v1/media/batch-upload", h.batchUploadMedia, middleware.JWTMiddleware(h.auth))
+	e.GET("/api/v1/media/metadata", h.mediaMetadata, middleware.JWTMiddleware(h.auth))
 	e.GET("/media/:id", h.serveMedia, h.optionalMediaAuth())
 	e.HEAD("/media/:id", h.serveMedia, h.optionalMediaAuth())
 	e.GET("/media/:id/thumb/:size", h.serveThumbnailSize, h.optionalMediaAuth())

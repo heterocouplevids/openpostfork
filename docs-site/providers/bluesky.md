@@ -16,4 +16,5 @@ Bluesky is the simplest provider to enable.
 ## Notes
 
 - No server-side OAuth app is required.
-- Media limits still apply, especially for images and video sizes.
+- OpenPost publishes images through `app.bsky.embed.images` and videos through `app.bsky.embed.video`.
+- Bluesky video support is limited to one video attachment per post in OpenPost.

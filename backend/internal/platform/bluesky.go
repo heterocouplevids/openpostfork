@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -151,7 +152,11 @@ func (b *BlueskyAdapter) GetProfile(ctx context.Context, accessToken string) (*U
 	}, nil
 }
 
-func (b *BlueskyAdapter) UploadMedia(ctx context.Context, accessToken, _ string, mimeType string, reader io.Reader) (string, error) {
+func (b *BlueskyAdapter) UploadMedia(ctx context.Context, accessToken, accountID, mimeType string, reader io.Reader) (string, error) {
+	if isVideoMime(mimeType) {
+		return b.uploadVideo(ctx, accessToken, accountID, mimeType, reader)
+	}
+
 	respBody, err := DoRequest(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.repo.uploadBlob", reader, map[string]string{
 		headerAuthorization: bearerPrefix + accessToken,
 		headerContentType:   mimeType,
@@ -182,6 +187,121 @@ func (b *BlueskyAdapter) UploadMedia(ctx context.Context, accessToken, _ string,
 	return string(blobJSON), nil
 }
 
+func (b *BlueskyAdapter) uploadVideo(ctx context.Context, accessToken, did, mimeType string, reader io.Reader) (string, error) {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return "", fmt.Errorf("reading video data: %w", err)
+	}
+
+	// Get service auth token for video.bsky.app
+	pdsHost := strings.TrimPrefix(b.pdsURL, "https://")
+	pdsHost = strings.TrimPrefix(pdsHost, "http://")
+	authPayload := map[string]interface{}{
+		"aud": "did:web:" + pdsHost,
+		"lxm": "com.atproto.repo.uploadBlob",
+		"exp": time.Now().UTC().Add(30 * time.Minute).Unix(),
+	}
+
+	authResp, err := DoJSON(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.server.getServiceAuth", authPayload, map[string]string{
+		headerAuthorization: bearerPrefix + accessToken,
+	})
+	if err != nil {
+		return "", fmt.Errorf("bluesky video service auth: %w", err)
+	}
+
+	var authResult struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(authResp, &authResult); err != nil {
+		return "", fmt.Errorf("decoding bluesky service auth: %w", err)
+	}
+
+	// Derive filename from MIME type
+	filename := "video.mp4"
+	switch {
+	case strings.Contains(mimeType, "quicktime"):
+		filename = "video.mov"
+	case strings.Contains(mimeType, "webm"):
+		filename = "video.webm"
+	}
+
+	// Upload video to Bluesky video service
+	uploadURL := "https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?did=" + url.QueryEscape(did) + "&name=" + url.QueryEscape(filename)
+	jobResp, err := DoRequest(ctx, "POST", uploadURL, bytes.NewReader(data), map[string]string{
+		headerAuthorization: bearerPrefix + authResult.Token,
+		headerContentType:   mimeType,
+	})
+	if err != nil {
+		return "", fmt.Errorf("bluesky video upload: %w", err)
+	}
+
+	var jobStatus struct {
+		JobID string      `json:"jobId"`
+		State string      `json:"state"`
+		Blob  interface{} `json:"blob"`
+	}
+	if err := json.Unmarshal(jobResp, &jobStatus); err != nil {
+		return "", fmt.Errorf("decoding bluesky video job: %w", err)
+	}
+
+	// Poll if video is still processing
+	if jobStatus.Blob == nil {
+		blob, pollErr := b.pollVideoJob(ctx, accessToken, jobStatus.JobID)
+		if pollErr != nil {
+			return "", pollErr
+		}
+		jobStatus.Blob = blob
+	}
+
+	blobJSON, err := json.Marshal(jobStatus.Blob)
+	if err != nil {
+		return "", fmt.Errorf("encoding bluesky video blob: %w", err)
+	}
+
+	return string(blobJSON), nil
+}
+
+func (b *BlueskyAdapter) pollVideoJob(ctx context.Context, accessToken, jobID string) (interface{}, error) {
+	statusURL := "https://video.bsky.app/xrpc/app.bsky.video.getJobStatus?jobId=" + url.QueryEscape(jobID)
+
+	for i := 0; i < 60; i++ {
+		respBody, err := DoRequest(ctx, "GET", statusURL, nil, map[string]string{
+			headerAuthorization: bearerPrefix + accessToken,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("bluesky video job status: %w", err)
+		}
+
+		var result struct {
+			JobStatus struct {
+				JobID string      `json:"jobId"`
+				State string      `json:"state"`
+				Blob  interface{} `json:"blob"`
+			} `json:"jobStatus"`
+		}
+		if err := json.Unmarshal(respBody, &result); err != nil {
+			return nil, fmt.Errorf("decoding bluesky video job status: %w", err)
+		}
+
+		switch result.JobStatus.State {
+		case "JOB_STATE_COMPLETED":
+			if result.JobStatus.Blob != nil {
+				return result.JobStatus.Blob, nil
+			}
+		case "JOB_STATE_FAILED":
+			return nil, fmt.Errorf("bluesky video processing failed")
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+
+	return nil, fmt.Errorf("bluesky video processing timed out")
+}
+
 func (b *BlueskyAdapter) Publish(ctx context.Context, accessToken, accountID string, req *PublishRequest) (string, error) {
 	record := map[string]interface{}{
 		"$type":       "app.bsky.feed.post",
@@ -189,50 +309,11 @@ func (b *BlueskyAdapter) Publish(ctx context.Context, accessToken, accountID str
 		"createdAt":   time.Now().UTC().Format(time.RFC3339Nano),
 	}
 
-	if len(req.PlatformMediaIDs) > 0 {
-		images := make([]map[string]interface{}, 0, len(req.PlatformMediaIDs))
-		for i, blobJSON := range req.PlatformMediaIDs {
-			var blob map[string]interface{}
-			if err := json.Unmarshal([]byte(blobJSON), &blob); err != nil {
-				return "", fmt.Errorf("decoding bluesky blob: %w", err)
-			}
-			altText := ""
-			if i < len(req.MediaAltTexts) {
-				altText = req.MediaAltTexts[i]
-			}
-			images = append(images, map[string]interface{}{
-				"alt":   altText,
-				"image": blob,
-			})
-		}
-		if len(images) > 0 {
-			record["embed"] = map[string]interface{}{
-				"$type":  "app.bsky.embed.images",
-				"images": images,
-			}
-		}
+	if err := b.attachMediaToRecord(record, req); err != nil {
+		return "", err
 	}
 
-	if req.ReplyToID != "" {
-		var parentRef map[string]interface{}
-		if err := json.Unmarshal([]byte(req.ReplyToID), &parentRef); err != nil {
-			return "", fmt.Errorf("decoding bluesky reply parent: %w", err)
-		}
-
-		rootRef := parentRef
-		if rootRef["_root"] != nil {
-			if rootMap, ok := rootRef["_root"].(map[string]interface{}); ok {
-				rootRef = rootMap
-			}
-		}
-
-		delete(parentRef, "_root")
-
-		record["reply"] = map[string]interface{}{
-			"root":   rootRef,
-			"parent": parentRef,
-		}
-	}
+	attachReplyToRecord(record, req.ReplyToID)
 
 	payload := map[string]interface{}{
 		"repo":       accountID,
@@ -261,6 +342,144 @@ func (b *BlueskyAdapter) Publish(ctx context.Context, accessToken, accountID str
 		"_root": getParentRoot(req.ReplyToID),
 	})
 	return string(externalID), nil
+}
+
+func (b *BlueskyAdapter) attachMediaToRecord(record map[string]interface{}, req *PublishRequest) error {
+	if len(req.PlatformMediaIDs) == 0 {
+		return nil
+	}
+
+	isVideo := len(req.Media) > 0 && isVideoMime(req.Media[0].MimeType)
+	if isVideo {
+		return b.attachVideoToRecord(record, req)
+	}
+
+	return b.attachImagesToRecord(record, req)
+}
+
+func (b *BlueskyAdapter) attachVideoToRecord(record map[string]interface{}, req *PublishRequest) error {
+	var blob map[string]interface{}
+	if err := json.Unmarshal([]byte(req.PlatformMediaIDs[0]), &blob); err != nil {
+		return fmt.Errorf("decoding bluesky video blob: %w", err)
+	}
+	altText := ""
+	if len(req.MediaAltTexts) > 0 {
+		altText = req.MediaAltTexts[0]
+	}
+	record["embed"] = map[string]interface{}{
+		"$type": "app.bsky.embed.video",
+		"video": blob,
+		"alt":   altText,
+	}
+	return nil
+}
+
+func (b *BlueskyAdapter) attachImagesToRecord(record map[string]interface{}, req *PublishRequest) error {
+	images := make([]map[string]interface{}, 0, len(req.PlatformMediaIDs))
+	for i, blobJSON := range req.PlatformMediaIDs {
+		var blob map[string]interface{}
+		if err := json.Unmarshal([]byte(blobJSON), &blob); err != nil {
+			return fmt.Errorf("decoding bluesky blob: %w", err)
+		}
+		altText := ""
+		if i < len(req.MediaAltTexts) {
+			altText = req.MediaAltTexts[i]
+		}
+		images = append(images, map[string]interface{}{
+			"alt":   altText,
+			"image": blob,
+		})
+	}
+	if len(images) > 0 {
+		record["embed"] = map[string]interface{}{
+			"$type":  "app.bsky.embed.images",
+			"images": images,
+		}
+	}
+	return nil
+}
+
+func attachReplyToRecord(record map[string]interface{}, replyToID string) {
+	if replyToID == "" {
+		return
+	}
+
+	var parentRef map[string]interface{}
+	if err := json.Unmarshal([]byte(replyToID), &parentRef); err != nil {
+		return
+	}
+
+	rootRef := parentRef
+	if rootRef["_root"] != nil {
+		if rootMap, ok := rootRef["_root"].(map[string]interface{}); ok {
+			rootRef = rootMap
+		}
+	}
+
+	delete(parentRef, "_root")
+
+	record["reply"] = map[string]interface{}{
+		"root":   rootRef,
+		"parent": parentRef,
+	}
+}
+
+func validateBlueskyMedia(media []MediaItem) []MediaValidationIssue {
+	if len(media) == 0 {
+		return nil
+	}
+
+	hasVideo := false
+	for _, item := range media {
+		if isVideoMime(item.MimeType) {
+			if hasVideo {
+				return []MediaValidationIssue{{
+					Provider: "bluesky",
+					MediaID:  item.ID,
+					Severity: "error",
+					Message:  "Bluesky supports only 1 video per post.",
+				}}
+			}
+			hasVideo = true
+			if item.MimeType != videoTypeMP4 {
+				return []MediaValidationIssue{{
+					Provider: "bluesky",
+					MediaID:  item.ID,
+					Severity: "error",
+					Message:  "Bluesky supports MP4 video only.",
+				}}
+			}
+			if item.Size > 100*1024*1024 {
+				return []MediaValidationIssue{{
+					Provider: "bluesky",
+					MediaID:  item.ID,
+					Severity: "error",
+					Message:  "Bluesky video must be under 100MB.",
+				}}
+			}
+		}
+	}
+
+	if hasVideo {
+		if len(media) > 1 {
+			return []MediaValidationIssue{{
+				Provider: "bluesky",
+				Severity: "error",
+				Message:  "Bluesky does not support mixing video and images in one post.",
+			}}
+		}
+		return nil
+	}
+
+	if len(media) > 4 {
+		return []MediaValidationIssue{{
+			Provider: "bluesky",
+			Severity: "error",
+			Message:  "Bluesky supports up to 4 images per post.",
+		}}
+	}
+
+	return nil
 }
 
 func getParentRoot(replyToID string) interface{} {

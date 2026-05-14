@@ -14,6 +14,7 @@
 		display_order: number;
 		file_path: string;
 		mime_type: string;
+		alt_text?: string;
 	}
 
 	interface PostDestination {

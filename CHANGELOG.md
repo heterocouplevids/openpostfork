@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Clarified the README and docs to reflect the actual provider-by-provider video implementation state instead of treating video support as universally absent.
+
+### Fixed
+- Corrected the launch TODO and public docs after auditing the current X, Mastodon, Bluesky, LinkedIn, and Threads video code paths.
+- Reduced repeated backend string literals called out by `golangci-lint` `goconst` checks so local Go linting passes again.
+- Added a real Bluesky video embed path, MIME-aware Threads media publishing, and LinkedIn video upload finalization with required file sizes.
+- Updated composer and social previews to render attached videos as videos and warn about provider-specific media limitations.
+
 ## [1.0.5] - 2026-05-10
 
 ### Changed

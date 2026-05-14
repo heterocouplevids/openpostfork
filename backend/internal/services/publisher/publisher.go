@@ -346,6 +346,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 
 	var platformMediaIDs []string
 	var mediaAltTexts []string
+	mediaItems := make([]platform.MediaItem, 0, len(mediaAttachments))
 	for _, media := range mediaAttachments {
 		mediaID, err := s.uploadMediaToPlatform(ctx, account, provider, token, media)
 		if err != nil {
@@ -354,6 +355,12 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		}
 		platformMediaIDs = append(platformMediaIDs, mediaID)
 		mediaAltTexts = append(mediaAltTexts, media.AltText)
+		mediaItems = append(mediaItems, platform.MediaItem{
+			ID:               media.ID,
+			MimeType:         media.MimeType,
+			Size:             media.Size,
+			OriginalFilename: media.OriginalFilename,
+		})
 	}
 
 	replyToID := ""
@@ -368,6 +375,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		Content:          post.Content,
 		PlatformMediaIDs: platformMediaIDs,
 		MediaAltTexts:    mediaAltTexts,
+		Media:            mediaItems,
 		ReplyToID:        replyToID,
 	}
 
@@ -450,9 +458,30 @@ func (s *Service) getPublicMediaURL(media models.MediaAttachment) string {
 		signedQuery = fmt.Sprintf("?exp=%d&sig=%s", expiresAt.Unix(), s.mediaSigner.Sign(media.ID, expiresAt))
 	}
 	if s.publicMediaURL != "" {
-		return s.publicMediaURL + "/" + media.ID + signedQuery
+		return s.publicMediaURL + "/" + media.ID + publicMediaExtension(media.MimeType) + signedQuery
 	}
-	return "/media/" + media.ID + signedQuery
+	return "/media/" + media.ID + publicMediaExtension(media.MimeType) + signedQuery
+}
+
+func publicMediaExtension(mimeType string) string {
+	switch strings.ToLower(mimeType) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "video/mp4":
+		return ".mp4"
+	case "video/quicktime":
+		return ".mov"
+	case "video/webm":
+		return ".webm"
+	default:
+		return ""
+	}
 }
 
 func (s *Service) getPreviousPostExternalID(ctx context.Context, currentPostID, socialAccountID string) (string, error) {

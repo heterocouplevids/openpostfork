@@ -79,6 +79,7 @@ func main() {
 		publishSvc.SetPublicMediaURL(cfg.MediaURL)
 	}
 
+	platform.RegisterAllMediaValidators()
 	providers := make(map[string]platform.Adapter)
 
 	if cfg.TwitterClientID != "" {

@@ -54,7 +54,7 @@
 		content: string;
 		status: string;
 		scheduled_at: string;
-		media: Array<{ media_id: string; alt_text?: string }>;
+		media: Array<{ media_id: string; mime_type?: string; alt_text?: string }>;
 		destinations: Array<{ social_account_id: string; platform: string }>;
 	}
 
@@ -122,6 +122,7 @@
 	let isUploading = $state(false);
 
 	let mediaAltTexts = $state<Map<string, string>>(new Map());
+	let mediaMimeTypes = $state<Map<string, string>>(new Map());
 	let editingAltMediaId = $state<string | null>(null);
 
 	let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -174,6 +175,20 @@
 	const isThread = $derived(posts.length > 1);
 
 	const selectedAccounts = $derived(accounts.filter((a) => selectedAccountIds.includes(a.id)));
+	const mediaCapabilityWarnings = $derived.by(() => {
+		const warnings: string[] = [];
+		const sourcePosts = isThread ? posts : activePost ? [activePost] : [];
+
+		for (const account of selectedAccounts) {
+			const platform = getPlatformKey(account.platform);
+			for (const post of sourcePosts) {
+				const mediaIds = getVariantMediaIds(account.id, post.key) ?? post.mediaIds;
+				warnings.push(...getProviderMediaWarnings(platform, mediaIds));
+			}
+		}
+
+		return Array.from(new Set(warnings));
+	});
 	const activeVariantAccount = $derived(
 		activeVariantAccountId ? (accounts.find((a) => a.id === activeVariantAccountId) ?? null) : null
 	);
@@ -234,7 +249,10 @@
 				.map((post) => ({
 					key: post.key,
 					content: getVariantContent(account.id, post.key) ?? post.content,
-					mediaIds: getVariantMediaIds(account.id, post.key) ?? post.mediaIds
+					mediaIds: getVariantMediaIds(account.id, post.key) ?? post.mediaIds,
+					mediaMimeTypes: getMediaMimeTypeRecord(
+						getVariantMediaIds(account.id, post.key) ?? post.mediaIds
+					)
 				}))
 				.filter((post) => !isThread || post.content.trim().length > 0 || post.mediaIds.length > 0);
 
@@ -432,6 +450,43 @@
 		return getVariantMediaIds(activeVariantAccountId, post.key) ?? post.mediaIds;
 	}
 
+	function getMediaMimeTypeRecord(mediaIds: string[]): Record<string, string> {
+		return Object.fromEntries(
+			mediaIds.map((id) => [id, mediaMimeTypes.get(id) ?? '']).filter(([, mimeType]) => mimeType)
+		);
+	}
+
+	function isVideoMedia(mediaId: string): boolean {
+		return mediaMimeTypes.get(mediaId)?.startsWith('video/') ?? false;
+	}
+
+	function getProviderMediaWarnings(platform: string, mediaIds: string[]): string[] {
+		if (mediaIds.length === 0) return [];
+		const videos = mediaIds.filter((id) => isVideoMedia(id));
+		const warnings: string[] = [];
+
+		if ((platform === 'x' || platform === 'bluesky') && videos.length > 0 && mediaIds.length > 1) {
+			warnings.push(
+				`${getPlatformName(platform)} supports one video per post and cannot mix it with images.`
+			);
+		}
+		if (platform === 'linkedin' && mediaIds.length > 1) {
+			warnings.push('LinkedIn publishing currently sends only the first media attachment.');
+		}
+		if (platform === 'threads' && mediaIds.length > 1) {
+			warnings.push('Threads publishing currently sends only the first media attachment.');
+		}
+		if (platform === 'threads') {
+			for (const id of videos) {
+				const mimeType = mediaMimeTypes.get(id) ?? '';
+				if (mimeType !== 'video/mp4' && mimeType !== 'video/quicktime') {
+					warnings.push('Threads supports MP4 or MOV video.');
+				}
+			}
+		}
+		return warnings;
+	}
+
 	function normalizeVariantsMap(
 		nextVariants: Map<string, Record<string, VariantPost>>,
 		sourcePosts: PostItem[] = posts
@@ -460,6 +515,8 @@
 			activeVariantAccountId = null;
 			selectedAccountIds = [];
 			selectedSetId = null;
+			mediaAltTexts = new Map();
+			mediaMimeTypes = new Map();
 			const tomorrow = today(getLocalTimeZone()).add({ days: 1 });
 			selectedDate = new CalendarDate(tomorrow.year, tomorrow.month, tomorrow.day);
 			selectedTime = '10:00';
@@ -478,10 +535,13 @@
 
 		// Load alt texts from media
 		const newAlts = new Map<string, string>();
+		const newMimeTypes = new Map<string, string>();
 		post.media?.forEach((m) => {
 			if (m.alt_text) newAlts.set(m.media_id, m.alt_text);
+			if (m.mime_type) newMimeTypes.set(m.media_id, m.mime_type);
 		});
 		mediaAltTexts = newAlts;
+		mediaMimeTypes = newMimeTypes;
 
 		if (isThreadDraft(post.content)) {
 			const threadData = decodeThreadDraft(post.content);
@@ -947,6 +1007,11 @@
 
 				const data = await resp.json();
 				if (resp.ok) {
+					if (data.mime_type) {
+						const nextMimeTypes = new Map(mediaMimeTypes);
+						nextMimeTypes.set(data.id, data.mime_type);
+						mediaMimeTypes = nextMimeTypes;
+					}
 					addMediaToPost(targetPostIndex, data.id);
 					scheduleAutoSave();
 				} else {
@@ -1016,6 +1081,9 @@
 			const newAlts = new Map(mediaAltTexts);
 			newAlts.delete(mediaId);
 			mediaAltTexts = newAlts;
+			const newMimeTypes = new Map(mediaMimeTypes);
+			newMimeTypes.delete(mediaId);
+			mediaMimeTypes = newMimeTypes;
 		}
 		scheduleAutoSave();
 	}
@@ -1123,6 +1191,7 @@
 			});
 			if (err) throw err;
 			const nextVariants = new Map<string, Record<string, VariantPost>>();
+			const variantMediaIds = new Set<string>();
 			for (const variant of data?.variants ?? []) {
 				if (variant.is_unsynced) {
 					let mediaIds = [...(posts[0]?.mediaIds ?? [])];
@@ -1136,6 +1205,9 @@
 							console.error('Failed to parse variant media IDs:', e);
 						}
 					}
+					for (const id of mediaIds) {
+						variantMediaIds.add(id);
+					}
 					nextVariants.set(variant.social_account_id, {
 						[posts[0]?.key ?? makeEmptyPost().key]: {
 							content: variant.content,
@@ -1145,6 +1217,30 @@
 				}
 			}
 			variants = nextVariants;
+
+			// Fetch MIME types for variant-only media IDs not already in mediaMimeTypes
+			const missingIds = [...variantMediaIds].filter((id) => !mediaMimeTypes.has(id));
+			if (missingIds.length > 0) {
+				const token = getToken();
+				const resp = await fetch(
+					`${getApiBase()}/api/v1/media/metadata?workspace_id=${encodeURIComponent(
+						initialPost?.workspace_id ?? ''
+					)}&media_ids=${encodeURIComponent(missingIds.join(','))}`,
+					{
+						headers: token ? { Authorization: `Bearer ${token}` } : {}
+					}
+				);
+				if (resp.ok) {
+					const mediaData = await resp.json();
+					const nextMimeTypes = new Map(mediaMimeTypes);
+					for (const m of mediaData.media ?? []) {
+						if (m.mime_type) {
+							nextMimeTypes.set(m.id, m.mime_type);
+						}
+					}
+					mediaMimeTypes = nextMimeTypes;
+				}
+			}
 		} catch (e) {
 			console.error('Failed to load variants:', e);
 			variants = new Map();
@@ -1707,6 +1803,18 @@
 			{success}
 		</div>
 	{/if}
+	{#if mediaCapabilityWarnings.length > 0}
+		<div
+			class="mx-3 mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 md:mx-4 md:mt-3 dark:text-amber-300"
+		>
+			<div class="font-medium">Media compatibility warning</div>
+			<ul class="mt-1 list-disc space-y-0.5 pl-4">
+				{#each mediaCapabilityWarnings as warning (warning)}
+					<li>{warning}</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
 
 	<!-- ====================================================================== -->
 	<!-- Main Content Area -->
@@ -1861,13 +1969,25 @@
 															? 'col-span-2'
 															: ''}"
 													>
-														<img
-															src={getAuthenticatedMediaByID(mediaId)}
-															alt={mediaAltTexts.get(mediaId) || ''}
-															class="{getEditorMediaIdsForPost(post).length === 1
-																? 'aspect-video'
-																: 'aspect-square'} w-full object-cover"
-														/>
+														{#if isVideoMedia(mediaId)}
+															<video
+																src={getAuthenticatedMediaByID(mediaId)}
+																class="{getEditorMediaIdsForPost(post).length === 1
+																	? 'aspect-video'
+																	: 'aspect-square'} w-full object-cover"
+																controls
+																muted
+																playsinline
+															></video>
+														{:else}
+															<img
+																src={getAuthenticatedMediaByID(mediaId)}
+																alt={mediaAltTexts.get(mediaId) || ''}
+																class="{getEditorMediaIdsForPost(post).length === 1
+																	? 'aspect-video'
+																	: 'aspect-square'} w-full object-cover"
+															/>
+														{/if}
 														<div
 															class="absolute inset-0 flex items-start justify-end gap-1 bg-black/0 p-2 opacity-0 transition-all group-hover/media:bg-black/40 group-hover/media:opacity-100"
 														>

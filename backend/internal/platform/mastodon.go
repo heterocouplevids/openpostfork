@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -26,6 +27,35 @@ func NewMastodonAdapter(clientID, clientSecret, redirectURI, instanceURL string)
 	}
 }
 
+func validateMastodonMedia(media []MediaItem) []MediaValidationIssue {
+	if len(media) == 0 {
+		return nil
+	}
+	if len(media) > 4 {
+		return []MediaValidationIssue{{
+			Provider: "mastodon",
+			Severity: "error",
+			Message:  "Mastodon supports up to 4 media attachments per post.",
+		}}
+	}
+	for _, item := range media {
+		if isVideoMime(item.MimeType) && !isMastodonLikelyVideoMime(item.MimeType) {
+			return []MediaValidationIssue{{
+				Provider: "mastodon",
+				MediaID:  item.ID,
+				Severity: "warning",
+				Message:  "Mastodon video support depends on the instance; MP4 and WebM are the safest formats.",
+			}}
+		}
+	}
+	return nil
+}
+
+func isMastodonLikelyVideoMime(mimeType string) bool {
+	mimeType = strings.ToLower(mimeType)
+	return mimeType == videoTypeMP4 || mimeType == "video/webm" || mimeType == "image/gif"
+}
+
 func (m *MastodonAdapter) InstanceURL() string {
 	return m.instanceURL
 }
@@ -43,7 +73,7 @@ func (m *MastodonAdapter) GenerateAuthURL(state string) (string, map[string]stri
 
 func (m *MastodonAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
 	values := map[string]string{
-		"grant_type":           oauthGrantAuthCode,
+		grantType:              oauthGrantAuthCode,
 		oauthParamCode:         code,
 		oauthParamRedirectURI:  m.redirectURI,
 		oauthParamClientID:     m.clientID,

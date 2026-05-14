@@ -315,6 +315,10 @@
 		return mimeType.startsWith('image/');
 	}
 
+	function isVideo(mimeType: string): boolean {
+		return mimeType.startsWith('video/');
+	}
+
 	function toggleSelection(mediaId: string) {
 		if (selectedMediaIds.has(mediaId)) {
 			selectedMediaIds.delete(mediaId);
@@ -549,7 +553,22 @@
 						: ''}"
 				>
 					<div class="relative aspect-square overflow-hidden bg-muted/30">
-						{#if isImage(media.mime_type)}
+						{#if isVideo(media.mime_type)}
+							<video
+								src={getAuthenticatedMediaURL(media.url)}
+								class="size-full object-cover"
+								muted
+								playsinline
+								preload="metadata"
+							></video>
+							<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+								<div
+									class="flex size-10 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm"
+								>
+									<VideoIcon class="size-5 text-foreground" />
+								</div>
+							</div>
+						{:else if isImage(media.mime_type)}
 							<img
 								src={getAuthenticatedMediaURL(media.thumbnail_url || media.url)}
 								alt={media.alt_text || 'Media'}

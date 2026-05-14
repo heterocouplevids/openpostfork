@@ -95,9 +95,10 @@ OpenPost is especially useful for:
 
 ## Current Limitations
 
-- **No video support yet** — video uploads are not implemented
+- **Video support is provider-dependent** — some platforms have implementation paths in the codebase, but not every provider is verified end to end
 - **No full feature parity guarantee** — each platform has different capabilities
-- **Analytics not built yet** — engagement tracking is on the roadmap
+- **Advanced analytics are not the current focus** — engagement reporting is not a launch feature
+- **Enterprise approval workflows are not the current focus** — OpenPost is optimized for core scheduling workflows
 
 ## Quickstart
 

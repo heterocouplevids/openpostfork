@@ -63,7 +63,7 @@ func (t *ThreadsAdapter) ExchangeCode(ctx context.Context, code string, _ map[st
 		oauthParamClientSecret: t.config.ClientSecret,
 		oauthParamRedirectURI:  t.config.RedirectURL,
 		oauthParamCode:         code,
-		"grant_type":           oauthGrantAuthCode,
+		grantType:              oauthGrantAuthCode,
 	}
 
 	respBody, err := DoFormURLEncoded(ctx, "POST", t.config.Endpoint.TokenURL, values, nil)
@@ -95,7 +95,7 @@ func (t *ThreadsAdapter) ExchangeCode(ctx context.Context, code string, _ map[st
 
 func (t *ThreadsAdapter) exchangeLongLivedToken(ctx context.Context, shortLivedToken string) (*TokenResult, error) {
 	params := url.Values{
-		"grant_type":                         {"th_exchange_token"},
+		grantType:                            {"th_exchange_token"},
 		oauthParamClientSecret:               {t.config.ClientSecret},
 		string(RefreshCredentialAccessToken): {shortLivedToken},
 	}
@@ -134,7 +134,7 @@ func (t *ThreadsAdapter) RefreshToken(ctx context.Context, input RefreshTokenInp
 	}
 
 	params := url.Values{
-		"grant_type":                         {"th_refresh_token"},
+		grantType:                            {"th_refresh_token"},
 		string(RefreshCredentialAccessToken): {input.AccessToken},
 	}
 
@@ -192,9 +192,9 @@ func (t *ThreadsAdapter) Publish(ctx context.Context, accessToken, userID string
 	isVideo := false
 	var mediaURL string
 
-	for _, url := range req.PlatformMediaIDs {
-		mediaURL = url
-		if isVideoType(url) {
+	if len(req.PlatformMediaIDs) > 0 {
+		mediaURL = req.PlatformMediaIDs[0]
+		if len(req.Media) > 0 && isVideoMime(req.Media[0].MimeType) {
 			isVideo = true
 		}
 	}
@@ -349,6 +349,33 @@ func (t *ThreadsAdapter) publishContainer(ctx context.Context, accessToken, user
 	return publishResp.ID, nil
 }
 
-func isVideoType(url string) bool {
-	return len(url) > 4 && (url[len(url)-4:] == ".mp4" || url[len(url)-4:] == ".mov" || url[len(url)-5:] == ".webm")
+func validateThreadsMedia(media []MediaItem) []MediaValidationIssue {
+	if len(media) == 0 {
+		return nil
+	}
+
+	var issues []MediaValidationIssue
+	for _, item := range media {
+		if isVideoMime(item.MimeType) && !isThreadsVideoMime(item.MimeType) {
+			issues = append(issues, MediaValidationIssue{
+				Provider: "threads",
+				MediaID:  item.ID,
+				Severity: "error",
+				Message:  "Threads supports MP4 or MOV video.",
+			})
+		}
+	}
+	if len(media) > 1 {
+		issues = append(issues, MediaValidationIssue{
+			Provider: "threads",
+			Severity: "warning",
+			Message:  "OpenPost currently publishes only the first Threads attachment.",
+		})
+	}
+	return issues
+}
+
+func isThreadsVideoMime(mimeType string) bool {
+	mimeType = strings.ToLower(mimeType)
+	return mimeType == videoTypeMP4 || mimeType == "video/quicktime"
 }

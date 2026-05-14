@@ -17,4 +17,6 @@ const (
 	oauthParamClientSecret = "client_secret"
 	oauthParamCode         = "code"
 	oauthParamRedirectURI  = "redirect_uri"
+	grantType              = "grant_type"
+	videoTypeMP4           = "video/mp4"
 )

@@ -59,7 +59,7 @@ func (l *LinkedInAdapter) GenerateAuthURL(state string) (string, map[string]stri
 
 func (l *LinkedInAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
 	values := map[string]string{
-		"grant_type":           oauthGrantAuthCode,
+		grantType:              oauthGrantAuthCode,
 		oauthParamCode:         code,
 		oauthParamRedirectURI:  l.redirectURI,
 		oauthParamClientID:     l.clientID,
@@ -102,7 +102,7 @@ func (l *LinkedInAdapter) RefreshToken(ctx context.Context, input RefreshTokenIn
 	}
 
 	values := map[string]string{
-		"grant_type":                          oauthGrantRefresh,
+		grantType:                             oauthGrantRefresh,
 		string(RefreshCredentialRefreshToken): input.RefreshToken,
 		oauthParamClientID:                    l.clientID,
 		oauthParamClientSecret:                l.clientSecret,
@@ -183,7 +183,7 @@ func (l *LinkedInAdapter) uploadImage(ctx context.Context, accessToken, personID
 		return "", fmt.Errorf("linkedin image register: %w", err)
 	}
 
-	return l.completeUpload(ctx, accessToken, respBody, data)
+	return l.completeImageUpload(ctx, accessToken, respBody, data)
 }
 
 func (l *LinkedInAdapter) uploadVideo(ctx context.Context, accessToken, personID, _ string, data []byte) (string, error) {
@@ -192,6 +192,7 @@ func (l *LinkedInAdapter) uploadVideo(ctx context.Context, accessToken, personID
 	registerPayload := map[string]interface{}{
 		"initializeUploadRequest": map[string]interface{}{
 			"owner":           "urn:li:person:" + personID,
+			"fileSizeBytes":   int64(len(data)),
 			"uploadCaptions":  false,
 			"uploadThumbnail": false,
 		},
@@ -202,10 +203,10 @@ func (l *LinkedInAdapter) uploadVideo(ctx context.Context, accessToken, personID
 		return "", fmt.Errorf("linkedin video register: %w", err)
 	}
 
-	return l.completeUpload(ctx, accessToken, respBody, data)
+	return l.completeVideoUpload(ctx, accessToken, apiVersion, respBody, data)
 }
 
-func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string, registerResp []byte, data []byte) (string, error) {
+func (l *LinkedInAdapter) completeImageUpload(ctx context.Context, accessToken string, registerResp []byte, data []byte) (string, error) {
 	var registerResult struct {
 		Value struct {
 			Image              string `json:"image"`
@@ -257,6 +258,65 @@ func (l *LinkedInAdapter) completeUpload(ctx context.Context, accessToken string
 	}
 
 	return assetURN, nil
+}
+
+func (l *LinkedInAdapter) completeVideoUpload(ctx context.Context, accessToken, apiVersion string, registerResp []byte, data []byte) (string, error) {
+	var registerResult struct {
+		Value struct {
+			Video              string `json:"video"`
+			UploadToken        string `json:"uploadToken"`
+			UploadInstructions []struct {
+				UploadURL string `json:"uploadUrl"`
+				FirstByte int64  `json:"firstByte"`
+				LastByte  int64  `json:"lastByte"`
+			} `json:"uploadInstructions"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(registerResp, &registerResult); err != nil {
+		return "", fmt.Errorf("decoding linkedin video register: %w", err)
+	}
+	if registerResult.Value.Video == "" {
+		return "", fmt.Errorf("no video URN in linkedin response")
+	}
+	if len(registerResult.Value.UploadInstructions) == 0 {
+		return "", fmt.Errorf("no video upload instructions in linkedin response: %s", string(registerResp))
+	}
+
+	uploadedPartIDs := make([]string, 0, len(registerResult.Value.UploadInstructions))
+	for _, instruction := range registerResult.Value.UploadInstructions {
+		if instruction.UploadURL == "" {
+			return "", fmt.Errorf("linkedin video upload instruction missing upload URL")
+		}
+		if instruction.FirstByte < 0 || instruction.LastByte < instruction.FirstByte || instruction.LastByte >= int64(len(data)) {
+			return "", fmt.Errorf("linkedin video upload instruction has invalid byte range %d-%d for file size %d", instruction.FirstByte, instruction.LastByte, len(data))
+		}
+		part := data[instruction.FirstByte : instruction.LastByte+1]
+		headers, err := doRequestWithHeaders(ctx, "PUT", instruction.UploadURL, bytes.NewReader(part), map[string]string{
+			headerAuthorization: bearerPrefix + accessToken,
+			headerContentType:   contentTypeOctet,
+		})
+		if err != nil {
+			return "", fmt.Errorf("linkedin video PUT upload: %w", err)
+		}
+		partID := headers.Get("ETag")
+		if partID == "" {
+			return "", fmt.Errorf("linkedin video PUT upload missing ETag")
+		}
+		uploadedPartIDs = append(uploadedPartIDs, strings.Trim(partID, `"`))
+	}
+
+	payload := map[string]interface{}{
+		"finalizeUploadRequest": map[string]interface{}{
+			"video":           registerResult.Value.Video,
+			"uploadToken":     registerResult.Value.UploadToken,
+			"uploadedPartIds": uploadedPartIDs,
+		},
+	}
+	if _, err := DoJSONWithHeaders(ctx, "POST", "https://api.linkedin.com/rest/videos?action=finalizeUpload", payload, linkedinHeaders(accessToken, apiVersion)); err != nil {
+		return "", fmt.Errorf("linkedin video finalize: %w", err)
+	}
+
+	return registerResult.Value.Video, nil
 }
 
 func (l *LinkedInAdapter) Publish(ctx context.Context, accessToken, personID string, req *PublishRequest) (string, error) {
@@ -370,7 +430,11 @@ func DoJSONWithHeaders(ctx context.Context, method, url string, payload any, hea
 		headers[headerContentType] = contentTypeJSON
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	return doRequestWithHeaders(ctx, method, url, bodyReader, headers)
+}
+
+func doRequestWithHeaders(ctx context.Context, method, url string, body io.Reader, headers map[string]string) (http.Header, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
@@ -390,8 +454,35 @@ func DoJSONWithHeaders(ctx context.Context, method, url string, payload any, hea
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%s %s returned %d: %s", method, url, resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("%s %s returned %d: %s", method, sanitizeURL(url), resp.StatusCode, string(respBody))
 	}
 
 	return resp.Header, nil
+}
+
+func validateLinkedInMedia(media []MediaItem) []MediaValidationIssue {
+	if len(media) == 0 {
+		return nil
+	}
+	if len(media) > 1 {
+		return []MediaValidationIssue{{
+			Provider: "linkedin",
+			Severity: "warning",
+			Message:  "OpenPost currently publishes only the first LinkedIn attachment.",
+		}}
+	}
+	item := media[0]
+	if isVideoMime(item.MimeType) && !isLinkedInVideoMime(item.MimeType) {
+		return []MediaValidationIssue{{
+			Provider: "linkedin",
+			MediaID:  item.ID,
+			Severity: "warning",
+			Message:  "LinkedIn video publishing is most reliable with MP4 video.",
+		}}
+	}
+	return nil
+}
+
+func isLinkedInVideoMime(mimeType string) bool {
+	return strings.EqualFold(mimeType, videoTypeMP4)
 }

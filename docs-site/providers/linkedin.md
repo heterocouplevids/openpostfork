@@ -21,6 +21,10 @@ If your LinkedIn app cannot obtain the permissions required for comment-style re
 
 LinkedIn thread child posts are implemented as comments on the first post rather than native threaded posts.
 
+## Media caveat
+
+OpenPost uses LinkedIn's Images API for images and Videos API for videos. Video upload initializes with `fileSizeBytes`, uploads all returned byte ranges, and finalizes the upload before creating the post.
+
 ## Common issues
 
 - Insufficient app approval for social actions

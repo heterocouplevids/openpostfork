@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"io"
+	"strings"
 )
 
 // PublishRequest contains everything needed to publish a single post.
@@ -10,7 +11,45 @@ type PublishRequest struct {
 	Content          string   // Post text content
 	PlatformMediaIDs []string // Platform-specific media IDs from UploadMedia
 	MediaAltTexts    []string // Alt text for each media item (parallel to PlatformMediaIDs)
-	ReplyToID        string   // External ID of parent post (empty for first post in thread)
+	Media            []MediaItem
+	ReplyToID        string // External ID of parent post (empty for first post in thread)
+}
+
+type MediaItem struct {
+	ID               string
+	MimeType         string
+	Size             int64
+	OriginalFilename string
+}
+
+type MediaValidationIssue struct {
+	Provider string
+	MediaID  string
+	Severity string
+	Message  string
+}
+
+type MediaValidator func([]MediaItem) []MediaValidationIssue
+
+var MediaValidators = map[string]MediaValidator{}
+
+func RegisterAllMediaValidators() {
+	MediaValidators["bluesky"] = validateBlueskyMedia
+	MediaValidators["linkedin"] = validateLinkedInMedia
+	MediaValidators["mastodon"] = validateMastodonMedia
+	MediaValidators["threads"] = validateThreadsMedia
+	MediaValidators["x"] = validateXMedia
+}
+
+func ValidateMedia(platformName string, media []MediaItem) []MediaValidationIssue {
+	if validator, ok := MediaValidators[platformName]; ok {
+		return validator(media)
+	}
+	return nil
+}
+
+func isVideoMime(mimeType string) bool {
+	return strings.HasPrefix(strings.ToLower(mimeType), "video/")
 }
 
 // UserProfile is a platform-agnostic user identity returned by GetProfile.

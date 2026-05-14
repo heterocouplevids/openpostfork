@@ -20,6 +20,8 @@ Threads requires publicly reachable media URLs. Set:
 OPENPOST_MEDIA_URL=https://your-domain.com/media
 ```
 
+OpenPost passes stored media MIME types to the Threads publisher and serves public media URLs with file extensions where possible. Threads still fetches media from your URL server-side, so the URL must be reachable by Meta and return the correct media bytes.
+
 ## Local development
 
 For local testing, expose OpenPost through a tunnel such as ngrok so the callback URL and `/media/...` paths are publicly reachable.

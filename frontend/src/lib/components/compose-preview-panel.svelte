@@ -6,6 +6,7 @@
 		key: string;
 		content: string;
 		mediaIds: string[];
+		mediaMimeTypes: Record<string, string>;
 	}
 
 	export interface PreviewGroup {
@@ -43,6 +44,7 @@
 							platform={group.platformKey}
 							content={post.content}
 							mediaIds={post.mediaIds}
+							mediaMimeTypes={post.mediaMimeTypes}
 							username={group.username}
 							displayName={group.displayName}
 							isUnsynced={group.isUnsynced}
