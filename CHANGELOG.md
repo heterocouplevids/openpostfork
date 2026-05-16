@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.8] - 2026-05-16
+
+### Changed
+- Media library deletion now allows media that is unused or only attached to already published posts, while still blocking media needed by draft, scheduled, publishing, or failed posts.
+
+### Added
+- Added a media library download action for saved images and videos.
+
 ## [1.0.7] - 2026-05-16
 
 ### Fixed

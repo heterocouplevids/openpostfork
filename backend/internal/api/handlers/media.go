@@ -72,6 +72,7 @@ type MediaListItem struct {
 	URL              string `json:"url" doc:"URL to access the media"`
 	ThumbnailURL     string `json:"thumbnail_url" doc:"Thumbnail URL for grid view"`
 	UsageCount       int    `json:"usage_count" doc:"Number of posts using this media"`
+	CanDelete        bool   `json:"can_delete" doc:"Whether media can be deleted"`
 	ProcessingStatus string `json:"processing_status" doc:"Processing status"`
 }
 
@@ -236,10 +237,10 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 
 		result := make([]MediaListItem, len(media))
 		for i, m := range media {
-			var usageCount int
-			usageCount, _ = h.db.NewSelect().Model(&models.PostMedia{}).
-				Where("media_id = ?", m.ID).
-				Count(ctx)
+			usage, usageErr := h.mediaUsageSummary(ctx, m.WorkspaceID, m.ID)
+			if usageErr != nil {
+				return nil, huma.Error500InternalServerError("failed to check media usage")
+			}
 
 			var thumbs Thumbnails
 			if m.ThumbnailsJSON != "" {
@@ -261,7 +262,8 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 				CreatedAt:        m.CreatedAt.Format(time.RFC3339),
 				URL:              "/media/" + m.ID,
 				ThumbnailURL:     "/media/" + m.ID + "/thumb",
-				UsageCount:       usageCount,
+				UsageCount:       usage.Total,
+				CanDelete:        usage.Blocking == 0,
 				ProcessingStatus: m.ProcessingStatus,
 			}
 			if thumbs.SM != "" {
@@ -303,33 +305,27 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
-		var postMedia []models.PostMedia
-		err = h.db.NewSelect().Model(&postMedia).
-			Where("media_id = ?", input.PathID).
-			Scan(ctx)
+		posts, err := h.postsUsingMedia(ctx, media.WorkspaceID, input.PathID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch usage")
 		}
 
-		usage := make([]MediaUsageItem, 0, len(postMedia))
-		for _, pm := range postMedia {
-			var post models.Post
-			if err := h.db.NewSelect().Model(&post).Where("id = ?", pm.PostID).Scan(ctx); err == nil {
-				content := post.Content
-				if len(content) > 100 {
-					content = content[:100] + "..."
-				}
-				scheduled := ""
-				if !post.ScheduledAt.IsZero() {
-					scheduled = post.ScheduledAt.Format(time.RFC3339)
-				}
-				usage = append(usage, MediaUsageItem{
-					PostID:    post.ID,
-					Content:   content,
-					Status:    post.Status,
-					Scheduled: scheduled,
-				})
+		usage := make([]MediaUsageItem, 0, len(posts))
+		for _, post := range posts {
+			content := post.Content
+			if len(content) > 100 {
+				content = content[:100] + "..."
 			}
+			scheduled := ""
+			if !post.ScheduledAt.IsZero() {
+				scheduled = post.ScheduledAt.Format(time.RFC3339)
+			}
+			usage = append(usage, MediaUsageItem{
+				PostID:    post.ID,
+				Content:   content,
+				Status:    post.Status,
+				Scheduled: scheduled,
+			})
 		}
 
 		return &GetMediaUsageOutput{Body: struct {
@@ -366,19 +362,20 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
-		var usageCount int
-		usageCount, err = h.db.NewSelect().Model(&models.PostMedia{}).
-			Where("media_id = ?", input.PathID).
-			Count(ctx)
+		usage, err := h.mediaUsageSummary(ctx, media.WorkspaceID, input.PathID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to check usage")
 		}
-		if usageCount > 0 {
-			return nil, huma.Error400BadRequest("cannot delete media that is attached to posts")
+		if usage.Blocking > 0 {
+			return nil, huma.Error400BadRequest("cannot delete media attached to posts that have not been published yet")
 		}
 
 		if err := h.deleteMediaFiles(&media); err != nil {
 			return nil, huma.Error500InternalServerError("failed to delete media files")
+		}
+
+		if err := h.removeMediaReferences(ctx, media.WorkspaceID, input.PathID); err != nil {
+			return nil, huma.Error500InternalServerError("failed to remove media references")
 		}
 
 		_, err = h.db.NewDelete().Model(&media).Where("id = ?", input.PathID).Exec(ctx)
@@ -395,7 +392,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		OperationID: "batch-delete-media",
 		Method:      http.MethodPost,
 		Path:        "/media/batch-delete",
-		Summary:     "Delete multiple media attachments at once (only unused ones)",
+		Summary:     "Delete multiple media attachments at once",
 		Tags:        []string{tagMedia},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403},
@@ -430,22 +427,19 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 				continue
 			}
 
-			var usageCount int
-			usageCount, err = h.db.NewSelect().Model(&models.PostMedia{}).
-				Where("media_id = ?", mediaID).
-				Count(ctx)
-			if err != nil || usageCount > 0 {
-				failedIDs = append(failedIDs, mediaID)
-				continue
-			}
-			usedByVariant, err := h.mediaUsedByVariant(ctx, media.WorkspaceID, mediaID)
-			if err != nil || usedByVariant {
+			usage, err := h.mediaUsageSummary(ctx, media.WorkspaceID, mediaID)
+			if err != nil || usage.Blocking > 0 {
 				failedIDs = append(failedIDs, mediaID)
 				continue
 			}
 
 			err = h.deleteMediaFiles(&media)
 			if err != nil {
+				failedIDs = append(failedIDs, mediaID)
+				continue
+			}
+
+			if err := h.removeMediaReferences(ctx, media.WorkspaceID, mediaID); err != nil {
 				failedIDs = append(failedIDs, mediaID)
 				continue
 			}
@@ -544,31 +538,145 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 	})
 }
 
-func (h *MediaHandler) mediaUsedByVariant(ctx context.Context, workspaceID, mediaID string) (bool, error) {
-	var rows []struct {
-		MediaIDs string `bun:"media_ids"`
+type mediaUsageSummary struct {
+	Total    int
+	Blocking int
+}
+
+func (h *MediaHandler) mediaUsageSummary(ctx context.Context, workspaceID, mediaID string) (mediaUsageSummary, error) {
+	var summary mediaUsageSummary
+
+	posts, err := h.postsUsingMedia(ctx, workspaceID, mediaID)
+	if err != nil {
+		return summary, err
 	}
+
+	summary.Total = len(posts)
+	for _, post := range posts {
+		if post.Status != "published" { //nolint:goconst
+			summary.Blocking++
+		}
+	}
+
+	return summary, nil
+}
+
+func (h *MediaHandler) postsUsingMedia(ctx context.Context, workspaceID, mediaID string) ([]models.Post, error) {
+	postRows := []models.Post{}
 	if err := h.db.NewSelect().
-		TableExpr("post_variants AS pv").
-		ColumnExpr("pv.media_ids").
-		Join("JOIN posts AS p ON p.id = pv.post_id").
+		TableExpr("post_media AS pm").
+		ColumnExpr("p.*").
+		Join("JOIN posts AS p ON p.id = pm.post_id").
 		Where("p.workspace_id = ?", workspaceID).
-		Where("pv.media_ids != ''").
-		Scan(ctx, &rows); err != nil {
-		return false, err
+		Where("pm.media_id = ?", mediaID).
+		Scan(ctx, &postRows); err != nil {
+		return nil, err
 	}
-	for _, row := range rows {
-		var ids []string
-		if err := json.Unmarshal([]byte(row.MediaIDs), &ids); err != nil {
+
+	var variants []models.PostVariant
+	if err := h.db.NewSelect().
+		Model(&variants).
+		Where("media_i_ds != ''").
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	postsByID := make(map[string]models.Post, len(postRows)+len(variants))
+	for _, post := range postRows {
+		postsByID[post.ID] = post
+	}
+	for _, variant := range variants {
+		if !variantContainsMedia(variant.MediaIDs, mediaID) {
 			continue
 		}
+		var post models.Post
+		if err := h.db.NewSelect().Model(&post).Where("id = ?", variant.PostID).Scan(ctx); err != nil {
+			continue
+		}
+		if post.WorkspaceID != workspaceID {
+			continue
+		}
+		postsByID[post.ID] = post
+	}
+
+	posts := make([]models.Post, 0, len(postsByID))
+	for _, post := range postsByID {
+		posts = append(posts, post)
+	}
+	return posts, nil
+}
+
+func (h *MediaHandler) removeMediaReferences(ctx context.Context, workspaceID, mediaID string) error {
+	if _, err := h.db.NewDelete().
+		Model((*models.PostMedia)(nil)).
+		Where("media_id = ?", mediaID).
+		Exec(ctx); err != nil {
+		return err
+	}
+
+	var variants []models.PostVariant
+	if err := h.db.NewSelect().
+		Model(&variants).
+		Where("media_i_ds != ''").
+		Scan(ctx); err != nil {
+		return err
+	}
+
+	for _, variant := range variants {
+		var post models.Post
+		if err := h.db.NewSelect().Model(&post).Where("id = ?", variant.PostID).Scan(ctx); err != nil {
+			continue
+		}
+		if post.WorkspaceID != workspaceID {
+			continue
+		}
+
+		var ids []string
+		if err := json.Unmarshal([]byte(variant.MediaIDs), &ids); err != nil {
+			continue
+		}
+
+		changed := false
+		filtered := ids[:0]
 		for _, id := range ids {
 			if id == mediaID {
-				return true, nil
+				changed = true
+				continue
 			}
+			filtered = append(filtered, id)
+		}
+		if !changed {
+			continue
+		}
+
+		encoded, err := json.Marshal(filtered)
+		if err != nil {
+			return err
+		}
+		if _, err := h.db.NewUpdate().
+			Model(&variant).
+			Column("media_i_ds").
+			Set("media_i_ds = ?", string(encoded)).
+			Where("id = ?", variant.ID).
+			Exec(ctx); err != nil {
+			return err
 		}
 	}
-	return false, nil
+
+	return nil
+}
+
+func variantContainsMedia(mediaIDsJSON, mediaID string) bool {
+	var ids []string
+	if err := json.Unmarshal([]byte(mediaIDsJSON), &ids); err != nil {
+		return false
+	}
+	for _, id := range ids {
+		if id == mediaID {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *MediaHandler) mediaMetadata(c echo.Context) error {

@@ -17,6 +17,7 @@
 	import HeartIcon from 'lucide-svelte/icons/heart';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
 	import UploadIcon from 'lucide-svelte/icons/upload';
+	import DownloadIcon from 'lucide-svelte/icons/download';
 	import XIcon from 'lucide-svelte/icons/x';
 	import ExternalLinkIcon from 'lucide-svelte/icons/external-link';
 	import CheckIcon from 'lucide-svelte/icons/check';
@@ -38,6 +39,7 @@
 		url: string;
 		thumbnail_url: string;
 		usage_count: number;
+		can_delete: boolean;
 		processing_status: string;
 	}
 
@@ -45,7 +47,7 @@
 		post_id: string;
 		content: string;
 		status: string;
-		scheduled: string;
+		scheduled_at: string;
 	}
 
 	interface BatchDeleteResult {
@@ -190,6 +192,25 @@
 		}
 	}
 
+	async function downloadMedia(media: MediaItem) {
+		try {
+			const response = await fetch(getAuthenticatedMediaURL(media.url));
+			if (!response.ok) throw new Error('Failed to download media');
+
+			const blob = await response.blob();
+			const objectURL = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = objectURL;
+			link.download = media.original_filename || `${media.id}.${extensionForMime(media.mime_type)}`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(objectURL);
+		} catch (e) {
+			toastMessage = (e as Error).message;
+		}
+	}
+
 	async function showUsage(media: MediaItem) {
 		selectedMedia = media;
 		usageDialogOpen = true;
@@ -319,6 +340,20 @@
 		return mimeType.startsWith('video/');
 	}
 
+	function canDeleteMedia(media: MediaItem): boolean {
+		return media.can_delete ?? media.usage_count === 0;
+	}
+
+	function extensionForMime(mimeType: string): string {
+		if (mimeType === 'image/jpeg') return 'jpg';
+		if (mimeType === 'image/png') return 'png';
+		if (mimeType === 'image/webp') return 'webp';
+		if (mimeType === 'image/gif') return 'gif';
+		if (mimeType === 'video/mp4') return 'mp4';
+		if (mimeType === 'video/webm') return 'webm';
+		return 'bin';
+	}
+
 	function toggleSelection(mediaId: string) {
 		if (selectedMediaIds.has(mediaId)) {
 			selectedMediaIds.delete(mediaId);
@@ -330,11 +365,11 @@
 	}
 
 	function selectAll() {
-		const unusedMedia = mediaItems.filter((m) => m.usage_count === 0);
-		if (unusedMedia.length === selectedMediaIds.size) {
+		const deletableMedia = mediaItems.filter(canDeleteMedia);
+		if (deletableMedia.length === selectedMediaIds.size) {
 			selectedMediaIds.clear();
 		} else {
-			unusedMedia.forEach((m) => selectedMediaIds.add(m.id));
+			deletableMedia.forEach((m) => selectedMediaIds.add(m.id));
 		}
 		selectedMediaIds = new Set(selectedMediaIds);
 		isSelectionMode = selectedMediaIds.size > 0;
@@ -388,6 +423,7 @@
 
 	const totalPages = $derived(Math.ceil(totalCount / pageSize));
 	const unusedCount = $derived(mediaItems.filter((m) => m.usage_count === 0).length);
+	const deletableCount = $derived(mediaItems.filter(canDeleteMedia).length);
 
 	const descriptionText = $derived.by(() => {
 		if (totalCount > 0) {
@@ -458,7 +494,7 @@
 	<!-- Filter Tabs + Sort -->
 	<div class="mb-6 flex flex-wrap items-center gap-4">
 		<div class="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-1">
-			{#each filterTabs as tab}
+			{#each filterTabs as tab (tab.value)}
 				<button
 					class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors {filter === tab.value
 						? 'bg-background text-foreground shadow-sm'
@@ -488,9 +524,9 @@
 	{#if isSelectionMode}
 		<div class="mb-4 flex items-center gap-4 rounded-lg border bg-muted/50 p-3">
 			<span class="text-sm font-medium">{selectedMediaIds.size} selected</span>
-			{#if unusedCount > 0}
+			{#if deletableCount > 0}
 				<Button variant="outline" size="sm" onclick={selectAll}>
-					{unusedCount === selectedMediaIds.size ? 'Deselect All' : 'Select All Unused'}
+					{deletableCount === selectedMediaIds.size ? 'Deselect All' : 'Select All Deletable'}
 				</Button>
 			{/if}
 			<div class="ml-auto flex items-center gap-2">
@@ -512,7 +548,7 @@
 	<!-- Media Grid -->
 	{#if mediaLoading}
 		<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-			{#each Array(10) as _}
+			{#each Array(10) as _, index (index)}
 				<div class="space-y-2">
 					<Skeleton class="aspect-square rounded-lg" />
 					<Skeleton class="h-3 w-3/4" />
@@ -583,7 +619,7 @@
 						<!-- Selection checkbox -->
 						<button
 							class="absolute top-2 left-2 rounded-md bg-background/80 p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background {!isSelectionMode &&
-							media.usage_count === 0
+							canDeleteMedia(media)
 								? 'opacity-0 group-hover:opacity-100'
 								: ''}"
 							onclick={(e) => {
@@ -611,6 +647,13 @@
 							</button>
 							<button
 								class="rounded-full bg-white/20 p-2 backdrop-blur-sm transition-colors hover:bg-white/30"
+								onclick={() => downloadMedia(media)}
+								title="Download"
+							>
+								<DownloadIcon class="size-4 text-white" />
+							</button>
+							<button
+								class="rounded-full bg-white/20 p-2 backdrop-blur-sm transition-colors hover:bg-white/30"
 								onclick={() => toggleFavorite(media.id)}
 								title={media.is_favorite ? 'Unfavorite' : 'Favorite'}
 							>
@@ -619,7 +662,7 @@
 									fill={media.is_favorite ? 'currentColor' : 'none'}
 								/>
 							</button>
-							{#if media.usage_count === 0}
+							{#if canDeleteMedia(media)}
 								<button
 									class="rounded-full bg-white/20 p-2 backdrop-blur-sm transition-colors hover:bg-red-500/80"
 									onclick={() => deleteMedia(media.id)}
@@ -662,6 +705,13 @@
 									class="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
 								>
 									Unused
+								</span>
+							{/if}
+							{#if canDeleteMedia(media) && media.usage_count > 0}
+								<span
+									class="ml-1 inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+								>
+									Deletable
 								</span>
 							{/if}
 						</div>
@@ -795,9 +845,9 @@
 						<p class="line-clamp-2 text-sm">{usage.content}</p>
 						<div class="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
 							<span class="rounded-full bg-muted px-2 py-0.5 text-xs">{usage.status}</span>
-							{#if usage.scheduled}
+							{#if usage.scheduled_at}
 								<span
-									>{new Date(usage.scheduled).toLocaleString('en-US', {
+									>{new Date(usage.scheduled_at).toLocaleString('en-US', {
 										timeZone: workspaceCtx.settings.timezone || 'UTC'
 									})}</span
 								>
