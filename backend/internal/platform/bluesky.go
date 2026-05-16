@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -193,27 +194,9 @@ func (b *BlueskyAdapter) uploadVideo(ctx context.Context, accessToken, did, mime
 		return "", fmt.Errorf("reading video data: %w", err)
 	}
 
-	// Get service auth token for video.bsky.app
-	pdsHost := strings.TrimPrefix(b.pdsURL, "https://")
-	pdsHost = strings.TrimPrefix(pdsHost, "http://")
-	authPayload := map[string]interface{}{
-		"aud": "did:web:" + pdsHost,
-		"lxm": "com.atproto.repo.uploadBlob",
-		"exp": time.Now().UTC().Add(30 * time.Minute).Unix(),
-	}
-
-	authResp, err := DoJSON(ctx, "POST", b.pdsURL+"/xrpc/com.atproto.server.getServiceAuth", authPayload, map[string]string{
-		headerAuthorization: bearerPrefix + accessToken,
-	})
+	serviceToken, err := b.videoServiceAuthToken(ctx, accessToken)
 	if err != nil {
-		return "", fmt.Errorf("bluesky video service auth: %w", err)
-	}
-
-	var authResult struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(authResp, &authResult); err != nil {
-		return "", fmt.Errorf("decoding bluesky service auth: %w", err)
+		return "", err
 	}
 
 	// Derive filename from MIME type
@@ -228,25 +211,28 @@ func (b *BlueskyAdapter) uploadVideo(ctx context.Context, accessToken, did, mime
 	// Upload video to Bluesky video service
 	uploadURL := "https://video.bsky.app/xrpc/app.bsky.video.uploadVideo?did=" + url.QueryEscape(did) + "&name=" + url.QueryEscape(filename)
 	jobResp, err := DoRequest(ctx, "POST", uploadURL, bytes.NewReader(data), map[string]string{
-		headerAuthorization: bearerPrefix + authResult.Token,
+		headerAuthorization: bearerPrefix + serviceToken,
 		headerContentType:   mimeType,
+		"Content-Length":    strconv.Itoa(len(data)),
 	})
 	if err != nil {
 		return "", fmt.Errorf("bluesky video upload: %w", err)
 	}
 
-	var jobStatus struct {
-		JobID string      `json:"jobId"`
-		State string      `json:"state"`
-		Blob  interface{} `json:"blob"`
-	}
-	if err := json.Unmarshal(jobResp, &jobStatus); err != nil {
+	jobStatus, err := decodeBlueskyVideoJobStatus(jobResp)
+	if err != nil {
 		return "", fmt.Errorf("decoding bluesky video job: %w", err)
+	}
+	if jobStatus.State == "JOB_STATE_FAILED" {
+		return "", fmt.Errorf("bluesky video processing failed: %s", jobStatus.failureMessage())
 	}
 
 	// Poll if video is still processing
 	if jobStatus.Blob == nil {
-		blob, pollErr := b.pollVideoJob(ctx, accessToken, jobStatus.JobID)
+		if jobStatus.JobID == "" {
+			return "", fmt.Errorf("bluesky video upload returned no job ID")
+		}
+		blob, pollErr := b.pollVideoJob(ctx, serviceToken, jobStatus.JobID)
 		if pollErr != nil {
 			return "", pollErr
 		}
@@ -261,35 +247,111 @@ func (b *BlueskyAdapter) uploadVideo(ctx context.Context, accessToken, did, mime
 	return string(blobJSON), nil
 }
 
-func (b *BlueskyAdapter) pollVideoJob(ctx context.Context, accessToken, jobID string) (interface{}, error) {
+func (b *BlueskyAdapter) videoServiceAuthToken(ctx context.Context, accessToken string) (string, error) {
+	pdsHost, err := serviceAuthPDSHost(b.pdsURL)
+	if err != nil {
+		return "", err
+	}
+
+	params := url.Values{}
+	params.Set("aud", "did:web:"+pdsHost)
+	params.Set("lxm", "com.atproto.repo.uploadBlob")
+	params.Set("exp", strconv.FormatInt(time.Now().UTC().Add(30*time.Minute).Unix(), 10))
+
+	authURL := b.pdsURL + "/xrpc/com.atproto.server.getServiceAuth?" + params.Encode()
+	authResp, err := DoRequest(ctx, "GET", authURL, nil, map[string]string{
+		headerAuthorization: bearerPrefix + accessToken,
+	})
+	if err != nil {
+		return "", fmt.Errorf("bluesky video service auth: %w", err)
+	}
+
+	var authResult struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(authResp, &authResult); err != nil {
+		return "", fmt.Errorf("decoding bluesky service auth: %w", err)
+	}
+	if authResult.Token == "" {
+		return "", fmt.Errorf("bluesky service auth returned no token")
+	}
+
+	return authResult.Token, nil
+}
+
+func serviceAuthPDSHost(pdsURL string) (string, error) {
+	parsed, err := url.Parse(pdsURL)
+	if err != nil {
+		return "", fmt.Errorf("parsing bluesky PDS URL: %w", err)
+	}
+	if parsed.Host != "" {
+		return parsed.Host, nil
+	}
+
+	host := strings.TrimPrefix(strings.TrimPrefix(pdsURL, "https://"), "http://")
+	host = strings.TrimRight(host, "/")
+	if host == "" {
+		return "", fmt.Errorf("bluesky PDS URL has no host")
+	}
+	return host, nil
+}
+
+type blueskyVideoJobStatus struct {
+	JobID   string      `json:"jobId"`
+	State   string      `json:"state"`
+	Blob    interface{} `json:"blob"`
+	Error   string      `json:"error"`
+	Message string      `json:"message"`
+}
+
+func (s blueskyVideoJobStatus) failureMessage() string {
+	if s.Message != "" {
+		return s.Message
+	}
+	if s.Error != "" {
+		return s.Error
+	}
+	return s.State
+}
+
+func decodeBlueskyVideoJobStatus(data []byte) (blueskyVideoJobStatus, error) {
+	var result struct {
+		blueskyVideoJobStatus
+		JobStatus blueskyVideoJobStatus `json:"jobStatus"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return blueskyVideoJobStatus{}, err
+	}
+
+	if result.JobStatus.JobID != "" || result.JobStatus.State != "" || result.JobStatus.Blob != nil {
+		return result.JobStatus, nil
+	}
+	return result.blueskyVideoJobStatus, nil
+}
+
+func (b *BlueskyAdapter) pollVideoJob(ctx context.Context, serviceToken, jobID string) (interface{}, error) {
 	statusURL := "https://video.bsky.app/xrpc/app.bsky.video.getJobStatus?jobId=" + url.QueryEscape(jobID)
 
 	for i := 0; i < 60; i++ {
 		respBody, err := DoRequest(ctx, "GET", statusURL, nil, map[string]string{
-			headerAuthorization: bearerPrefix + accessToken,
+			headerAuthorization: bearerPrefix + serviceToken,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("bluesky video job status: %w", err)
 		}
 
-		var result struct {
-			JobStatus struct {
-				JobID string      `json:"jobId"`
-				State string      `json:"state"`
-				Blob  interface{} `json:"blob"`
-			} `json:"jobStatus"`
-		}
-		if err := json.Unmarshal(respBody, &result); err != nil {
+		jobStatus, err := decodeBlueskyVideoJobStatus(respBody)
+		if err != nil {
 			return nil, fmt.Errorf("decoding bluesky video job status: %w", err)
 		}
 
-		switch result.JobStatus.State {
+		switch jobStatus.State {
 		case "JOB_STATE_COMPLETED":
-			if result.JobStatus.Blob != nil {
-				return result.JobStatus.Blob, nil
+			if jobStatus.Blob != nil {
+				return jobStatus.Blob, nil
 			}
 		case "JOB_STATE_FAILED":
-			return nil, fmt.Errorf("bluesky video processing failed")
+			return nil, fmt.Errorf("bluesky video processing failed: %s", jobStatus.failureMessage())
 		}
 
 		select {

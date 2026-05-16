@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
 
 const defaultLinkedInVersionLagMonths = 1
+const linkedInVideoAvailabilityPolls = 30
 
 func linkedInAPIVersion() string {
 	if version := os.Getenv("LINKEDIN_API_VERSION"); version != "" {
@@ -316,6 +318,10 @@ func (l *LinkedInAdapter) completeVideoUpload(ctx context.Context, accessToken, 
 		return "", fmt.Errorf("linkedin video finalize: %w", err)
 	}
 
+	if err := l.waitForVideoAvailable(ctx, accessToken, apiVersion, registerResult.Value.Video); err != nil {
+		return "", err
+	}
+
 	return registerResult.Value.Video, nil
 }
 
@@ -348,7 +354,7 @@ func (l *LinkedInAdapter) createPost(ctx context.Context, accessToken, authorURN
 		mediaItem := map[string]interface{}{
 			"id": req.PlatformMediaIDs[0],
 		}
-		if len(req.MediaAltTexts) > 0 && req.MediaAltTexts[0] != "" {
+		if !isLinkedInVideoURN(req.PlatformMediaIDs[0]) && len(req.MediaAltTexts) > 0 && req.MediaAltTexts[0] != "" {
 			mediaItem["altText"] = req.MediaAltTexts[0]
 		}
 		payload["content"] = map[string]interface{}{
@@ -394,6 +400,56 @@ func (l *LinkedInAdapter) postComment(ctx context.Context, accessToken, actorURN
 	}
 
 	return result.ID, nil
+}
+
+func (l *LinkedInAdapter) waitForVideoAvailable(ctx context.Context, accessToken, apiVersion, videoURN string) error {
+	encodedVideoURN := url.PathEscape(videoURN)
+	statusURL := "https://api.linkedin.com/rest/videos/" + encodedVideoURN
+
+	for i := 0; i < linkedInVideoAvailabilityPolls; i++ {
+		respBody, err := DoRequest(ctx, "GET", statusURL, nil, linkedinHeaders(accessToken, apiVersion))
+		if err != nil {
+			return fmt.Errorf("linkedin video status: %w", err)
+		}
+
+		var result struct {
+			Status                  string `json:"status"`
+			ProcessingFailureReason string `json:"processingFailureReason"`
+		}
+		if err := json.Unmarshal(respBody, &result); err != nil {
+			return fmt.Errorf("decoding linkedin video status: %w", err)
+		}
+
+		switch result.Status {
+		case "AVAILABLE":
+			return nil
+		case "PROCESSING", "WAITING_UPLOAD":
+		case "PROCESSING_FAILED", "FAILED":
+			if result.ProcessingFailureReason != "" {
+				return fmt.Errorf("linkedin video processing failed: %s", result.ProcessingFailureReason)
+			}
+			return fmt.Errorf("linkedin video processing failed")
+		default:
+			if result.Status == "" {
+				return fmt.Errorf("linkedin video status response missing status")
+			}
+			if !slices.Contains([]string{"PROCESSING", "WAITING_UPLOAD"}, result.Status) {
+				return fmt.Errorf("linkedin video is not available: %s", result.Status)
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+
+	return fmt.Errorf("linkedin video processing timed out")
+}
+
+func isLinkedInVideoURN(urn string) bool {
+	return strings.HasPrefix(urn, "urn:li:video:")
 }
 
 func linkedinHeaders(accessToken, apiVersion string) map[string]string {
