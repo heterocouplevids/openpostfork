@@ -248,13 +248,13 @@ func (b *BlueskyAdapter) uploadVideo(ctx context.Context, accessToken, did, mime
 }
 
 func (b *BlueskyAdapter) videoServiceAuthToken(ctx context.Context, accessToken string) (string, error) {
-	pdsHost, err := serviceAuthPDSHost(b.pdsURL)
+	audience, err := blueskyServiceAuthAudience(accessToken, b.pdsURL)
 	if err != nil {
 		return "", err
 	}
 
 	params := url.Values{}
-	params.Set("aud", "did:web:"+pdsHost)
+	params.Set("aud", audience)
 	params.Set("lxm", "com.atproto.repo.uploadBlob")
 	params.Set("exp", strconv.FormatInt(time.Now().UTC().Add(30*time.Minute).Unix(), 10))
 
@@ -277,6 +277,41 @@ func (b *BlueskyAdapter) videoServiceAuthToken(ctx context.Context, accessToken 
 	}
 
 	return authResult.Token, nil
+}
+
+func blueskyServiceAuthAudience(accessToken, pdsURL string) (string, error) {
+	parts := strings.Split(accessToken, ".")
+	if len(parts) == 3 {
+		payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil {
+			return "", fmt.Errorf("decode bluesky jwt payload: %w", err)
+		}
+
+		var claims struct {
+			Aud json.RawMessage `json:"aud"`
+		}
+		if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+			return "", fmt.Errorf("decode bluesky jwt claims: %w", err)
+		}
+
+		var audience string
+		if err := json.Unmarshal(claims.Aud, &audience); err == nil && audience != "" {
+			return audience, nil
+		}
+
+		var audiences []string
+		if err := json.Unmarshal(claims.Aud, &audiences); err == nil && len(audiences) > 0 && audiences[0] != "" {
+			return audiences[0], nil
+		}
+
+		return "", fmt.Errorf("bluesky jwt missing aud claim")
+	}
+
+	pdsHost, err := serviceAuthPDSHost(pdsURL)
+	if err != nil {
+		return "", err
+	}
+	return "did:web:" + pdsHost, nil
 }
 
 func serviceAuthPDSHost(pdsURL string) (string, error) {

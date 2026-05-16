@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -52,6 +53,76 @@ func TestDecodeBlueskyVideoJobStatusHandlesWrappedResponse(t *testing.T) {
 	}
 }
 
+func TestBlueskyServiceAuthAudienceUsesAccessTokenAudience(t *testing.T) {
+	token := testJWT(t, map[string]interface{}{
+		"aud": "did:web:polypore.us-west.host.bsky.network",
+	})
+
+	audience, err := blueskyServiceAuthAudience(token, "https://bsky.social")
+	if err != nil {
+		t.Fatalf("blueskyServiceAuthAudience returned error: %v", err)
+	}
+	if audience != "did:web:polypore.us-west.host.bsky.network" {
+		t.Fatalf("expected token audience, got %q", audience)
+	}
+}
+
+func TestBlueskyVideoServiceAuthRequestsTokenAudience(t *testing.T) {
+	token := testJWT(t, map[string]interface{}{
+		"aud": "did:web:polypore.us-west.host.bsky.network",
+	})
+
+	originalClient := httpClient
+	defer func() { httpClient = originalClient }()
+
+	httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != "GET" || req.URL.Path != "/xrpc/com.atproto.server.getServiceAuth" {
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
+		}
+		if got := req.URL.Query().Get("aud"); got != "did:web:polypore.us-west.host.bsky.network" {
+			t.Fatalf("expected service auth aud from access token, got %q", got)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"token":"service-token"}`)),
+			Request:    req,
+		}, nil
+	})}
+
+	adapter := NewBlueskyAdapter("https://bsky.social")
+	serviceToken, err := adapter.videoServiceAuthToken(context.Background(), token)
+	if err != nil {
+		t.Fatalf("videoServiceAuthToken returned error: %v", err)
+	}
+	if serviceToken != "service-token" {
+		t.Fatalf("expected service token, got %q", serviceToken)
+	}
+}
+
+func TestLinkedInVideoStatusEncodesURNPathVariable(t *testing.T) {
+	originalClient := httpClient
+	defer func() { httpClient = originalClient }()
+
+	httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method != "GET" {
+			t.Fatalf("unexpected request method %s", req.Method)
+		}
+		if req.URL.EscapedPath() != "/rest/videos/urn%3Ali%3Avideo%3AD4D10AQHRV0XIfe6hDw" {
+			t.Fatalf("unexpected escaped path %q", req.URL.EscapedPath())
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"status":"AVAILABLE"}`)),
+			Request:    req,
+		}, nil
+	})}
+
+	adapter := NewLinkedInAdapter("", "", "", false)
+	if err := adapter.waitForVideoAvailable(context.Background(), "token", "202601", "urn:li:video:D4D10AQHRV0XIfe6hDw"); err != nil {
+		t.Fatalf("waitForVideoAvailable returned error: %v", err)
+	}
+}
+
 func TestLinkedInCreatePostSkipsAltTextForVideoURN(t *testing.T) {
 	payload := captureLinkedInCreatePostPayload(t, &PublishRequest{
 		Content:          "video post",
@@ -63,6 +134,22 @@ func TestLinkedInCreatePostSkipsAltTextForVideoURN(t *testing.T) {
 	if _, ok := media["altText"]; ok {
 		t.Fatalf("did not expect altText for video media: %#v", media)
 	}
+}
+
+func testJWT(t *testing.T, payload map[string]interface{}) string {
+	t.Helper()
+
+	headerJSON, err := json.Marshal(map[string]string{"alg": "none"})
+	if err != nil {
+		t.Fatalf("marshaling jwt header: %v", err)
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshaling jwt payload: %v", err)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(headerJSON) + "." +
+		base64.RawURLEncoding.EncodeToString(payloadJSON) + ".signature"
 }
 
 func TestLinkedInCreatePostKeepsAltTextForImageURN(t *testing.T) {

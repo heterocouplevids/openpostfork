@@ -403,7 +403,7 @@ func (l *LinkedInAdapter) postComment(ctx context.Context, accessToken, actorURN
 }
 
 func (l *LinkedInAdapter) waitForVideoAvailable(ctx context.Context, accessToken, apiVersion, videoURN string) error {
-	encodedVideoURN := url.PathEscape(videoURN)
+	encodedVideoURN := url.QueryEscape(videoURN)
 	statusURL := "https://api.linkedin.com/rest/videos/" + encodedVideoURN
 
 	for i := 0; i < linkedInVideoAvailabilityPolls; i++ {

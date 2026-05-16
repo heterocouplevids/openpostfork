@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.9] - 2026-05-16
+
+### Fixed
+- Corrected Bluesky video service auth to use the user's PDS DID from the access JWT audience instead of assuming `bsky.social`.
+- Corrected LinkedIn video status polling to percent-encode video URNs as Rest.li path variables.
+
 ## [1.0.8] - 2026-05-16
 
 ### Changed
