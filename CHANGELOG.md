@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Expanded the README launch messaging around the Typefully-like workflow, target users, support snapshot, and current limitations.
+- Filled in the thin operator docs with a more complete quickstart, single-binary install guide, backup and restore process, provider support matrix, and stronger security guidance.
+
 ## [1.0.9] - 2026-05-16
 
 ### Fixed

@@ -6,19 +6,26 @@ Provider-native API capabilities are not the same as OpenPost-supported capabili
 
 ## Current Platform Support
 
-| Provider | Images | Video | Threading |
-|---|---|---|---|
-| X | 4 images | Implementation exists, manual verification still needed | Replies |
-| Mastodon | 4 attachments | Implementation likely works, manual verification still needed | Replies |
-| Bluesky | 4 images | Implementation exists for one MP4 video, manual verification still needed | AT Protocol reply refs |
-| LinkedIn | 1 image | Implementation exists, manual verification still needed | Comments on first post |
-| Threads | 1 media item in OpenPost | Implementation uses stored MIME type and public media URL, manual verification still needed | `reply_to_id` |
+| Provider | Text | Images | Video | Threading | Scheduling | Variants |
+|---|---|---|---|---|---|---|
+| X | Supported | Up to 4 images | Implemented, real-account verification still required | Replies | Supported | Supported |
+| Mastodon | Supported | Up to 4 attachments | Implemented through media upload + publish flow, real-account verification still required | Replies | Supported | Supported |
+| Bluesky | Supported | Up to 4 images | Implemented for one MP4 video via `app.bsky.video.*`, real-account verification still required | AT Protocol reply refs | Supported | Supported |
+| LinkedIn | Supported | Single-image path supported | Implemented and recently fixed, still needs re-verification against the live API | Thread children are posted as comments | Supported | Supported |
+| Threads | Supported | Single-media path in current OpenPost composer flow | Implemented with MIME-aware media handling and public media URL requirement | `reply_to_id` | Supported | Supported |
 
 ## Known Limitations
 
-- **Video support is uneven** — X, Mastodon, and Threads have working video implementations (videos with chunked X upload, Mastodon async media, Threads MIME-based video detection). Bluesky video is newly implemented via `app.bsky.video.uploadVideo`. LinkedIn video had a `fileSizeBytes` type issue (fixed). Provider limits and app-review permissions still apply.
+- **Video support is uneven** — implementation exists across multiple providers, but support is still provider-dependent and some paths need end-to-end verification with real accounts.
 - **No full feature parity guarantee** — OpenPost provides the core scheduling features but may not support every platform-specific option (e.g., polls, galleries, stories)
 - **Provider APIs can change** — social platforms may change their APIs, rate limits, or app review requirements at any time
 - **OAuth tokens require HTTPS** — callbacks need a valid domain with TLS for OAuth to work
+
+## Reading this table correctly
+
+- A provider can support a feature natively while OpenPost still marks it unsupported or unverified.
+- "Implemented" means the code path exists in OpenPost.
+- "Verified" means the implementation has been confirmed against a live provider account recently.
+- Deployment details still matter. Threads in particular depends on a public media URL, and LinkedIn depends heavily on granted app permissions.
 
 These limits are a starting point, not a permanent contract. Providers can change them.

@@ -49,6 +49,8 @@ When running OpenPost, follow these security practices:
 - Use strong, randomly generated secrets (`openssl rand -base64 32`)
 - Rotate secrets periodically
 - Use Docker secrets, Kubernetes secrets, or a secrets manager in production
+- Restrict access to `OPENPOST_ENCRYPTION_KEY`: encrypted provider tokens still depend on that key to be decrypted
+- Limit read access to the OpenPost runtime user for `.env`, backup archives, and service configuration files
 
 ### Network Security
 
@@ -56,12 +58,15 @@ When running OpenPost, follow these security practices:
 - Configure a proper firewall
 - Don't expose the OpenPost port directly to the internet (except for OAuth callbacks)
 - For Threads: ensure `/media/` endpoint is publicly accessible for media uploads
+- Use HTTPS before configuring production OAuth callbacks for X, Mastodon, LinkedIn, or Threads
 
 ### Data Protection
 
 - Back up your database and media directory regularly
+- Back up your `.env` or secret-management configuration together with the database and media directory
 - Store backups in a secure location
 - Consider encrypting backups at rest
+- Restrict filesystem permissions on the SQLite database, media folder, and backup artifacts
 
 ### OAuth Provider Security
 
@@ -76,6 +81,8 @@ OpenPost includes the following security measures:
 - **Token encryption:** All OAuth tokens are encrypted at rest using AES-256-GCM
 - **Password hashing:** User passwords are hashed with bcrypt
 - **JWT authentication:** Secure token-based session management
+- **Account MFA:** TOTP enrollment and verification for user accounts
+- **Passkeys:** WebAuthn passkey registration and login support
 - **OAuth PKCE:** Twitter authentication uses PKCE for improved security
 - **No external dependencies:** Self-contained binary with no external service dependencies
 

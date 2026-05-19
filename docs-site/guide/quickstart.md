@@ -2,6 +2,8 @@
 
 This is the fastest path to a working OpenPost instance.
 
+If you prefer not to use Docker, jump to [Single Binary](/installation/binary).
+
 ## 1. Create `docker-compose.yml`
 
 ```yaml
@@ -28,8 +30,20 @@ volumes:
 
 ## 2. Create `.env`
 
-```bash
-cp backend/.env.example .env
+Create a `.env` file next to `docker-compose.yml`:
+
+```dotenv
+OPENPOST_PORT=8080
+OPENPOST_DATABASE_PATH=/data/db/openpost.db
+OPENPOST_MEDIA_PATH=/data/media
+OPENPOST_MEDIA_URL=http://localhost:8080/media
+
+OPENPOST_JWT_SECRET=replace-with-a-random-secret-at-least-32-characters-long
+OPENPOST_ENCRYPTION_KEY=replace-with-a-random-secret-at-least-32-characters-long
+
+# Start with Bluesky if you want the easiest first provider:
+# no server-side OAuth app is required.
+# Add other provider env vars later as needed.
 ```
 
 ## 3. Generate secrets
@@ -55,18 +69,40 @@ docker compose up -d
 
 Visit `http://localhost:8080`.
 
-## 6. Finish setup
+## 6. Finish first-run setup
 
 1. Create your OpenPost account.
    The first account on the instance becomes the instance admin automatically.
 2. Create or select a workspace.
 3. Connect your first provider.
-4. Publish a test post.
+4. Create a post, choose a scheduled time a few minutes ahead, and save it.
+5. Confirm the post appears in the activity view as scheduled, then wait for it to publish.
+
+## 7. Recommended first provider
+
+Start with **Bluesky** if you want the fastest validation path:
+
+1. In Bluesky, open Settings and create an app password.
+2. In OpenPost, go to Accounts and connect Bluesky with your handle and app password.
+3. Publish or schedule a short text post first.
+
+## What success looks like
+
+- You see the registration or login screen on first load.
+- After signing in, OpenPost opens the workspace-aware app shell.
+- The Accounts screen shows your connected provider.
+- The composer lets you pick that account as a destination.
+- The Activity screen shows the scheduled post, then later shows it as published.
+
+## HTTPS note
+
+`http://localhost:8080` is fine for a local trial. Before configuring production OAuth callbacks, put OpenPost behind HTTPS with a real domain. That matters for X, Mastodon, LinkedIn, and Threads callback validation, and for Threads public media fetches.
 
 If you want to close self-service signups after setup, set `OPENPOST_DISABLE_REGISTRATIONS=true` and restart OpenPost. The first account is still allowed on a brand-new instance even when that flag is enabled.
 
 ## Next steps
 
 - [Docker Compose details](/installation/docker-compose)
+- [Single binary install](/installation/binary)
 - [Environment variables](/configuration/environment-variables)
 - [Provider setup](/providers/overview)

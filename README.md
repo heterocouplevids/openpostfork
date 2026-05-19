@@ -24,9 +24,9 @@
 
 <div align="center">
   <strong>
-    <h2>Self-hosted Buffer/Hootsuite alternative</h2>
+    <h2>Self-hosted social media scheduling, without another monthly subscription.</h2>
   </strong>
-  Schedule posts to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server. One binary or container. No Redis, no Postgres, no external queue.
+  OpenPost is a self-hosted Typefully-like social media scheduler for people who want to write, customize, and schedule posts across platforms from their own server.
 </div>
 
 <div align="center">
@@ -81,17 +81,35 @@ OpenPost is for people who want the core social media scheduling workflow withou
 - **Reusable media library**: upload once, reuse across posts
 - **Self-hosted**: your data, schedules, and tokens stay on your server
 
-**Under the hood**: Built with Go, Svelte, and SQLite. Runs as a single binary or container — no Redis, no Postgres, no external queue. OAuth tokens are encrypted at rest with AES-256-GCM. Account-level 2FA and passkeys supported.
+Built with Go, SvelteKit, and SQLite. Runs as a single binary or container with no Redis, no Postgres, and no external queue.
 
 ## Who is this for?
 
 OpenPost is especially useful for:
 
+- **Creators** who want scheduling without another SaaS subscription
 - **Indie hackers** who want a cheaper or free alternative to Typefully, Buffer, or Hootsuite
 - **Small teams** that want control over credentials and data
 - **Open-source maintainers** managing multiple platform presences
 - **Self-hosters** who want a lightweight tool instead of a full marketing suite
 - **Agencies** managing separate brand workspaces
+
+## Feature Snapshot
+
+| Capability | Status |
+|---|---|
+| Self-hosted | Yes |
+| Single binary | Yes |
+| Docker support | Yes |
+| SQLite | Yes |
+| X, Mastodon, Bluesky, Threads, LinkedIn | Yes |
+| Threads composer | Yes |
+| Platform-specific variants | Yes |
+| Media library | Yes |
+| 2FA / TOTP | Yes |
+| Passkeys | Yes |
+| Video posts | Partial, provider-dependent |
+| Analytics | Not a launch feature |
 
 ## Current Limitations
 
@@ -100,10 +118,13 @@ OpenPost is especially useful for:
 - **Advanced analytics are not the current focus** — engagement reporting is not a launch feature
 - **Enterprise approval workflows are not the current focus** — OpenPost is optimized for core scheduling workflows
 
+## Security And Operations
+
+OAuth tokens are encrypted at rest, and OpenPost supports account-level 2FA/TOTP and passkeys. In production, keep `OPENPOST_JWT_SECRET` and `OPENPOST_ENCRYPTION_KEY` unique and private, run behind HTTPS for OAuth callbacks, and back up the database, media directory, and secrets together.
+
 ## Quickstart
 
 ```bash
-cp backend/.env.example .env
 docker compose up -d
 ```
 
