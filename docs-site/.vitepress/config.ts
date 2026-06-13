@@ -23,6 +23,7 @@ const docsSidebar = [
 			{ text: 'Single Binary', link: '/installation/binary' },
 			{ text: 'Nix Module', link: '/installation/nix-module' },
 			{ text: 'Reverse Proxy', link: '/installation/reverse-proxy' },
+			{ text: 'Android App', link: '/installation/android' },
 		],
 	},
 	{

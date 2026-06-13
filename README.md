@@ -101,6 +101,7 @@ OpenPost is especially useful for:
 | Self-hosted | Yes |
 | Single binary | Yes |
 | Docker support | Yes |
+| Android app (Capacitor) | Yes (APK in every release) |
 | SQLite | Yes |
 | X, Mastodon, Bluesky, Threads, LinkedIn | Yes |
 | Threads composer | Yes |
@@ -143,6 +144,7 @@ Set fresh values for `OPENPOST_JWT_SECRET` and `OPENPOST_ENCRYPTION_KEY` before 
 - [Landing and docs site](https://op.rgo.pt/)
 - [Quickstart](https://op.rgo.pt/guide/quickstart)
 - [Installation](https://op.rgo.pt/installation/docker-compose)
+- [Android app](https://op.rgo.pt/installation/android)
 - [Configuration](https://op.rgo.pt/configuration/environment-variables)
 - [Providers](https://op.rgo.pt/providers/overview)
 - [Operations](https://op.rgo.pt/operations/troubleshooting)

@@ -123,6 +123,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/login/passkey/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Begin MFA login with a passkey */
+        post: operations["begin-login-passkey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login/passkey/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete MFA login with a passkey */
+        post: operations["finish-login-passkey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete MFA login with a TOTP code */
+        post: operations["verify-login-totp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -151,6 +202,125 @@ export interface paths {
         put?: never;
         /** Register a new user */
         post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/security": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get account security settings */
+        get: operations["get-security-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/security/passkeys/begin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Begin passkey registration for the current user */
+        post: operations["begin-passkey-registration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/security/passkeys/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish passkey registration for the current user */
+        post: operations["finish-passkey-registration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/security/passkeys/{passkey_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove a passkey from the current user */
+        post: operations["remove-passkey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/security/totp/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm TOTP enrollment with a verification code */
+        post: operations["confirm-totp-setup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/security/totp/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable TOTP for the current user */
+        post: operations["disable-totp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/security/totp/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start TOTP enrollment for the current user */
+        post: operations["begin-totp-setup"];
         delete?: never;
         options?: never;
         head?: never;
@@ -217,7 +387,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Delete multiple media attachments at once (only unused ones) */
+        /** Delete multiple media attachments at once */
         post: operations["batch-delete-media"];
         delete?: never;
         options?: never;
@@ -652,9 +822,15 @@ export interface components {
              * @example https://example.com/schemas/AuthOutputBody.json
              */
             readonly $schema?: string;
+            /** @description Enabled MFA methods for this account */
+            mfa_methods?: string[] | null;
+            /** @description Pending MFA token for follow-up verification */
+            mfa_token?: string;
+            /** @description Whether the login requires a second factor */
+            requires_mfa: boolean;
             /** @description JWT authentication token */
-            token: string;
-            user: components["schemas"]["UserProfile"];
+            token?: string;
+            user?: components["schemas"]["UserProfile"];
         };
         BatchDeleteMediaInputBody: {
             /**
@@ -681,6 +857,28 @@ export interface components {
             /** @description IDs that could not be deleted (in use) */
             failed_ids: string[] | null;
         };
+        BeginPasskeyLoginInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/BeginPasskeyLoginInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Pending MFA challenge token */
+            mfa_token: string;
+        };
+        BeginPasskeyRegistrationInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/BeginPasskeyRegistrationInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Current password for re-authentication */
+            current_password: string;
+            /** @description Optional passkey label */
+            name: string;
+        };
         BlueskyLoginInputBody: {
             /**
              * Format: uri
@@ -694,6 +892,18 @@ export interface components {
             handle: string;
             /** @description Workspace ID */
             workspace_id: string;
+        };
+        ConfirmTOTPSetupInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ConfirmTOTPSetupInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description TOTP setup challenge ID */
+            challenge_id: string;
+            /** @description Six digit authenticator code */
+            code: string;
         };
         CreatePostInputBody: {
             /**
@@ -718,6 +928,8 @@ export interface components {
             scheduled_at?: string;
             /** @description Social account IDs to publish to */
             social_account_ids: string[] | null;
+            /** @description Optional thread draft JSON (encoded with __openpost_thread__: prefix) for a parent post that drafts a multi-post thread. Mutually exclusive with a thread blob in content: the new field is preferred. */
+            thread_draft?: string;
             /** @description Target workspace ID */
             workspace_id: string;
         };
@@ -910,6 +1122,16 @@ export interface components {
             /** @description Success message */
             message: string;
         };
+        DisableTOTPInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DisableTOTPInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Current password for re-authentication */
+            current_password: string;
+        };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
             location?: string;
@@ -970,6 +1192,32 @@ export interface components {
             server_name: string;
             /** @description Workspace ID */
             workspace_id: string;
+        };
+        FinishPasskeyLoginInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/FinishPasskeyLoginInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Passkey challenge ID */
+            challenge_id: string;
+            /** @description WebAuthn assertion response */
+            credential: unknown;
+        };
+        FinishPasskeyRegistrationInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/FinishPasskeyRegistrationInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Passkey registration challenge ID */
+            challenge_id: string;
+            /** @description WebAuthn registration response */
+            credential: unknown;
+            /** @description Optional passkey label */
+            name: string;
         };
         GetAuthURLOutputBody: {
             /**
@@ -1121,6 +1369,8 @@ export interface components {
         MediaListItem: {
             /** @description Alt text */
             alt_text: string;
+            /** @description Whether media can be deleted */
+            can_delete: boolean;
             /** @description Creation time */
             created_at: string;
             /**
@@ -1184,6 +1434,32 @@ export interface components {
             /** @description The suggested time in ISO 8601 format */
             slot_time: string;
         };
+        PasskeyCeremonyOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PasskeyCeremonyOutputBody.json
+             */
+            readonly $schema?: string;
+            challenge_id: string;
+            options: unknown;
+        };
+        PasskeySummary: {
+            /**
+             * Format: date-time
+             * @description When the passkey was registered
+             */
+            created_at: string;
+            /** @description Passkey ID */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the passkey was last used
+             */
+            last_used_at: string;
+            /** @description User-visible passkey label */
+            name: string;
+        };
         PostDestinationResponse: {
             /** @description Error message if publishing failed */
             error_message?: string;
@@ -1224,6 +1500,8 @@ export interface components {
             scheduled_at: string;
             /** @description Post status */
             status: string;
+            /** @description Set when this post is a thread-draft parent; contains the encoded thread JSON (with __openpost_thread__: prefix). */
+            thread_draft?: string;
             /** @description Workspace ID */
             workspace_id: string;
         };
@@ -1272,6 +1550,8 @@ export interface components {
             scheduled_at: string;
             /** @description Post status (draft, scheduled, publishing, published, failed) */
             status: string;
+            /** @description Set when this post is a thread-draft parent; contains the encoded thread JSON (with __openpost_thread__: prefix). */
+            thread_draft?: string;
             /** @description Workspace ID */
             workspace_id: string;
         };
@@ -1362,6 +1642,16 @@ export interface components {
             /** @description User password (min 8 characters) */
             password: string;
         };
+        RemovePasskeyInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/RemovePasskeyInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Current password for re-authentication */
+            current_password: string;
+        };
         ScheduleDay: {
             /**
              * Format: int64
@@ -1421,6 +1711,20 @@ export interface components {
              */
             year: number;
         };
+        SecurityStatusOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SecurityStatusOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Currently available MFA methods */
+            methods: string[] | null;
+            passkeys: components["schemas"]["PasskeySummary"][] | null;
+            /** @description Whether authenticator-based 2FA is enabled */
+            totp_enabled: boolean;
+            user: components["schemas"]["UserProfile"];
+        };
         SetAccountResponse: {
             /** @description Account username */
             account_username: string;
@@ -1450,6 +1754,28 @@ export interface components {
             name: string;
             /** @description Workspace ID */
             workspace_id: string;
+        };
+        SetupTOTPInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SetupTOTPInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Current password for re-authentication */
+            current_password: string;
+        };
+        SetupTOTPOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SetupTOTPOutputBody.json
+             */
+            readonly $schema?: string;
+            challenge_id: string;
+            manual_entry_key: string;
+            otpauth_url: string;
+            qr_code_data_url: string;
         };
         SuggestScheduleInputBody: {
             /**
@@ -1534,6 +1860,8 @@ export interface components {
             scheduled_at?: string;
             /** @description Social account IDs to publish to (replace all) */
             social_account_ids?: string[] | null;
+            /** @description Thread draft JSON (encoded with __openpost_thread__: prefix). Send a non-null value to set or replace the draft; send an empty string to clear it and revert to a single post. Send null (or omit) to leave the existing draft unchanged. */
+            thread_draft?: string;
         };
         UpdatePostingScheduleInputBody: {
             /**
@@ -1684,6 +2012,18 @@ export interface components {
             social_account_id: string;
             /** @description Last update time */
             updated_at: string;
+        };
+        VerifyTOTPLoginInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/VerifyTOTPLoginInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Six digit authenticator code */
+            code: string;
+            /** @description Pending MFA challenge token */
+            mfa_token: string;
         };
         WorkspaceResp: {
             /** @description Creation time (ISO 8601) */
@@ -2014,6 +2354,186 @@ export interface operations {
             };
         };
     };
+    "begin-login-passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BeginPasskeyLoginInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyCeremonyOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "finish-login-passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinishPasskeyLoginInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "verify-login-totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyTOTPLoginInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-me": {
         parameters: {
             query?: never;
@@ -2103,6 +2623,416 @@ export interface operations {
             };
         };
     };
+    "get-security-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityStatusOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "begin-passkey-registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BeginPasskeyRegistrationInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyCeremonyOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "finish-passkey-registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinishPasskeyRegistrationInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityStatusOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "remove-passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Passkey ID */
+                passkey_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemovePasskeyInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityStatusOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "confirm-totp-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmTOTPSetupInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityStatusOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "disable-totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableTOTPInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityStatusOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "begin-totp-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupTOTPInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupTOTPOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "health-check": {
         parameters: {
             query?: never;
@@ -2139,6 +3069,8 @@ export interface operations {
                 limit?: number;
                 /** @description Filter by status (pending, processing, completed, failed) */
                 status?: string;
+                /** @description Filter by workspace ID */
+                workspace_id?: string;
             };
             header?: never;
             path?: never;
@@ -2169,7 +3101,7 @@ export interface operations {
     "list-media": {
         parameters: {
             query: {
-                /** @description Filter by workspace ID (required) */
+                /** @description Filter by workspace ID */
                 workspace_id: string;
                 /** @description Filter: all, used, unused, favorites */
                 filter?: string;

@@ -9,6 +9,10 @@ let
     name = "eslint-wrapper";
     runtimeInputs = [ pkgs.bun ];
     text = ''
+      # Cap V8 heap at 1GB to keep the runner's OOM in check on
+      # small-memory hosts (3–4GB). The default Node heap is ~1.7GB
+      # and svelte-check / vite / paraglide will reliably OOM it.
+      export NODE_OPTIONS="--max-old-space-size=1024"
       cd "${config.git.root}/frontend"
       bun install --frozen-lockfile
       bun run lint
@@ -18,6 +22,10 @@ let
     name = "svelte-check-wrapper";
     runtimeInputs = [ pkgs.bun ];
     text = ''
+      # Cap V8 heap at 1GB to keep the runner's OOM in check on
+      # small-memory hosts (3–4GB). The default Node heap is ~1.7GB
+      # and svelte-check / vite / paraglide will reliably OOM it.
+      export NODE_OPTIONS="--max-old-space-size=1024"
       cd "${config.git.root}/frontend"
       bun install --frozen-lockfile
       bun run check
@@ -27,6 +35,10 @@ let
     name = "vitest-wrapper";
     runtimeInputs = [ pkgs.bun ];
     text = ''
+      # Cap V8 heap at 1GB to keep the runner's OOM in check on
+      # small-memory hosts (3–4GB). The default Node heap is ~1.7GB
+      # and svelte-check / vite / paraglide will reliably OOM it.
+      export NODE_OPTIONS="--max-old-space-size=1024"
       cd "${config.git.root}/frontend"
       bun install --frozen-lockfile
       # Run tests only if test files exist, otherwise skip silently

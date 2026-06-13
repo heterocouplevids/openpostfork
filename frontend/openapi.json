@@ -56,10 +56,23 @@
 						"readOnly": true,
 						"type": "string"
 					},
+					"mfa_methods": {
+						"description": "Enabled MFA methods for this account",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"mfa_token": {
+						"description": "Pending MFA token for follow-up verification",
+						"type": "string"
+					},
+					"requires_mfa": {
+						"description": "Whether the login requires a second factor",
+						"type": "boolean"
+					},
 					"token": { "description": "JWT authentication token", "type": "string" },
 					"user": { "$ref": "#/components/schemas/UserProfile" }
 				},
-				"required": ["token", "user"],
+				"required": ["requires_mfa"],
 				"type": "object"
 			},
 			"BatchDeleteMediaInputBody": {
@@ -105,6 +118,40 @@
 				"required": ["deleted", "failed_ids"],
 				"type": "object"
 			},
+			"BeginPasskeyLoginInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/BeginPasskeyLoginInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"mfa_token": { "description": "Pending MFA challenge token", "type": "string" }
+				},
+				"required": ["mfa_token"],
+				"type": "object"
+			},
+			"BeginPasskeyRegistrationInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/BeginPasskeyRegistrationInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"current_password": {
+						"description": "Current password for re-authentication",
+						"type": "string"
+					},
+					"name": { "description": "Optional passkey label", "type": "string" }
+				},
+				"required": ["current_password", "name"],
+				"type": "object"
+			},
 			"BlueskyLoginInputBody": {
 				"additionalProperties": false,
 				"properties": {
@@ -123,6 +170,27 @@
 					"workspace_id": { "description": "Workspace ID", "type": "string" }
 				},
 				"required": ["workspace_id", "handle", "app_password"],
+				"type": "object"
+			},
+			"ConfirmTOTPSetupInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/ConfirmTOTPSetupInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"challenge_id": { "description": "TOTP setup challenge ID", "type": "string" },
+					"code": {
+						"description": "Six digit authenticator code",
+						"maxLength": 6,
+						"minLength": 6,
+						"type": "string"
+					}
+				},
+				"required": ["challenge_id", "code"],
 				"type": "object"
 			},
 			"CreatePostInputBody": {
@@ -155,6 +223,10 @@
 						"description": "Social account IDs to publish to",
 						"items": { "type": "string" },
 						"type": ["array", "null"]
+					},
+					"thread_draft": {
+						"description": "Optional thread draft JSON (encoded with __openpost_thread__: prefix) for a parent post that drafts a multi-post thread. Mutually exclusive with a thread blob in content: the new field is preferred.",
+						"type": "string"
 					},
 					"workspace_id": { "description": "Target workspace ID", "type": "string" }
 				},
@@ -438,6 +510,24 @@
 				"required": ["message"],
 				"type": "object"
 			},
+			"DisableTOTPInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/DisableTOTPInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"current_password": {
+						"description": "Current password for re-authentication",
+						"type": "string"
+					}
+				},
+				"required": ["current_password"],
+				"type": "object"
+			},
 			"ErrorDetail": {
 				"additionalProperties": false,
 				"properties": {
@@ -512,6 +602,39 @@
 					"workspace_id": { "description": "Workspace ID", "type": "string" }
 				},
 				"required": ["workspace_id", "server_name", "code"],
+				"type": "object"
+			},
+			"FinishPasskeyLoginInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/FinishPasskeyLoginInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"challenge_id": { "description": "Passkey challenge ID", "type": "string" },
+					"credential": { "description": "WebAuthn assertion response" }
+				},
+				"required": ["challenge_id", "credential"],
+				"type": "object"
+			},
+			"FinishPasskeyRegistrationInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/FinishPasskeyRegistrationInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"challenge_id": { "description": "Passkey registration challenge ID", "type": "string" },
+					"credential": { "description": "WebAuthn registration response" },
+					"name": { "description": "Optional passkey label", "type": "string" }
+				},
+				"required": ["challenge_id", "name", "credential"],
 				"type": "object"
 			},
 			"GetAuthURLOutputBody": {
@@ -613,9 +736,9 @@
 				"required": [
 					"timezone",
 					"week_start",
-					"draft_gap_minutes",
 					"media_cleanup_days",
 					"random_delay_minutes",
+					"draft_gap_minutes",
 					"slot_start_hour",
 					"slot_end_hour",
 					"slot_interval_minutes"
@@ -721,6 +844,7 @@
 				"additionalProperties": false,
 				"properties": {
 					"alt_text": { "description": "Alt text", "type": "string" },
+					"can_delete": { "description": "Whether media can be deleted", "type": "boolean" },
 					"created_at": { "description": "Creation time", "type": "string" },
 					"height": { "description": "Image height", "format": "int64", "type": "integer" },
 					"id": { "description": "Media ID", "type": "string" },
@@ -753,6 +877,7 @@
 					"url",
 					"thumbnail_url",
 					"usage_count",
+					"can_delete",
 					"processing_status"
 				],
 				"type": "object"
@@ -786,6 +911,41 @@
 					"slot_time": { "description": "The suggested time in ISO 8601 format", "type": "string" }
 				},
 				"required": ["slot_time", "message"],
+				"type": "object"
+			},
+			"PasskeyCeremonyOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/PasskeyCeremonyOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"challenge_id": { "type": "string" },
+					"options": {}
+				},
+				"required": ["challenge_id", "options"],
+				"type": "object"
+			},
+			"PasskeySummary": {
+				"additionalProperties": false,
+				"properties": {
+					"created_at": {
+						"description": "When the passkey was registered",
+						"format": "date-time",
+						"type": "string"
+					},
+					"id": { "description": "Passkey ID", "type": "string" },
+					"last_used_at": {
+						"description": "When the passkey was last used",
+						"format": "date-time",
+						"type": "string"
+					},
+					"name": { "description": "User-visible passkey label", "type": "string" }
+				},
+				"required": ["id", "name", "created_at", "last_used_at"],
 				"type": "object"
 			},
 			"PostDestinationResponse": {
@@ -837,6 +997,10 @@
 					},
 					"scheduled_at": { "description": "Scheduled time (ISO 8601)", "type": "string" },
 					"status": { "description": "Post status", "type": "string" },
+					"thread_draft": {
+						"description": "Set when this post is a thread-draft parent; contains the encoded thread JSON (with __openpost_thread__: prefix).",
+						"type": "string"
+					},
 					"workspace_id": { "description": "Workspace ID", "type": "string" }
 				},
 				"required": [
@@ -899,6 +1063,10 @@
 					"scheduled_at": { "description": "Scheduled time (ISO 8601)", "type": "string" },
 					"status": {
 						"description": "Post status (draft, scheduled, publishing, published, failed)",
+						"type": "string"
+					},
+					"thread_draft": {
+						"description": "Set when this post is a thread-draft parent; contains the encoded thread JSON (with __openpost_thread__: prefix).",
 						"type": "string"
 					},
 					"workspace_id": { "description": "Workspace ID", "type": "string" }
@@ -1013,6 +1181,24 @@
 				"required": ["email", "password"],
 				"type": "object"
 			},
+			"RemovePasskeyInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/RemovePasskeyInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"current_password": {
+						"description": "Current password for re-authentication",
+						"type": "string"
+					}
+				},
+				"required": ["current_password"],
+				"type": "object"
+			},
 			"ScheduleDay": {
 				"additionalProperties": false,
 				"properties": {
@@ -1113,6 +1299,34 @@
 				],
 				"type": "object"
 			},
+			"SecurityStatusOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/SecurityStatusOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"methods": {
+						"description": "Currently available MFA methods",
+						"items": { "type": "string" },
+						"type": ["array", "null"]
+					},
+					"passkeys": {
+						"items": { "$ref": "#/components/schemas/PasskeySummary" },
+						"type": ["array", "null"]
+					},
+					"totp_enabled": {
+						"description": "Whether authenticator-based 2FA is enabled",
+						"type": "boolean"
+					},
+					"user": { "$ref": "#/components/schemas/UserProfile" }
+				},
+				"required": ["user", "totp_enabled", "passkeys", "methods"],
+				"type": "object"
+			},
 			"SetAccountResponse": {
 				"additionalProperties": false,
 				"properties": {
@@ -1149,6 +1363,42 @@
 					"workspace_id": { "description": "Workspace ID", "type": "string" }
 				},
 				"required": ["id", "workspace_id", "name", "is_default", "created_at"],
+				"type": "object"
+			},
+			"SetupTOTPInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/SetupTOTPInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"current_password": {
+						"description": "Current password for re-authentication",
+						"type": "string"
+					}
+				},
+				"required": ["current_password"],
+				"type": "object"
+			},
+			"SetupTOTPOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/SetupTOTPOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"challenge_id": { "type": "string" },
+					"manual_entry_key": { "type": "string" },
+					"otpauth_url": { "type": "string" },
+					"qr_code_data_url": { "type": "string" }
+				},
+				"required": ["challenge_id", "manual_entry_key", "otpauth_url", "qr_code_data_url"],
 				"type": "object"
 			},
 			"SuggestScheduleInputBody": {
@@ -1278,6 +1528,10 @@
 						"description": "Social account IDs to publish to (replace all)",
 						"items": { "type": "string" },
 						"type": ["array", "null"]
+					},
+					"thread_draft": {
+						"description": "Thread draft JSON (encoded with __openpost_thread__: prefix). Send a non-null value to set or replace the draft; send an empty string to clear it and revert to a single post. Send null (or omit) to leave the existing draft unchanged.",
+						"type": "string"
 					}
 				},
 				"type": "object"
@@ -1366,9 +1620,9 @@
 				"required": [
 					"timezone",
 					"week_start",
-					"draft_gap_minutes",
 					"media_cleanup_days",
 					"random_delay_minutes",
+					"draft_gap_minutes",
 					"slot_start_hour",
 					"slot_end_hour",
 					"slot_interval_minutes"
@@ -1476,6 +1730,27 @@
 					"created_at",
 					"updated_at"
 				],
+				"type": "object"
+			},
+			"VerifyTOTPLoginInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/VerifyTOTPLoginInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"code": {
+						"description": "Six digit authenticator code",
+						"maxLength": 6,
+						"minLength": 6,
+						"type": "string"
+					},
+					"mfa_token": { "description": "Pending MFA challenge token", "type": "string" }
+				},
+				"required": ["mfa_token", "code"],
 				"type": "object"
 			},
 			"WorkspaceResp": {
@@ -1796,6 +2071,173 @@
 				"tags": ["Auth"]
 			}
 		},
+		"/auth/login/passkey/options": {
+			"post": {
+				"operationId": "begin-login-passkey",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/BeginPasskeyLoginInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/PasskeyCeremonyOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Begin MFA login with a passkey",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/login/passkey/verify": {
+			"post": {
+				"operationId": "finish-login-passkey",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/FinishPasskeyLoginInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/AuthOutputBody" } }
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Complete MFA login with a passkey",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/login/totp": {
+			"post": {
+				"operationId": "verify-login-totp",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/VerifyTOTPLoginInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/AuthOutputBody" } }
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Complete MFA login with a TOTP code",
+				"tags": ["Auth"]
+			}
+		},
 		"/auth/me": {
 			"get": {
 				"operationId": "get-me",
@@ -1872,6 +2314,396 @@
 				"tags": ["Auth"]
 			}
 		},
+		"/auth/security": {
+			"get": {
+				"operationId": "get-security-status",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/SecurityStatusOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "Get account security settings",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/security/passkeys/begin": {
+			"post": {
+				"operationId": "begin-passkey-registration",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/BeginPasskeyRegistrationInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/PasskeyCeremonyOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Begin passkey registration for the current user",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/security/passkeys/finish": {
+			"post": {
+				"operationId": "finish-passkey-registration",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/FinishPasskeyRegistrationInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/SecurityStatusOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Finish passkey registration for the current user",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/security/passkeys/{passkey_id}/remove": {
+			"post": {
+				"operationId": "remove-passkey",
+				"parameters": [
+					{
+						"description": "Passkey ID",
+						"in": "path",
+						"name": "passkey_id",
+						"required": true,
+						"schema": { "description": "Passkey ID", "type": "string" }
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/RemovePasskeyInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/SecurityStatusOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Remove a passkey from the current user",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/security/totp/confirm": {
+			"post": {
+				"operationId": "confirm-totp-setup",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/ConfirmTOTPSetupInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/SecurityStatusOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Confirm TOTP enrollment with a verification code",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/security/totp/disable": {
+			"post": {
+				"operationId": "disable-totp",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": { "$ref": "#/components/schemas/DisableTOTPInputBody" }
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/SecurityStatusOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Disable TOTP for the current user",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/security/totp/setup": {
+			"post": {
+				"operationId": "begin-totp-setup",
+				"requestBody": {
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/SetupTOTPInputBody" } }
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/SetupTOTPOutputBody" }
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Conflict"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": { "$ref": "#/components/schemas/ErrorModel" }
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Start TOTP enrollment for the current user",
+				"tags": ["Auth"]
+			}
+		},
 		"/health": {
 			"get": {
 				"operationId": "health-check",
@@ -1921,6 +2753,13 @@
 							"description": "Filter by status (pending, processing, completed, failed)",
 							"type": "string"
 						}
+					},
+					{
+						"description": "Filter by workspace ID",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"schema": { "description": "Filter by workspace ID", "type": "string" }
 					}
 				],
 				"responses": {
@@ -1953,12 +2792,12 @@
 				"operationId": "list-media",
 				"parameters": [
 					{
-						"description": "Filter by workspace ID (required)",
+						"description": "Filter by workspace ID",
 						"explode": false,
 						"in": "query",
 						"name": "workspace_id",
 						"required": true,
-						"schema": { "description": "Filter by workspace ID (required)", "type": "string" }
+						"schema": { "description": "Filter by workspace ID", "type": "string" }
 					},
 					{
 						"description": "Filter: all, used, unused, favorites",
@@ -2096,7 +2935,7 @@
 						"description": "Internal Server Error"
 					}
 				},
-				"summary": "Delete multiple media attachments at once (only unused ones)",
+				"summary": "Delete multiple media attachments at once",
 				"tags": ["Media"]
 			}
 		},

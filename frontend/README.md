@@ -85,15 +85,40 @@ To add translations:
 
 ## Android (Capacitor)
 
-OpenPost can be built as an Android app using Capacitor:
+The app is built as a native Android wrapper around the same SvelteKit
+frontend the web build uses. A pre-built APK ships with every GitHub
+release — see the [Android app docs](../../docs-site/installation/android.md)
+for install and configuration.
+
+### Local debug build
 
 ```bash
-bun run build:capacitor
+bun run build:capacitor    # vite build + cap sync android + assets
 cd android
 ./gradlew assembleDebug
+# APK at android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Branding assets are generated automatically from `assets/brand/icon.svg` during build, so both PWA icons and Android launcher icons stay aligned with the OpenPost logo.
+### Local signed release build
+
+```bash
+cd android
+./gradlew assembleRelease \
+    -PRELEASE_STORE_FILE=path/to/release.keystore.jks \
+    -PRELEASE_STORE_PASSWORD=... \
+    -PRELEASE_KEY_ALIAS=... \
+    -PRELEASE_KEY_PASSWORD=...
+```
+
+Branding assets (launcher icon, splash screen) are generated automatically
+from `assets/brand/icon.svg` during `bun run build:capacitor`, so the
+Android app stays visually consistent with the web app and PWA.
+
+For a deeper look at the Android configuration, the Gradle variables
+(`android/variables.gradle`), the bundled Capacitor plugins
+(`@capacitor/app`, `@capacitor/splash-screen`, `@capacitor/status-bar`),
+and how the release workflow packages the APK, see the
+[Android app docs](../../docs-site/installation/android.md).
 
 ## Development
 

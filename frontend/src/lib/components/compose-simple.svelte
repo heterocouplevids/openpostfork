@@ -52,6 +52,7 @@
 		id: string;
 		workspace_id: string;
 		content: string;
+		thread_draft?: string | null;
 		status: string;
 		scheduled_at: string;
 		media: Array<{ media_id: string; mime_type?: string; alt_text?: string }>;
@@ -543,8 +544,17 @@
 		mediaAltTexts = newAlts;
 		mediaMimeTypes = newMimeTypes;
 
-		if (isThreadDraft(post.content)) {
-			const threadData = decodeThreadDraft(post.content);
+		// Read the thread state. Prefer the explicit `thread_draft`
+		// field on the post (new P0.2 representation, set by the
+		// backend when the post is a thread draft). Fall back to the
+		// legacy `__openpost_thread__:` blob inside `content` for posts
+		// that were saved before the migration ran. If neither is
+		// present, treat it as a single-post draft.
+		const threadSource: string | null = post.thread_draft ?? null;
+		const legacySource: string | null = isThreadDraft(post.content) ? post.content : null;
+		const source = threadSource ?? legacySource;
+		if (source) {
+			const threadData = decodeThreadDraft(source);
 			if (threadData && threadData.posts.length > 0) {
 				posts = threadData.posts.map((item) => ({
 					key: item.key,
@@ -582,7 +592,7 @@
 
 		await loadAccounts(selectedWorkspaceId, selectedAccountIds);
 		await loadSets(selectedWorkspaceId, false);
-		if (!isThreadDraft(post.content)) {
+		if (!source) {
 			await loadVariants(post.id);
 		}
 		lastSavedSnapshot = getSaveSnapshot();
@@ -784,12 +794,28 @@
 		error = '';
 
 		try {
-			const draftContent = isThread
+			// Threads: store the encoded draft in the new dedicated
+			// `thread_draft` field, and put the first post's text in
+			// `content` so the parent row still carries a meaningful
+			// preview. The backend is the source of truth on the
+			// server side; the prefix is no longer stored on the
+			// post row.
+			const isThreadDraft_ = isThread;
+			const threadDraft = isThreadDraft_
 				? encodeThreadDraft(posts, getVariantPayloadForSave())
-				: posts[0].content;
-			const draftMediaIds = isThread ? posts.flatMap((p) => p.mediaIds) : posts[0].mediaIds;
+				: null;
+			const draftContent = isThreadDraft_ ? posts[0].content : posts[0].content;
+			const draftMediaIds = isThreadDraft_ ? posts.flatMap((p) => p.mediaIds) : posts[0].mediaIds;
 
 			const defaultDelay = workspaceCtx.settings.random_delay_minutes;
+			const body = {
+				workspace_id: selectedWorkspaceId,
+				content: draftContent,
+				social_account_ids: selectedAccountIds,
+				media_ids: draftMediaIds,
+				random_delay_minutes: defaultDelay,
+				...(threadDraft ? { thread_draft: threadDraft } : {})
+			};
 			if (draftId) {
 				const { error: patchErr } = await (client as any).PATCH('/posts/{id}', {
 					params: { path: { id: draftId } },
@@ -798,20 +824,13 @@
 						scheduled_at: '',
 						social_account_ids: selectedAccountIds,
 						media_ids: draftMediaIds,
-						random_delay_minutes: defaultDelay
+						random_delay_minutes: defaultDelay,
+						...(threadDraft ? { thread_draft: threadDraft } : {})
 					}
 				});
 				if (patchErr) throw new Error((patchErr as any).detail || 'Failed to update draft');
 			} else {
-				const { data, error: postErr } = await client.POST('/posts', {
-					body: {
-						workspace_id: selectedWorkspaceId,
-						content: draftContent,
-						social_account_ids: selectedAccountIds,
-						media_ids: draftMediaIds,
-						random_delay_minutes: defaultDelay
-					}
-				});
+				const { data, error: postErr } = await client.POST('/posts', { body });
 				if (postErr) throw new Error((postErr as any).detail || 'Failed to save draft');
 				if (data?.id) draftId = data.id;
 			}
@@ -893,6 +912,12 @@
 				}
 			} else {
 				const postId = draftId;
+				// Always explicitly clear any leftover thread_draft on the
+				// server side. We send an empty string so the backend
+				// upsert removes the row. This covers the case where a
+				// user had a multi-post thread draft, removed posts until
+				// only one was left, and is now publishing a single post.
+				const clearThreadDraft = isThread ? undefined : '';
 				if (postId) {
 					const { error: patchErr } = await (client as any).PATCH('/posts/{id}', {
 						params: { path: { id: postId } },
@@ -901,7 +926,8 @@
 							scheduled_at: scheduledAt,
 							social_account_ids: selectedAccountIds,
 							media_ids: posts[0].mediaIds,
-							random_delay_minutes: randomDelay
+							random_delay_minutes: randomDelay,
+							...(clearThreadDraft !== undefined ? { thread_draft: clearThreadDraft } : {})
 						}
 					});
 					if (patchErr) throw new Error((patchErr as any).detail || 'Failed to update post');
