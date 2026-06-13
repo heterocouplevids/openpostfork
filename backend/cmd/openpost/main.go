@@ -228,7 +228,7 @@ func main() {
 	jobHandler := handlers.NewJobHandler(db, authService)
 	jobHandler.RegisterRoutes(api)
 
-	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService, cfg.DisableLinkedInThreadReplies)
+	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService, cfg.DisableLinkedInThreadReplies, cfg.FrontendURL)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
 	oauthHandler.Callback(api)

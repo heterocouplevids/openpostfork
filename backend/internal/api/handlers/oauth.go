@@ -32,6 +32,10 @@ type OAuthHandler struct {
 	disableLinkedInThreadReplies bool
 	accountSaver                 *account_saver.AccountSaver
 	oauthStates                  *oauthstate.Store
+	// frontendURL is the absolute base URL the SPA is served from
+	// (e.g. "https://openpost.example.com"). OAuth callback redirects go
+	// here so they work behind reverse proxies and subpath mounts.
+	frontendURL string
 }
 
 func mastodonInstanceURL(adapter platform.Adapter) string {
@@ -48,6 +52,7 @@ func NewOAuthHandler(
 	providers map[string]platform.Adapter,
 	authService *auth.Service,
 	disableLinkedInThreadReplies bool,
+	frontendURL string,
 ) *OAuthHandler {
 	if xProvider, ok := providers["x"]; ok {
 		if xAdapter, castOk := xProvider.(*platform.XAdapter); castOk {
@@ -63,6 +68,7 @@ func NewOAuthHandler(
 		disableLinkedInThreadReplies: disableLinkedInThreadReplies,
 		accountSaver:                 account_saver.NewAccountSaver(db, encryptor),
 		oauthStates:                  oauthstate.NewStore(db),
+		frontendURL:                  strings.TrimRight(frontendURL, "/"),
 	}
 }
 
@@ -365,10 +371,11 @@ func (h *OAuthHandler) Callback(api huma.API) {
 }
 
 func (h *OAuthHandler) redirectWithError(msg string) (*huma.StreamResponse, error) {
+	location := h.frontendURL + "/accounts?error=" + url.QueryEscape(msg)
 	return &huma.StreamResponse{
 		Body: func(ctx huma.Context) {
 			ctx.SetStatus(http.StatusTemporaryRedirect)
-			ctx.SetHeader("Location", "/accounts?error="+url.QueryEscape(msg))
+			ctx.SetHeader("Location", location)
 		},
 	}, nil
 }
@@ -387,7 +394,7 @@ func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, userID, platf
 		return nil, huma.Error500InternalServerError("failed to save account")
 	}
 
-	successPath := "/accounts/callback?status=success&platform=" + url.QueryEscape(platformName)
+	successPath := h.frontendURL + "/accounts/callback?status=success&platform=" + url.QueryEscape(platformName)
 	log.Printf("[Callback] Account saved successfully: ID=%s, redirecting to %s", account.ID, successPath)
 
 	return &huma.StreamResponse{
