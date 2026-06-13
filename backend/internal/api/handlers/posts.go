@@ -1263,7 +1263,12 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 					if _, err := tx.NewUpdate().Model(&post).Column("content", "status", "scheduled_at", "random_delay_minutes", "actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to unschedule post: %w", err)
 					}
-					if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+					// Cancel any queued publish_post job for this post. We filter on
+					// job type AND the JSON `post_id` key, so unrelated jobs (and any
+					// future job type that happens to embed a post_id field in its
+					// payload) cannot be cancelled by accident. The previous LIKE-based
+					// version of this query was strictly less safe.
+					if _, err := tx.NewDelete().Model(&models.Job{}).Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, post.ID).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to cancel job: %w", err)
 					}
 				} else {
@@ -1284,7 +1289,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 						return fmt.Errorf("failed to update post: %w", err)
 					}
 					if !oldScheduledAt.IsZero() {
-						if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+						if _, err := tx.NewDelete().Model(&models.Job{}).Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, post.ID).Exec(txCtx); err != nil {
 							return fmt.Errorf("failed to cancel old job: %w", err)
 						}
 					}
@@ -1313,7 +1318,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 					if _, err := tx.NewUpdate().Model(&post).Column("random_delay_minutes", "actual_run_at").Where("id = ?", post.ID).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to update random delay: %w", err)
 					}
-					if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+					if _, err := tx.NewDelete().Model(&models.Job{}).Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, post.ID).Exec(txCtx); err != nil {
 						return fmt.Errorf("failed to cancel old job: %w", err)
 					}
 					payload, _ := json.Marshal(map[string]string{postIDKey: post.ID})
@@ -1539,7 +1544,7 @@ func (h *PostHandler) DeletePost(api huma.API) {
 			if err != nil {
 				return err
 			}
-			if _, err := tx.NewDelete().Model(&models.Job{}).Where("payload LIKE ?", "%"+post.ID+"%").Exec(txCtx); err != nil {
+			if _, err := tx.NewDelete().Model(&models.Job{}).Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, post.ID).Exec(txCtx); err != nil {
 				return fmt.Errorf("failed to delete jobs: %w", err)
 			}
 			return deletePostsCascadeTx(txCtx, tx, allIDs)
