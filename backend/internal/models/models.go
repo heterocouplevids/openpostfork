@@ -229,6 +229,33 @@ type PostingSchedule struct {
 	CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+// ThreadDraft is the per-post, not-yet-published thread state.
+//
+// While a user is composing a multi-post thread, the parent Post row holds
+// only the parent post's text in `content`, and the full unsaved thread state
+// (parent + every child post + per-account content variants) is encoded as
+// JSON in this table. The JSON shape is shared with the frontend
+// (`frontend/src/lib/components/compose/draft-utils.ts`):
+//
+//	{ "p": [ { "k": "key", "c": "content", "m": ["media_id", ...] } ],
+//	  "v": { "<social_account_id>": { "<post_key>": { "content": "...",
+//	                                                 "mediaIds": [...] } } } }
+//
+// On publish, the thread becomes real `posts` rows linked by `ParentPostID`,
+// and this row is no longer authoritative. It is left in place (cheap) and
+// will be re-upserted on the next edit of the parent post.
+//
+// Cascade-delete with the parent post: deleting a draft thread removes this
+// row, and publishing a thread leaves it behind as a benign cached draft.
+type ThreadDraft struct {
+	bun.BaseModel `bun:"table:thread_drafts"`
+
+	PostID    string    `bun:",pk" json:"post_id"`
+	DraftJSON string    `bun:"draft_json,notnull" json:"-"`
+	CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
 // Prompt represents a writing prompt for content inspiration.
 type Prompt struct {
 	bun.BaseModel `bun:"table:prompts"`
