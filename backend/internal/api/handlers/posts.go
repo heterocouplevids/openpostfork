@@ -43,6 +43,7 @@ type CreatePostInput struct {
 		SocialAccountIDs   []string   `json:"social_account_ids" doc:"Social account IDs to publish to"`
 		MediaIDs           []string   `json:"media_ids,omitempty" doc:"Media attachment IDs to include"`
 		RandomDelayMinutes int        `json:"random_delay_minutes,omitempty" doc:"Random delay in minutes (±N) to add for natural posting"`
+		ThreadDraft        *string    `json:"thread_draft,omitempty" doc:"Optional thread draft JSON (encoded with __openpost_thread__: prefix) for a parent post that drafts a multi-post thread. Mutually exclusive with a thread blob in content: the new field is preferred."`
 	}
 }
 
@@ -69,6 +70,7 @@ type PostResponse struct {
 	CreatedAt          string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
 	Destinations       []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
 	MediaIDs           []string                  `json:"media_ids,omitempty" doc:"Attached media IDs"`
+	ThreadDraft        *string                   `json:"thread_draft,omitempty" doc:"Set when this post is a thread-draft parent; contains the encoded thread JSON (with __openpost_thread__: prefix)."`
 }
 
 type ListPostsInput struct {
@@ -246,6 +248,13 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			post.ScheduledAt = *input.Body.ScheduledAt
 		}
 
+		// Normalise any thread-draft data: prefer the new explicit
+		// `thread_draft` field, fall back to detecting the legacy blob
+		// in `content`. The result is a clean `posts.content` and an
+		// optional `thread_drafts.draft_json` to be written below.
+		var draftJSON *string
+		post.Content, draftJSON = resolveThreadDraftInput(input.Body.Content, input.Body.ThreadDraft)
+
 		destinations := make([]models.PostDestination, 0, len(input.Body.SocialAccountIDs))
 		for _, accID := range input.Body.SocialAccountIDs {
 			destinations = append(destinations, models.PostDestination{
@@ -301,7 +310,9 @@ func (h *PostHandler) CreatePost(api huma.API) {
 					return err
 				}
 			}
-			return nil
+			// Persist the thread_drafts row if the request carried a
+			// thread draft. The migration has ensured the table exists.
+			return upsertThreadDraftTx(txCtx, tx, post.ID, draftJSON)
 		})
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to create post")
@@ -317,6 +328,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			ScheduledAt:        post.ScheduledAt.Format(time.RFC3339),
 			RandomDelayMinutes: post.RandomDelayMinutes,
 			CreatedAt:          post.CreatedAt.Format(time.RFC3339),
+			ThreadDraft:        draftJSON,
 		}
 		if !post.ActualRunAt.IsZero() {
 			resp.Body.ActualRunAt = post.ActualRunAt.Format(time.RFC3339)
@@ -942,6 +954,7 @@ type PostDetailResponse struct {
 	CreatedAt          string                    `json:"created_at" doc:"Creation time (ISO 8601)"`
 	Media              []PostMediaResponse       `json:"media,omitempty" doc:"Attached media"`
 	Destinations       []PostDestinationResponse `json:"destinations,omitempty" doc:"Post destinations"`
+	ThreadDraft        *string                   `json:"thread_draft,omitempty" doc:"Set when this post is a thread-draft parent; contains the encoded thread JSON (with __openpost_thread__: prefix)."`
 }
 
 func (h *PostHandler) GetPost(api huma.API) {
@@ -1043,6 +1056,21 @@ func (h *PostHandler) GetPost(api huma.API) {
 		if !post.ActualRunAt.IsZero() {
 			resp.Body.ActualRunAt = post.ActualRunAt.Format(time.RFC3339)
 		}
+		// Surface the thread draft so the composer can hydrate from
+		// the dedicated field. `loadThreadDraft` returns nil for plain
+		// posts, so non-thread parents get no extra field.
+		// Fall back to the legacy in-content blob for any rows that
+		// somehow escaped the migration (shouldn't happen on a clean
+		// upgrade, but the fallback is cheap and self-healing).
+		threadDraft, err := loadThreadDraft(ctx, h.db, input.PathID)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to load thread draft")
+		}
+		if threadDraft == nil && isThreadDraft(post.Content) {
+			blob := post.Content
+			threadDraft = &blob
+		}
+		resp.Body.ThreadDraft = threadDraft
 		return resp, nil
 	})
 }
@@ -1055,6 +1083,7 @@ type UpdatePostInput struct {
 		SocialAccountIDs   []string `json:"social_account_ids,omitempty" doc:"Social account IDs to publish to (replace all)"`
 		MediaIDs           []string `json:"media_ids,omitempty" doc:"Media attachment IDs to include (replace all)"`
 		RandomDelayMinutes *int     `json:"random_delay_minutes,omitempty" doc:"Random delay in minutes (±N) to add for natural posting"`
+		ThreadDraft        *string  `json:"thread_draft,omitempty" doc:"Thread draft JSON (encoded with __openpost_thread__: prefix). Send a non-null value to set or replace the draft; send an empty string to clear it and revert to a single post. Send null (or omit) to leave the existing draft unchanged."`
 	}
 }
 
@@ -1075,6 +1104,87 @@ type threadDraftData struct {
 		M []string `json:"m"`
 	} `json:"p"`
 	V map[string]map[string]string `json:"v"`
+}
+
+// resolveThreadDraftInput normalises the thread-draft half of a post write
+// request. It accepts the new explicit `thread_draft` field as the
+// preferred path, and falls back to detecting the legacy blob in
+// `content` for clients that have not been updated yet.
+//
+// Returns:
+//   - contentToStore: the value to put in `posts.content` (never starts
+//     with the thread prefix, even if the request supplied a blob).
+//   - draftJSON: nil if the post is a regular single post, or a pointer
+//     to the encoded thread JSON (with prefix) to be stored in
+//     `thread_drafts.draft_json`.
+//
+// If both the explicit field and a blob in content are present, the
+// explicit field wins and the blob is silently dropped (it is already
+// superseded by the new field).
+func resolveThreadDraftInput(content string, threadDraftField *string) (contentToStore string, draftJSON *string) {
+	if threadDraftField != nil {
+		// Explicit field set. Use it as the source of truth; ignore any
+		// blob that may also be in content.
+		if isThreadDraft(*threadDraftField) && len(*threadDraftField) > len(threadDraftPrefix) {
+			draft := *threadDraftField
+			draftJSON = &draft
+		}
+		// The parent's content is left as the caller sent it. The
+		// composer is expected to set it to the first thread post's
+		// text; the backend does not second-guess that.
+		return content, draftJSON
+	}
+	if isThreadDraft(content) {
+		// Legacy path: the client packed the whole thread into
+		// `content`. Pull it out into the dedicated field and clear
+		// `content` so the parent row no longer carries a magic blob.
+		draft := content
+		draftJSON = &draft
+		return "", draftJSON
+	}
+	return content, nil
+}
+
+// upsertThreadDraftTx writes or clears the thread_drafts row for a given
+// post. Pass nil to clear, or a non-empty string to set. An empty string
+// is treated as nil for safety (the row will be deleted, since storing
+// an empty blob serves no purpose).
+func upsertThreadDraftTx(ctx context.Context, tx bun.Tx, postID string, draftJSON *string) error {
+	if draftJSON == nil || *draftJSON == "" {
+		_, err := tx.NewDelete().Model((*models.ThreadDraft)(nil)).Where("post_id = ?", postID).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to clear thread_drafts for %s: %w", postID, err)
+		}
+		return nil
+	}
+	// Upsert via SQLite's ON CONFLICT. The migration ensures the table
+	// exists with post_id as PRIMARY KEY.
+	_, err := tx.NewRaw(`
+		INSERT INTO thread_drafts (post_id, draft_json, created_at, updated_at)
+		VALUES (?, ?, current_timestamp, current_timestamp)
+		ON CONFLICT(post_id) DO UPDATE SET
+			draft_json = excluded.draft_json,
+			updated_at = current_timestamp
+	`, postID, *draftJSON).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert thread_drafts for %s: %w", postID, err)
+	}
+	return nil
+}
+
+// loadThreadDraft fetches the encoded thread draft for a post, returning
+// nil if no draft exists. Used by GetPost and ListPosts to populate the
+// optional `thread_draft` field in API responses.
+func loadThreadDraft(ctx context.Context, db *bun.DB, postID string) (*string, error) {
+	var draft models.ThreadDraft
+	err := db.NewSelect().Model(&draft).Where("post_id = ?", postID).Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to load thread_drafts for %s: %w", postID, err)
+	}
+	return &draft.DraftJSON, nil
 }
 
 func getThreadPostIDsTx(ctx context.Context, tx bun.Tx, rootPostID string, includeRoot bool) ([]string, error) {
@@ -1156,97 +1266,59 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			}
 		}
 		if input.Body.Content != nil && isThreadDraft(*input.Body.Content) {
+			// Legacy fallback: a client that still packs the thread into
+			// `content` instead of using the explicit `thread_draft`
+			// field. We accept it and route it to the same path below
+			// by mirroring the value into ThreadDraft. The CreatePost /
+			// UpdatePost handlers then store the blob in
+			// `thread_drafts.draft_json` and clear `posts.content` so
+			// the parent row no longer carries a magic prefix.
+			var draftMediaIDs []string
 			var draft threadDraftData
 			if err := json.Unmarshal([]byte((*input.Body.Content)[len(threadDraftPrefix):]), &draft); err == nil {
-				var draftMediaIDs []string
 				for _, item := range draft.P {
 					draftMediaIDs = append(draftMediaIDs, item.M...)
 				}
-				if err := h.validateMediaBelongsToWorkspace(ctx, post.WorkspaceID, draftMediaIDs); err != nil {
-					return nil, err
+			}
+			if err := h.validateMediaBelongsToWorkspace(ctx, post.WorkspaceID, draftMediaIDs); err != nil {
+				return nil, err
+			}
+		} else if input.Body.ThreadDraft != nil && *input.Body.ThreadDraft != "" && isThreadDraft(*input.Body.ThreadDraft) {
+			// New explicit path: validate the media IDs inside the
+			// thread draft up front. Invalid media is a 400, not a 500.
+			var draftMediaIDs []string
+			var draft threadDraftData
+			if err := json.Unmarshal([]byte((*input.Body.ThreadDraft)[len(threadDraftPrefix):]), &draft); err == nil {
+				for _, item := range draft.P {
+					draftMediaIDs = append(draftMediaIDs, item.M...)
 				}
+			}
+			if err := h.validateMediaBelongsToWorkspace(ctx, post.WorkspaceID, draftMediaIDs); err != nil {
+				return nil, err
 			}
 		}
 
 		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
-			if input.Body.Content != nil {
-				post.Content = *input.Body.Content
-
-				descendantIDs, err := getThreadPostIDsTx(txCtx, tx, post.ID, false)
-				if err != nil {
-					return err
+			// Compute the new content and the thread_drafts row, if any.
+			// resolveThreadDraftInput prefers the explicit field and
+			// falls back to detecting the legacy blob in `content`.
+			if input.Body.Content != nil || input.Body.ThreadDraft != nil {
+				var requestedContent string
+				if input.Body.Content != nil {
+					requestedContent = *input.Body.Content
 				}
-				if err := deletePostsCascadeTx(txCtx, tx, descendantIDs); err != nil {
-					return err
+				newContent, draftJSON := resolveThreadDraftInput(requestedContent, input.Body.ThreadDraft)
+				post.Content = newContent
+
+				// Persist the cleaned content on the post row first, so
+				// the new value is visible to subsequent reads inside
+				// the same transaction.
+				if _, err := tx.NewUpdate().Model(&post).Column("content").Where("id = ?", post.ID).Exec(txCtx); err != nil {
+					return fmt.Errorf("failed to update post content: %w", err)
 				}
-
-				// Handle thread draft updates
-				if isThreadDraft(post.Content) {
-					var draft threadDraftData
-					if err := json.Unmarshal([]byte(post.Content[len(threadDraftPrefix):]), &draft); err == nil && len(draft.P) > 1 {
-						var inheritedAccountIDs []string
-						if input.Body.SocialAccountIDs != nil {
-							inheritedAccountIDs = append(inheritedAccountIDs, input.Body.SocialAccountIDs...)
-						} else {
-							var parentDests []models.PostDestination
-							if err := tx.NewSelect().
-								Model(&parentDests).
-								Column("social_account_id").
-								Where("post_id = ?", post.ID).
-								Scan(txCtx); err != nil && !errors.Is(err, sql.ErrNoRows) {
-								return fmt.Errorf("failed to load destinations for thread draft: %w", err)
-							}
-							inheritedAccountIDs = make([]string, 0, len(parentDests))
-							for _, pd := range parentDests {
-								inheritedAccountIDs = append(inheritedAccountIDs, pd.SocialAccountID)
-							}
-						}
-
-						parentID := post.ID
-						for i := 1; i < len(draft.P); i++ {
-							child := &models.Post{
-								ID:                 uuid.New().String(),
-								WorkspaceID:        post.WorkspaceID,
-								CreatedByID:        post.CreatedByID,
-								Content:            draft.P[i].C,
-								Status:             post.Status,
-								ThreadSequence:     i,
-								ParentPostID:       parentID,
-								RandomDelayMinutes: post.RandomDelayMinutes,
-								ScheduledAt:        post.ScheduledAt,
-								ActualRunAt:        post.ActualRunAt,
-								CreatedAt:          post.CreatedAt,
-							}
-							if _, err := tx.NewInsert().Model(child).Exec(txCtx); err != nil {
-								return fmt.Errorf("failed to recreate thread child %d: %w", i, err)
-							}
-							parentID = child.ID
-
-							for _, accID := range inheritedAccountIDs {
-								dest := models.PostDestination{
-									ID:              uuid.New().String(),
-									PostID:          child.ID,
-									SocialAccountID: accID,
-									Status:          postStatusPending,
-								}
-								if _, err := tx.NewInsert().Model(&dest).Exec(txCtx); err != nil {
-									return err
-								}
-							}
-
-							// Recreate media for children
-							for j, mediaID := range draft.P[i].M {
-								pm := models.PostMedia{
-									PostID:       child.ID,
-									MediaID:      mediaID,
-									DisplayOrder: j,
-								}
-								if _, err := tx.NewInsert().Model(&pm).Exec(txCtx); err != nil {
-									return err
-								}
-							}
-						}
-					}
+				// Then sync the thread_drafts row (or clear it).
+				if err := upsertThreadDraftTx(txCtx, tx, post.ID, draftJSON); err != nil {
+					return err
 				}
 			}
 
@@ -1305,12 +1377,9 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 					}
 				}
 			} else {
-				// No scheduling change — update content and/or random delay only
-				if input.Body.Content != nil {
-					if _, err := tx.NewUpdate().Model(&post).Column("content").Where("id = ?", post.ID).Exec(txCtx); err != nil {
-						return fmt.Errorf("failed to update content: %w", err)
-					}
-				}
+				// No scheduling change — content and the thread_drafts
+				// row have already been synced by the block above, so
+				// only the random delay can change here.
 				if input.Body.RandomDelayMinutes != nil && post.Status == statusScheduled {
 					post.RandomDelayMinutes = *input.Body.RandomDelayMinutes
 					jobRunAt := applyRandomDelay(post.ScheduledAt, post.RandomDelayMinutes)
