@@ -358,17 +358,17 @@ func validateThreadsMedia(media []MediaItem) []MediaValidationIssue {
 	for _, item := range media {
 		if isVideoMime(item.MimeType) && !isThreadsVideoMime(item.MimeType) {
 			issues = append(issues, MediaValidationIssue{
-				Provider: "threads",
+				Provider: providerThreads,
 				MediaID:  item.ID,
-				Severity: "error",
+				Severity: severityError,
 				Message:  "Threads supports MP4 or MOV video.",
 			})
 		}
 	}
 	if len(media) > 1 {
 		issues = append(issues, MediaValidationIssue{
-			Provider: "threads",
-			Severity: "warning",
+			Provider: providerThreads,
+			Severity: severityWarning,
 			Message:  "OpenPost currently publishes only the first Threads attachment.",
 		})
 	}

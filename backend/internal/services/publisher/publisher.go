@@ -257,7 +257,7 @@ func (s *Service) finalizePost(ctx context.Context, post *models.Post) {
 		Count(ctx)
 
 	if totalDests == 0 {
-		if _, err := s.db.NewUpdate().Model(post).Set("status = ?", "published").Where("id = ?", post.ID).Exec(ctx); err != nil {
+		if _, err := s.db.NewUpdate().Model(post).Set("status = ?", models.PostStatusPublished).Where("id = ?", post.ID).Exec(ctx); err != nil {
 			log.Printf("[Publisher] Failed to update post %s status: %v", post.ID, err)
 		}
 		return
@@ -274,7 +274,7 @@ func (s *Service) finalizePost(ctx context.Context, post *models.Post) {
 		}
 	} else {
 		if _, err := s.db.NewUpdate().Model(post).
-			Set("status = ?", "published").
+			Set("status = ?", models.PostStatusPublished).
 			Set("published_at = CURRENT_TIMESTAMP").
 			Where("id = ?", post.ID).
 			Exec(ctx); err != nil {

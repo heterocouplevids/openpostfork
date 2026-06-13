@@ -19,4 +19,22 @@ const (
 	oauthParamRedirectURI  = "redirect_uri"
 	grantType              = "grant_type"
 	videoTypeMP4           = "video/mp4"
+
+	// MediaValidationIssue.Severity values. These must match the JSON
+	// schema consumed by the frontend.
+	severityError   = "error"
+	severityWarning = "warning"
+
+	// MediaValidationIssue.Provider values. These must match the
+	// canonical provider keys (see AGENTS.md "Provider Key Convention")
+	// and the entries in RegisterAllMediaValidators().
+	providerBluesky  = "bluesky"
+	providerLinkedIn = "linkedin"
+	providerMastodon = "mastodon"
+	providerThreads  = "threads"
+	providerX        = "x"
+
+	// JSON field names reused across adapters.
+	bskyRecordTypeField = "$type"
+	jsonFieldVideo      = "video"
 )

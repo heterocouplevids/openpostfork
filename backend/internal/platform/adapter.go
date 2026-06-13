@@ -34,11 +34,11 @@ type MediaValidator func([]MediaItem) []MediaValidationIssue
 var MediaValidators = map[string]MediaValidator{}
 
 func RegisterAllMediaValidators() {
-	MediaValidators["bluesky"] = validateBlueskyMedia
-	MediaValidators["linkedin"] = validateLinkedInMedia
-	MediaValidators["mastodon"] = validateMastodonMedia
-	MediaValidators["threads"] = validateThreadsMedia
-	MediaValidators["x"] = validateXMedia
+	MediaValidators[providerBluesky] = validateBlueskyMedia
+	MediaValidators[providerLinkedIn] = validateLinkedInMedia
+	MediaValidators[providerMastodon] = validateMastodonMedia
+	MediaValidators[providerThreads] = validateThreadsMedia
+	MediaValidators[providerX] = validateXMedia
 }
 
 func ValidateMedia(platformName string, media []MediaItem) []MediaValidationIssue {

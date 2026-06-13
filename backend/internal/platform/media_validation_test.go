@@ -4,7 +4,7 @@ import "testing"
 
 func TestValidateMediaBlueskyRejectsMixedVideo(t *testing.T) {
 	RegisterAllMediaValidators()
-	issues := ValidateMedia("bluesky", []MediaItem{
+	issues := ValidateMedia(providerBluesky, []MediaItem{
 		{ID: "video", MimeType: "video/mp4"},
 		{ID: "image", MimeType: "image/png"},
 	})
@@ -12,13 +12,13 @@ func TestValidateMediaBlueskyRejectsMixedVideo(t *testing.T) {
 	if len(issues) != 1 {
 		t.Fatalf("expected one issue, got %d", len(issues))
 	}
-	if issues[0].Severity != "error" {
+	if issues[0].Severity != severityError {
 		t.Fatalf("expected error severity, got %q", issues[0].Severity)
 	}
 }
 
 func TestValidateMediaThreadsUsesMimeTypeForVideo(t *testing.T) {
-	issues := ValidateMedia("threads", []MediaItem{
+	issues := ValidateMedia(providerThreads, []MediaItem{
 		{ID: "video-without-extension", MimeType: "video/mp4"},
 	})
 
@@ -28,7 +28,7 @@ func TestValidateMediaThreadsUsesMimeTypeForVideo(t *testing.T) {
 }
 
 func TestValidateMediaLinkedInWarnsForMultipleAttachments(t *testing.T) {
-	issues := ValidateMedia("linkedin", []MediaItem{
+	issues := ValidateMedia(providerLinkedIn, []MediaItem{
 		{ID: "first", MimeType: "image/png"},
 		{ID: "second", MimeType: "image/png"},
 	})
@@ -36,7 +36,7 @@ func TestValidateMediaLinkedInWarnsForMultipleAttachments(t *testing.T) {
 	if len(issues) != 1 {
 		t.Fatalf("expected one issue, got %d", len(issues))
 	}
-	if issues[0].Severity != "warning" {
+	if issues[0].Severity != severityWarning {
 		t.Fatalf("expected warning severity, got %q", issues[0].Severity)
 	}
 }

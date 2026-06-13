@@ -6,6 +6,15 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// Post status values stored in the `posts.status` column.
+const (
+	PostStatusDraft      = "draft"
+	PostStatusScheduled  = "scheduled"
+	PostStatusPublishing = "publishing"
+	PostStatusPublished  = "published"
+	PostStatusFailed     = "failed"
+)
+
 type Workspace struct {
 	bun.BaseModel `bun:"table:workspaces"`
 

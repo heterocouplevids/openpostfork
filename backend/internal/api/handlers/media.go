@@ -553,7 +553,7 @@ func (h *MediaHandler) mediaUsageSummary(ctx context.Context, workspaceID, media
 
 	summary.Total = len(posts)
 	for _, post := range posts {
-		if post.Status != "published" { //nolint:goconst
+		if post.Status != models.PostStatusPublished {
 			summary.Blocking++
 		}
 	}

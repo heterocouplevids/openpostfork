@@ -1142,7 +1142,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			return nil, err
 		}
 
-		if post.Status == "published" {
+		if post.Status == models.PostStatusPublished {
 			return nil, huma.Error400BadRequest("cannot edit a published post")
 		}
 		if input.Body.SocialAccountIDs != nil {
@@ -1535,7 +1535,7 @@ func (h *PostHandler) DeletePost(api huma.API) {
 			return nil, err
 		}
 
-		if post.Status == "published" || post.Status == "publishing" { //nolint:goconst
+		if post.Status == models.PostStatusPublished || post.Status == models.PostStatusPublishing {
 			return nil, huma.Error400BadRequest("cannot delete a post that is published or being published")
 		}
 

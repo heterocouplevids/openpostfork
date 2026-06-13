@@ -255,7 +255,7 @@ func TestPostModel(t *testing.T) {
 				WorkspaceID: "ws-123",
 				CreatedByID: "user-123",
 				Content:     "Already posted",
-				Status:      "published",
+				Status:      PostStatusPublished,
 				PublishedAt: now,
 				CreatedAt:   now,
 			},

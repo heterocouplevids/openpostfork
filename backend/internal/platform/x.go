@@ -569,8 +569,8 @@ func validateXMedia(media []MediaItem) []MediaValidationIssue {
 	if videos == 0 {
 		if len(media) > 4 {
 			return []MediaValidationIssue{{
-				Provider: "x",
-				Severity: "error",
+				Provider: providerX,
+				Severity: severityError,
 				Message:  "X supports up to 4 images per post.",
 			}}
 		}
@@ -579,16 +579,16 @@ func validateXMedia(media []MediaItem) []MediaValidationIssue {
 
 	if videos > 1 || len(media) > 1 {
 		return []MediaValidationIssue{{
-			Provider: "x",
-			Severity: "error",
+			Provider: providerX,
+			Severity: severityError,
 			Message:  "X supports one video per post and cannot mix video with images.",
 		}}
 	}
 	if !strings.EqualFold(media[0].MimeType, videoTypeMP4) {
 		return []MediaValidationIssue{{
-			Provider: "x",
+			Provider: providerX,
 			MediaID:  media[0].ID,
-			Severity: "warning",
+			Severity: severityWarning,
 			Message:  "X video publishing is most reliable with MP4 video.",
 		}}
 	}

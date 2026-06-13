@@ -33,17 +33,17 @@ func validateMastodonMedia(media []MediaItem) []MediaValidationIssue {
 	}
 	if len(media) > 4 {
 		return []MediaValidationIssue{{
-			Provider: "mastodon",
-			Severity: "error",
+			Provider: providerMastodon,
+			Severity: severityError,
 			Message:  "Mastodon supports up to 4 media attachments per post.",
 		}}
 	}
 	for _, item := range media {
 		if isVideoMime(item.MimeType) && !isMastodonLikelyVideoMime(item.MimeType) {
 			return []MediaValidationIssue{{
-				Provider: "mastodon",
+				Provider: providerMastodon,
 				MediaID:  item.ID,
-				Severity: "warning",
+				Severity: severityWarning,
 				Message:  "Mastodon video support depends on the instance; MP4 and WebM are the safest formats.",
 			}}
 		}

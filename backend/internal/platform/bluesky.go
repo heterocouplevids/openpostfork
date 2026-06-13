@@ -401,9 +401,9 @@ func (b *BlueskyAdapter) pollVideoJob(ctx context.Context, serviceToken, jobID s
 
 func (b *BlueskyAdapter) Publish(ctx context.Context, accessToken, accountID string, req *PublishRequest) (string, error) {
 	record := map[string]interface{}{
-		"$type":       "app.bsky.feed.post",
-		jsonFieldText: req.Content,
-		"createdAt":   time.Now().UTC().Format(time.RFC3339Nano),
+		bskyRecordTypeField: "app.bsky.feed.post",
+		jsonFieldText:       req.Content,
+		"createdAt":         time.Now().UTC().Format(time.RFC3339Nano),
 	}
 
 	if err := b.attachMediaToRecord(record, req); err != nil {
@@ -464,9 +464,9 @@ func (b *BlueskyAdapter) attachVideoToRecord(record map[string]interface{}, req 
 		altText = req.MediaAltTexts[0]
 	}
 	record["embed"] = map[string]interface{}{
-		"$type": "app.bsky.embed.video",
-		"video": blob,
-		"alt":   altText,
+		bskyRecordTypeField: "app.bsky.embed.video",
+		jsonFieldVideo:      blob,
+		"alt":               altText,
 	}
 	return nil
 }
@@ -531,26 +531,26 @@ func validateBlueskyMedia(media []MediaItem) []MediaValidationIssue {
 		if isVideoMime(item.MimeType) {
 			if hasVideo {
 				return []MediaValidationIssue{{
-					Provider: "bluesky",
+					Provider: providerBluesky,
 					MediaID:  item.ID,
-					Severity: "error",
+					Severity: severityError,
 					Message:  "Bluesky supports only 1 video per post.",
 				}}
 			}
 			hasVideo = true
 			if item.MimeType != videoTypeMP4 {
 				return []MediaValidationIssue{{
-					Provider: "bluesky",
+					Provider: providerBluesky,
 					MediaID:  item.ID,
-					Severity: "error",
+					Severity: severityError,
 					Message:  "Bluesky supports MP4 video only.",
 				}}
 			}
 			if item.Size > 100*1024*1024 {
 				return []MediaValidationIssue{{
-					Provider: "bluesky",
+					Provider: providerBluesky,
 					MediaID:  item.ID,
-					Severity: "error",
+					Severity: severityError,
 					Message:  "Bluesky video must be under 100MB.",
 				}}
 			}
@@ -560,8 +560,8 @@ func validateBlueskyMedia(media []MediaItem) []MediaValidationIssue {
 	if hasVideo {
 		if len(media) > 1 {
 			return []MediaValidationIssue{{
-				Provider: "bluesky",
-				Severity: "error",
+				Provider: providerBluesky,
+				Severity: severityError,
 				Message:  "Bluesky does not support mixing video and images in one post.",
 			}}
 		}
@@ -570,8 +570,8 @@ func validateBlueskyMedia(media []MediaItem) []MediaValidationIssue {
 
 	if len(media) > 4 {
 		return []MediaValidationIssue{{
-			Provider: "bluesky",
-			Severity: "error",
+			Provider: providerBluesky,
+			Severity: severityError,
 			Message:  "Bluesky supports up to 4 images per post.",
 		}}
 	}

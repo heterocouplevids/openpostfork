@@ -309,7 +309,7 @@ func (l *LinkedInAdapter) completeVideoUpload(ctx context.Context, accessToken, 
 
 	payload := map[string]interface{}{
 		"finalizeUploadRequest": map[string]interface{}{
-			"video":           registerResult.Value.Video,
+			jsonFieldVideo:    registerResult.Value.Video,
 			"uploadToken":     registerResult.Value.UploadToken,
 			"uploadedPartIds": uploadedPartIDs,
 		},
@@ -522,17 +522,17 @@ func validateLinkedInMedia(media []MediaItem) []MediaValidationIssue {
 	}
 	if len(media) > 1 {
 		return []MediaValidationIssue{{
-			Provider: "linkedin",
-			Severity: "warning",
+			Provider: providerLinkedIn,
+			Severity: severityWarning,
 			Message:  "OpenPost currently publishes only the first LinkedIn attachment.",
 		}}
 	}
 	item := media[0]
 	if isVideoMime(item.MimeType) && !isLinkedInVideoMime(item.MimeType) {
 		return []MediaValidationIssue{{
-			Provider: "linkedin",
+			Provider: providerLinkedIn,
 			MediaID:  item.ID,
-			Severity: "warning",
+			Severity: severityWarning,
 			Message:  "LinkedIn video publishing is most reliable with MP4 video.",
 		}}
 	}
