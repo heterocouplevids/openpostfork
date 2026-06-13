@@ -7,7 +7,7 @@ SvelteKit frontend for [OpenPost](../README.md) — a lightweight, self-hosted s
 - **SvelteKit 5** with runes (`$state`, `$derived`, `$effect`)
 - **TailwindCSS 4** for styling
 - **shadcn-svelte** UI component library
-- **Paraglide** for i18n (English, Spanish, Portuguese)
+- **Paraglide** for i18n (English, Portuguese)
 - **openapi-fetch** for typed API client (generated from backend OpenAPI spec)
 - **Vitest** for unit testing
 - **Capacitor** for Android mobile app support
@@ -73,7 +73,9 @@ The typed API client is generated from the backend's OpenAPI spec:
 ## i18n
 
 Translations are managed with Paraglide. Source messages are in `messages/*.json`.
-Supported languages: English (`en`), Spanish (`es`), Portuguese (`pt`).
+Supported languages: English (`en`), Portuguese (`pt`). Spanish
+(`es.json`) was previously a stub; it has been removed until a real
+translation is contributed (ROADMAP item 10).
 
 To add translations:
 

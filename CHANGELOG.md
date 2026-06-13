@@ -10,6 +10,9 @@ All notable changes to this project are documented in this file.
 - Aligned the Go config's `*_REDIRECT_URI` defaults with `.env.example`: when an env var is unset the value is now derived from `OPENPOST_APP_URL` (with `urn:ietf:wg:oauth:2.0:oob` for Mastodon, matching the documented example).
 - The Go binary now panics loudly at startup with a clear message if the embedded `index.html` is missing or empty. Previously a build that skipped the frontend step would silently serve a blank HTML page with HTTP 200.
 
+### Removed
+- Deleted the dead `frontend/messages/es.json` stub. Spanish was listed as a supported language in the docs and the ROADMAP, but the locale wasn't registered in Paraglide and the file only contained a single placeholder key. Both `frontend/README.md` and `ROADMAP.md` now reflect that Spanish is not yet shipped.
+
 ### Changed
 - Expanded the README launch messaging around the Typefully-like workflow, target users, support snapshot, and current limitations.
 - Filled in the thin operator docs with a more complete quickstart, single-binary install guide, backup and restore process, provider support matrix, and stronger security guidance.

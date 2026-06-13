@@ -43,7 +43,9 @@ OpenPost is a lightweight, self-hosted social media scheduler. This roadmap outl
     Update the `Posts` and `Jobs` list endpoints to support full cursor or offset-based pagination (currently only supports simple limits).
 
 10. **Spanish Localization**  
-    Complete the translation files (`es.json`) to provide full Spanish language support alongside English and Portuguese.
+    Complete the translation files to provide full Spanish language
+    support alongside English and Portuguese. The `es.json` stub was
+    removed in v1.0.x; this item is blocked on a real translator.
 
 ---
 
