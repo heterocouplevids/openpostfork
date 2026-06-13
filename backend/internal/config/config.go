@@ -50,29 +50,41 @@ type Config struct {
 const minSecretLength = 32
 
 func Load() *Config {
+	// FrontendURL is computed up front so the platform-specific OAuth
+	// redirect URIs can be derived from it when the operator hasn't set
+	// the *_REDIRECT_URI env vars. This avoids the previous footgun
+	// where copying `.env.example` to `.env` produced a working-looking
+	// setup that emitted OAuth callbacks pointing at localhost:5173
+	// (Vite's dev port) regardless of where the binary was actually
+	// deployed.
+	frontendURL := strings.TrimRight(getEnvWithFallbacks("OPENPOST_APP_URL", "http://localhost:8080", "OPENPOST_FRONTEND_URL"), "/")
+
 	cfg := &Config{
 		Port:                 getEnvWithFallbacks("OPENPOST_PORT", "8080"),
 		DatabasePath:         getEnvWithFallbacks("OPENPOST_DATABASE_PATH", "file:openpost.db?cache=shared&mode=rwc", "OPENPOST_DB_PATH"),
 		JWTSecret:            getEnvWithFallbacks("OPENPOST_JWT_SECRET", "", "JWT_SECRET"),
 		EncryptionKey:        getEnvWithFallbacks("OPENPOST_ENCRYPTION_KEY", "", "ENCRYPTION_KEY"),
 		DisableRegistrations: getEnvBoolWithAliases(false, "OPENPOST_DISABLE_REGISTRATIONS"),
-		FrontendURL:          getEnvWithFallbacks("OPENPOST_APP_URL", "http://localhost:8080", "OPENPOST_FRONTEND_URL"),
+		FrontendURL:          frontendURL,
 		PublicURL:            getEnvWithFallbacks("OPENPOST_PUBLIC_URL", "", "OPENPOST_APP_URL", "OPENPOST_FRONTEND_URL"),
 
 		TwitterClientID:     getEnvWithFallbacks("X_CLIENT_ID", "", "TWITTER_CLIENT_ID"),
 		TwitterClientSecret: getEnvWithFallbacks("X_CLIENT_SECRET", "", "TWITTER_CLIENT_SECRET"),
-		TwitterRedirectURI:  getEnvWithFallbacks("X_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/x/callback", "TWITTER_REDIRECT_URI"),
+		TwitterRedirectURI:  oauthRedirectFromFrontend("X_REDIRECT_URI", "TWITTER_REDIRECT_URI", frontendURL, "/api/v1/accounts/x/callback"),
 
-		MastodonRedirectURI: getEnvDefault("MASTODON_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/mastodon/callback"),
+		// Mastodon's OOB flow uses a special URI scheme rather than a
+		// real callback URL, so we don't derive from FrontendURL here.
+		// Operators who need a real URL can still override via env.
+		MastodonRedirectURI: getEnvDefault("MASTODON_REDIRECT_URI", "urn:ietf:wg:oauth:2.0:oob"),
 
 		LinkedInClientID:             getEnvWithFallbacks("LINKEDIN_CLIENT_ID", ""),
 		LinkedInClientSecret:         getEnvWithFallbacks("LINKEDIN_CLIENT_SECRET", ""),
-		LinkedInRedirectURI:          getEnvWithFallbacks("LINKEDIN_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/linkedin/callback"),
+		LinkedInRedirectURI:          oauthRedirectFromFrontend("LINKEDIN_REDIRECT_URI", "", frontendURL, "/api/v1/accounts/linkedin/callback"),
 		DisableLinkedInThreadReplies: getEnvBoolWithAliases(false, "LINKEDIN_DISABLE_THREAD_REPLIES", "OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES"),
 
 		ThreadsClientID:     getEnvWithFallbacks("THREADS_CLIENT_ID", ""),
 		ThreadsClientSecret: getEnvWithFallbacks("THREADS_CLIENT_SECRET", ""),
-		ThreadsRedirectURI:  getEnvWithFallbacks("THREADS_REDIRECT_URI", "http://localhost:8080/api/v1/accounts/threads/callback"),
+		ThreadsRedirectURI:  oauthRedirectFromFrontend("THREADS_REDIRECT_URI", "", frontendURL, "/api/v1/accounts/threads/callback"),
 
 		MediaPath: getEnvDefault("OPENPOST_MEDIA_PATH", "./media"),
 		MediaURL:  getEnvDefault("OPENPOST_MEDIA_URL", "/media"),
@@ -148,6 +160,23 @@ func getEnvBoolWithAliases(fallback bool, keys ...string) bool {
 	}
 
 	return fallback
+}
+
+// oauthRedirectFromFrontend returns the OAuth redirect URI to register
+// with an external provider, preferring the explicit env var (and any
+// aliases) when set. If nothing is set, it derives a sensible default
+// from the FrontendURL — this prevents the footgun where copying
+// `.env.example` produced OAuth callbacks pointing at localhost:5173
+// (Vite's dev port) regardless of where the binary was deployed.
+func oauthRedirectFromFrontend(primary, alias, frontend, path string) string {
+	keys := []string{primary}
+	if alias != "" {
+		keys = append(keys, alias)
+	}
+	if v := getEnvWithFallbacks(keys[0], "", keys[1:]...); v != "" {
+		return v
+	}
+	return strings.TrimRight(frontend, "/") + path
 }
 
 func Init() {
