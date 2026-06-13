@@ -122,7 +122,31 @@ func Load() *Config {
 	corsOrigins = append(corsOrigins, "capacitor://localhost", "http://localhost", "https://localhost")
 	cfg.CORSOrigins = corsOrigins
 
+	warnOnPlaceholderURL(cfg)
+
 	return cfg
+}
+
+// warnOnPlaceholderURL emits a loud startup warning when the operator is
+// running with the binary's default `http://localhost:8080` for
+// OPENPOST_APP_URL/OPENPOST_PUBLIC_URL, which is almost always wrong in
+// production. The check only fires when neither env var was set
+// explicitly, so `devenv shell` and any operator who has set a real URL
+// are not affected.
+func warnOnPlaceholderURL(cfg *Config) {
+	if _, explicit := os.LookupEnv("OPENPOST_APP_URL"); explicit {
+		return
+	}
+	if _, explicit := os.LookupEnv("OPENPOST_FRONTEND_URL"); explicit {
+		return
+	}
+	log.Printf("============================================================")
+	log.Printf("WARNING: OPENPOST_APP_URL is not set; falling back to")
+	log.Printf("         %s. OAuth callbacks, WebAuthn origins, and the", cfg.FrontendURL)
+	log.Printf("         public media URL will all advertise this address.")
+	log.Printf("         Set OPENPOST_APP_URL=https://your-public-host in")
+	log.Printf("         production. See .env.example for details.")
+	log.Printf("============================================================")
 }
 
 func getEnvDefault(key, fallback string) string {

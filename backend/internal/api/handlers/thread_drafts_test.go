@@ -60,7 +60,11 @@ func TestResolveThreadDraftInput(t *testing.T) {
 			wantDraftNonNil:  true,
 		},
 		{
-			name:             "explicit field empty string clears draft",
+			// An empty explicit field is not a valid blob (isThreadDraft
+			// rejects it) so resolveThreadDraftInput returns nil; the
+			// downstream upsertThreadDraftTx is what actually deletes the
+			// row — see TestUpsertThreadDraftTxClearsWithEmptyString.
+			name:             "explicit field empty string is not treated as a blob",
 			content:          "kept",
 			threadDraftField: ptrString(""),
 			wantContent:      "kept",

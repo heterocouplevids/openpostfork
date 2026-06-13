@@ -804,7 +804,7 @@
 			const threadDraft = isThreadDraft_
 				? encodeThreadDraft(posts, getVariantPayloadForSave())
 				: null;
-			const draftContent = isThreadDraft_ ? posts[0].content : posts[0].content;
+			const draftContent = posts[0].content;
 			const draftMediaIds = isThreadDraft_ ? posts.flatMap((p) => p.mediaIds) : posts[0].mediaIds;
 
 			const defaultDelay = workspaceCtx.settings.random_delay_minutes;

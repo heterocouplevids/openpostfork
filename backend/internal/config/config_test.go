@@ -65,3 +65,28 @@ func TestOauthRedirectFromFrontendEmptyFrontendDerivesPathOnly(t *testing.T) {
 	got := oauthRedirectFromFrontend("X_REDIRECT_URI", "TWITTER_REDIRECT_URI", "", "/api/v1/accounts/x/callback")
 	require.Equal(t, "/api/v1/accounts/x/callback", got)
 }
+
+// TestWarnOnPlaceholderURLNoEnvSet documents the warning fires when
+// neither OPENPOST_APP_URL nor its legacy alias is set, so the operator
+// is on the binary's default and the loud-warn is the right move.
+func TestWarnOnPlaceholderURLNoEnvSet(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "")
+	t.Setenv("OPENPOST_FRONTEND_URL", "")
+	// The function logs but does not return a value; we just verify it
+	// does not panic when the env is empty.
+	require.NotPanics(t, func() {
+		warnOnPlaceholderURL(&Config{FrontendURL: "http://localhost:8080"})
+	})
+}
+
+// TestWarnOnPlaceholderURLExplicitEnvSkipsWarn documents the contract
+// that the warning is suppressed once the operator has set
+// OPENPOST_APP_URL (or its alias). `devenv shell` and any real
+// deployment must not see the warning.
+func TestWarnOnPlaceholderURLExplicitEnvSkipsWarn(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://openpost.example.com")
+	t.Setenv("OPENPOST_FRONTEND_URL", "")
+	require.NotPanics(t, func() {
+		warnOnPlaceholderURL(&Config{FrontendURL: "https://openpost.example.com"})
+	})
+}

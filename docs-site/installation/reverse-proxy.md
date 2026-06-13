@@ -49,3 +49,34 @@ Update your provider apps to use your public domain:
 ## Threads note
 
 Threads needs the media endpoint to be publicly reachable. If `OPENPOST_MEDIA_URL` points to a private hostname or plain local path, media publishing will fail.
+
+## Subpath mounts (e.g. `https://example.com/openpost/`)
+
+**Not supported in v1.x.** The SvelteKit frontend is built with
+`@sveltejs/adapter-static` and the Go binary embeds the resulting
+`build/` directory. Asset URLs (`/_app/...`, `/sw.js`,
+`/manifest.webmanifest`, etc.) are emitted as absolute paths starting
+with `/`, not as paths relative to the mount point. The OAuth callback
+`Location` header (now fixed to be absolute) also assumes the SPA is
+served from the root.
+
+If you need to share a host with other apps, run OpenPost on its own
+subdomain (`https://openpost.example.com`) and let the reverse proxy
+terminate at the root. This is the only configuration exercised by
+the maintainers and the only one the CI matrix covers.
+
+If you absolutely must try a subpath mount, you will need to:
+
+- Strip the prefix in the proxy (e.g. `location /openpost/ { proxy_pass http://127.0.0.1:8080/; }`).
+- Manually rewrite every absolute asset path in the SvelteKit build
+  output (search-and-replace `/openpost` → `/` in `build/` before
+  embedding). This is fragile and not part of the supported
+  install path.
+- Expect OAuth callbacks to land on `/accounts?status=success`
+  (the URL the binary sets), not `/openpost/accounts?status=success`.
+  Browser will follow the redirect to a 404 unless the proxy also
+  rewrites the response `Location` header.
+
+Track subpath support on the
+[ROADMAP](https://github.com/rodrgds/openpost/blob/main/ROADMAP.md)
+before requesting it.

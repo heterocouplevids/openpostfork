@@ -54,7 +54,7 @@ function createAuthStore() {
 				const { data, error } = await (client as any).POST('/auth/login', {
 					body: { email, password }
 				});
-				if (error || !data) throw new Error(error?.detail || 'Login failed');
+				if (error || !data) throw new Error(error?.detail ?? 'Login failed');
 				if (data.requires_mfa) {
 					set({ user: null, isLoading: false, isAuthenticated: false });
 					return {
@@ -65,7 +65,7 @@ function createAuthStore() {
 					};
 				}
 				setToken(data.token);
-				set({ user: data.user, isLoading: false, isAuthenticated: true });
+				set({ user: data.user ?? null, isLoading: false, isAuthenticated: true });
 				return { success: true };
 			} catch (e) {
 				return { success: false, error: (e as Error).message };
@@ -78,7 +78,7 @@ function createAuthStore() {
 				});
 				if (error || !data) throw new Error(error?.detail || 'Registration failed');
 				setToken(data.token);
-				set({ user: data.user, isLoading: false, isAuthenticated: true });
+				set({ user: data.user ?? null, isLoading: false, isAuthenticated: true });
 				return { success: true };
 			} catch (e) {
 				return { success: false, error: (e as Error).message };
@@ -89,9 +89,9 @@ function createAuthStore() {
 				const { data, error } = await (client as any).POST('/auth/login/totp', {
 					body: { mfa_token: mfaToken, code }
 				});
-				if (error || !data) throw new Error(error?.detail || 'Authenticator verification failed');
+				if (error || !data) throw new Error(error?.detail ?? 'Authenticator verification failed');
 				setToken(data.token);
-				set({ user: data.user, isLoading: false, isAuthenticated: true });
+				set({ user: data.user ?? null, isLoading: false, isAuthenticated: true });
 				return { success: true };
 			} catch (e) {
 				return { success: false, error: (e as Error).message };
@@ -116,10 +116,10 @@ function createAuthStore() {
 						credential
 					}
 				});
-				if (error || !data) throw new Error(error?.detail || 'Passkey verification failed');
+				if (error || !data) throw new Error(error?.detail ?? 'Passkey verification failed');
 
 				setToken(data.token);
-				set({ user: data.user, isLoading: false, isAuthenticated: true });
+				set({ user: data.user ?? null, isLoading: false, isAuthenticated: true });
 				return { success: true };
 			} catch (e) {
 				return { success: false, error: (e as Error).message };

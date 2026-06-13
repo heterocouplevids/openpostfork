@@ -55,6 +55,7 @@ docs-site/public/openapi.json
 docs-site/.generated/openapi.json
 docs-site/.vitepress/dist/
 docs-site/.vitepress/cache/
+docs-site/.vitepress/.temp/
 
 # Logs
 *.log

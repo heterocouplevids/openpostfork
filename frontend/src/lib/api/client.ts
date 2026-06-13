@@ -17,8 +17,8 @@ if (browser) {
 	token = localStorage.getItem('token');
 }
 
-export function setToken(newToken: string | null) {
-	token = newToken;
+export function setToken(newToken: string | null | undefined) {
+	token = newToken ?? null;
 	if (browser) {
 		if (newToken) {
 			localStorage.setItem('token', newToken);
