@@ -93,6 +93,7 @@ func TestSaveAccount_X(t *testing.T) {
 	require.Equal(t, accountUsername, account.AccountUsername)
 	require.Equal(t, instanceURL, account.InstanceURL)
 	require.True(t, account.IsActive)
+	require.Equal(t, "x-testuser", account.Slug)
 	require.NotZero(t, account.ID)
 	require.NotZero(t, account.CreatedAt)
 
@@ -152,6 +153,7 @@ func TestSaveAccount_Mastodon(t *testing.T) {
 	require.Equal(t, accountUsername, account.AccountUsername)
 	require.Equal(t, instanceURL, account.InstanceURL)
 	require.True(t, account.IsActive)
+	require.Equal(t, "mastodon-mastodonuser", account.Slug)
 
 	// Verify tokens encrypted
 	decryptedAccess, err := crypto.Decrypt(account.AccessTokenEnc)
@@ -197,11 +199,34 @@ func TestSaveAccount_Threads(t *testing.T) {
 	// Verify the account ID was overridden by user_id from token extra
 	require.Equal(t, "threads-user-id-987", account.AccountID)
 	require.Equal(t, accountUsername, account.AccountUsername)
+	require.Equal(t, "threads-threadsuser", account.Slug)
 
 	// Verify tokens encrypted
 	decryptedAccess, err := crypto.Decrypt(account.AccessTokenEnc)
 	require.NoError(t, err)
 	require.Equal(t, tokenResp.AccessToken, decryptedAccess)
+}
+
+func TestSaveAccountGeneratesUniqueSlugs(t *testing.T) {
+	t.Parallel()
+
+	db := createTestDB(t)
+	crypto := crypto.NewTokenEncryptor("test-secret-key-for-testing-only")
+	saver := NewAccountSaver(db, crypto)
+
+	ctx := context.Background()
+	workspaceID := "workspace"
+	userID := "user"
+	seedWorkspaceMember(t, db, workspaceID, userID)
+	tokenResp := &platform.TokenResult{AccessToken: "token"}
+
+	first, err := saver.SaveAccount(ctx, userID, "x", workspaceID, "1", "Main Account", "", tokenResp)
+	require.NoError(t, err)
+	second, err := saver.SaveAccount(ctx, userID, "x", workspaceID, "2", "Main Account", "", tokenResp)
+	require.NoError(t, err)
+
+	require.Equal(t, "x-main-account", first.Slug)
+	require.Equal(t, "x-main-account-2", second.Slug)
 }
 
 // TestSaveAccount_EncryptionError tests handling of encryption failures.

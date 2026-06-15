@@ -29,6 +29,7 @@ func TestRunMigrationsRemovesInactiveSetMemberships(t *testing.T) {
 		(*models.SocialMediaSet)(nil),
 		(*models.SocialMediaSetAccount)(nil),
 		(*models.Post)(nil),
+		(*models.PostVariant)(nil),
 	} {
 		_, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx)
 		require.NoError(t, err)
@@ -78,6 +79,7 @@ func TestRunMigrationsPromotesSingleExistingUserToInstanceAdmin(t *testing.T) {
 		(*models.SocialAccount)(nil),
 		(*models.SocialMediaSetAccount)(nil),
 		(*models.Post)(nil),
+		(*models.PostVariant)(nil),
 	} {
 		_, err = db.NewCreateTable().Model(model).IfNotExists().Exec(ctx)
 		require.NoError(t, err)

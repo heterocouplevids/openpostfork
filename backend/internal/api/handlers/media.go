@@ -586,7 +586,7 @@ func (h *MediaHandler) postsUsingMedia(ctx context.Context, workspaceID, mediaID
 	var variants []models.PostVariant
 	if err := h.db.NewSelect().
 		Model(&variants).
-		Where("media_i_ds != ''").
+		Where("media_ids != ''").
 		Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -627,7 +627,7 @@ func (h *MediaHandler) removeMediaReferences(ctx context.Context, workspaceID, m
 	var variants []models.PostVariant
 	if err := h.db.NewSelect().
 		Model(&variants).
-		Where("media_i_ds != ''").
+		Where("media_ids != ''").
 		Scan(ctx); err != nil {
 		return err
 	}
@@ -665,8 +665,8 @@ func (h *MediaHandler) removeMediaReferences(ctx context.Context, workspaceID, m
 		}
 		if _, err := h.db.NewUpdate().
 			Model(&variant).
-			Column("media_i_ds").
-			Set("media_i_ds = ?", string(encoded)).
+			Column("media_ids").
+			Set("media_ids = ?", string(encoded)).
 			Where("id = ?", variant.ID).
 			Exec(ctx); err != nil {
 			return err

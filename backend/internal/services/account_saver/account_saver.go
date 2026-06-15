@@ -2,8 +2,11 @@ package account_saver
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +16,8 @@ import (
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
+
+var slugUnsafeChars = regexp.MustCompile(`[^a-z0-9]+`)
 
 // AccountSaver handles saving social account information to the database.
 // This service extracts the duplicated account-saving logic from the OAuth handler.
@@ -84,6 +89,7 @@ func (s *AccountSaver) SaveAccount(ctx context.Context, userID, platformName, wo
 	account := &models.SocialAccount{
 		ID:              uuid.New().String(),
 		WorkspaceID:     workspaceID,
+		Slug:            "",
 		Platform:        platformName,
 		AccountID:       accountID,
 		AccountUsername: accountUsername,
@@ -94,6 +100,7 @@ func (s *AccountSaver) SaveAccount(ctx context.Context, userID, platformName, wo
 		IsActive:        true,
 		CreatedAt:       time.Now().UTC(),
 	}
+	account.Slug = s.uniqueSlug(ctx, workspaceID, defaultSlug(platformName, accountUsername, accountID, instanceURL))
 
 	if _, err := s.db.NewInsert().Model(account).Exec(ctx); err != nil {
 		return nil, err
@@ -104,4 +111,50 @@ func (s *AccountSaver) SaveAccount(ctx context.Context, userID, platformName, wo
 	}
 
 	return account, nil
+}
+
+func defaultSlug(platformName, accountUsername, accountID, instanceURL string) string {
+	label := strings.TrimSpace(accountUsername)
+	if label == "" {
+		label = strings.TrimSpace(accountID)
+	}
+	if label == "" {
+		label = strings.TrimSpace(instanceURL)
+	}
+	base := strings.Trim(strings.ToLower(platformName+"-"+label), "-")
+	base = slugUnsafeChars.ReplaceAllString(base, "-")
+	base = strings.Trim(base, "-")
+	if len(base) > 63 {
+		base = strings.Trim(base[:63], "-")
+	}
+	if base == "" {
+		return strings.ToLower(platformName)
+	}
+	return base
+}
+
+func (s *AccountSaver) uniqueSlug(ctx context.Context, workspaceID, base string) string {
+	if base == "" {
+		base = "account"
+	}
+	for i := 0; ; i++ {
+		candidate := base
+		if i > 0 {
+			candidate = fmt.Sprintf("%s-%d", base, i+1)
+		}
+
+		var existing models.SocialAccount
+		err := s.db.NewSelect().
+			Model(&existing).
+			Where("workspace_id = ?", workspaceID).
+			Where("slug = ?", candidate).
+			Where("is_active = ?", true).
+			Scan(ctx)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return candidate
+			}
+			return base
+		}
+	}
 }

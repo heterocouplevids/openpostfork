@@ -115,6 +115,7 @@ type SocialAccount struct {
 
 	ID               string `bun:",pk" json:"id"`
 	WorkspaceID      string `bun:",notnull" json:"workspace_id"`
+	Slug             string `bun:",notnull" json:"slug"`
 	Platform         string `bun:",notnull" json:"platform"` // 'x', 'threads', 'linkedin', 'mastodon', 'bluesky'
 	AccountID        string `bun:",notnull" json:"account_id"`
 	AccountUsername  string `json:"account_username"`
@@ -238,7 +239,7 @@ type PostVariant struct {
 	PostID          string    `bun:",notnull" json:"post_id"`
 	SocialAccountID string    `bun:",notnull" json:"social_account_id"`
 	Content         string    `bun:",notnull" json:"content"`
-	MediaIDs        string    `bun:",nullzero" json:"media_ids"` // JSON array of media IDs override
+	MediaIDs        string    `bun:"media_ids,notnull" json:"media_ids"` // JSON array of media IDs override
 	IsUnsynced      bool      `bun:",default:false" json:"is_unsynced"`
 	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`

@@ -21,6 +21,7 @@ func TestNewTokenEncryptor(t *testing.T) {
 			encryptor := NewTokenEncryptor(tt.key)
 			if encryptor == nil {
 				t.Fatal("expected encryptor, got nil")
+				return
 			}
 			if len(encryptor.key) != 32 {
 				t.Errorf("expected key length 32, got %d", len(encryptor.key))

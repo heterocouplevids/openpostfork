@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -117,6 +118,7 @@ type ListAccountsInput struct {
 
 type AccountResponse struct {
 	ID                     string `json:"id" doc:"Account ID"`
+	Slug                   string `json:"slug" doc:"User-editable account slug for CLI selectors"`
 	Platform               string `json:"platform" doc:"Platform name"`
 	AccountID              string `json:"account_id" doc:"Platform-specific account ID"`
 	AccountUsername        string `json:"account_username" doc:"Account username"`
@@ -128,6 +130,19 @@ type AccountResponse struct {
 type ListAccountsOutput struct {
 	Body []AccountResponse
 }
+
+type UpdateAccountInput struct {
+	AccountID string `path:"account_id"`
+	Body      struct {
+		Slug string `json:"slug" doc:"New account slug. Use lowercase letters, numbers, and hyphens."`
+	}
+}
+
+type UpdateAccountOutput struct {
+	Body AccountResponse
+}
+
+var accountSlugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapter, error) {
 	if platform == mastodonProvider {
@@ -559,6 +574,7 @@ func (h *OAuthHandler) ListAccounts(api huma.API) {
 
 			response[i] = AccountResponse{
 				ID:                     acc.ID,
+				Slug:                   acc.Slug,
 				Platform:               acc.Platform,
 				AccountID:              acc.AccountID,
 				AccountUsername:        acc.AccountUsername,
@@ -569,6 +585,54 @@ func (h *OAuthHandler) ListAccounts(api huma.API) {
 		}
 
 		return &ListAccountsOutput{Body: response}, nil
+	})
+}
+
+func (h *OAuthHandler) UpdateAccount(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "update-account",
+		Method:      http.MethodPatch,
+		Path:        "/accounts/{account_id}",
+		Summary:     "Update a social account",
+		Tags:        []string{tagAccounts},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 404, 409},
+	}, func(ctx context.Context, input *UpdateAccountInput) (*UpdateAccountOutput, error) {
+		slug := strings.TrimSpace(input.Body.Slug)
+		if !accountSlugPattern.MatchString(slug) || strings.Contains(slug, "--") {
+			return nil, huma.Error400BadRequest("slug must be 1-63 lowercase letters, numbers, and single hyphens")
+		}
+
+		account, err := h.getAccessibleAccount(ctx, input.AccountID, middleware.GetUserID(ctx))
+		if err != nil {
+			return nil, err
+		}
+
+		var existing models.SocialAccount
+		err = h.db.NewSelect().
+			Model(&existing).
+			Where("workspace_id = ?", account.WorkspaceID).
+			Where("slug = ?", slug).
+			Where("id != ?", account.ID).
+			Where("is_active = ?", true).
+			Scan(ctx)
+		if err == nil {
+			return nil, huma.Error409Conflict("slug is already used by another active account in this workspace")
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, huma.Error500InternalServerError("failed to check slug uniqueness")
+		}
+
+		if _, err := h.db.NewUpdate().
+			Model((*models.SocialAccount)(nil)).
+			Set("slug = ?", slug).
+			Where("id = ?", account.ID).
+			Exec(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to update account")
+		}
+
+		account.Slug = slug
+		return &UpdateAccountOutput{Body: accountResponse(account, h.disableLinkedInThreadReplies)}, nil
 	})
 }
 
@@ -586,44 +650,23 @@ func (h *OAuthHandler) DisconnectAccount(api huma.API) {
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{404},
 	}, func(ctx context.Context, input *DisconnectAccountInput) (*struct{}, error) {
-		userID := middleware.GetUserID(ctx)
-
-		var account models.SocialAccount
-		err := h.db.NewSelect().
-			Model(&account).
-			Where("id = ?", input.AccountID).
-			Scan(ctx)
+		account, err := h.getAccessibleAccount(ctx, input.AccountID, middleware.GetUserID(ctx))
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, huma.Error404NotFound("account not found")
-			}
-			return nil, huma.Error500InternalServerError("failed to fetch account")
-		}
-
-		var members []models.WorkspaceMember
-		err = h.db.NewSelect().
-			Model(&members).
-			Where("workspace_id = ? AND user_id = ?", account.WorkspaceID, userID).
-			Scan(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to check workspace access")
-		}
-		if len(members) == 0 {
-			return nil, huma.Error403Forbidden("workspace not accessible")
+			return nil, err
 		}
 
 		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 			if _, err := tx.NewUpdate().
 				Model((*models.SocialAccount)(nil)).
 				Set("is_active = ?", false).
-				Where("id = ?", input.AccountID).
+				Where("id = ?", account.ID).
 				Exec(txCtx); err != nil {
 				return err
 			}
 
 			if _, err := tx.NewDelete().
 				Model((*models.SocialMediaSetAccount)(nil)).
-				Where("social_account_id = ?", input.AccountID).
+				Where("social_account_id = ?", account.ID).
 				Exec(txCtx); err != nil {
 				return err
 			}
@@ -636,4 +679,46 @@ func (h *OAuthHandler) DisconnectAccount(api huma.API) {
 
 		return nil, nil
 	})
+}
+
+func (h *OAuthHandler) getAccessibleAccount(ctx context.Context, accountID, userID string) (models.SocialAccount, error) {
+	var account models.SocialAccount
+	err := h.db.NewSelect().
+		Model(&account).
+		Where("id = ?", accountID).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return account, huma.Error404NotFound("account not found")
+		}
+		return account, huma.Error500InternalServerError("failed to fetch account")
+	}
+
+	var members []models.WorkspaceMember
+	err = h.db.NewSelect().
+		Model(&members).
+		Where("workspace_id = ? AND user_id = ?", account.WorkspaceID, userID).
+		Scan(ctx)
+	if err != nil {
+		return account, huma.Error500InternalServerError("failed to check workspace access")
+	}
+	if len(members) == 0 {
+		return account, huma.Error403Forbidden("workspace not accessible")
+	}
+	return account, nil
+}
+
+func accountResponse(acc models.SocialAccount, disableLinkedInThreadReplies bool) AccountResponse {
+	threadRepliesSupported := !disableLinkedInThreadReplies || acc.Platform != "linkedin"
+
+	return AccountResponse{
+		ID:                     acc.ID,
+		Slug:                   acc.Slug,
+		Platform:               acc.Platform,
+		AccountID:              acc.AccountID,
+		AccountUsername:        acc.AccountUsername,
+		InstanceURL:            acc.InstanceURL,
+		IsActive:               acc.IsActive,
+		ThreadRepliesSupported: threadRepliesSupported,
+	}
 }

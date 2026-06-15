@@ -247,6 +247,7 @@ func main() {
 	oauthHandler.ExchangeCode(api)
 	oauthHandler.BlueskyLogin(api)
 	oauthHandler.ListAccounts(api)
+	oauthHandler.UpdateAccount(api)
 	oauthHandler.DisconnectAccount(api)
 
 	huma.Register(api, huma.Operation{

@@ -18,6 +18,7 @@ func TestFindNextAvailableSlotTimeReturnsFirstFreeScheduledSlot(t *testing.T) {
 	slot, when := findNextAvailableSlotTime(now, loc, schedules, nil, 60)
 	if slot == nil {
 		t.Fatal("expected a slot")
+		return
 	}
 	if slot.ID != "slot-1" {
 		t.Fatalf("expected first slot, got %q", slot.ID)

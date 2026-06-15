@@ -45,6 +45,7 @@ func newMigrationsTestDB(t *testing.T) *bun.DB {
 		(*models.SocialMediaSetAccount)(nil),
 		(*models.ThreadDraft)(nil),
 		(*models.Post)(nil),
+		(*models.PostVariant)(nil),
 	}
 	for _, m := range modelList {
 		_, err := db.NewCreateTable().Model(m).IfNotExists().Exec(context.Background())
