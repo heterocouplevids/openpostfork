@@ -22,6 +22,7 @@
 	import ShieldCheckIcon from 'lucide-svelte/icons/shield-check';
 	import SmartphoneIcon from 'lucide-svelte/icons/smartphone';
 	import KeyRoundIcon from 'lucide-svelte/icons/key-round';
+	import TerminalIcon from 'lucide-svelte/icons/terminal';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
 	import { getLocaleTag } from '$lib/i18n';
@@ -92,7 +93,7 @@
 		{ group: 'Africa', value: 'Africa/Nairobi', label: 'Nairobi (EAT)' }
 	];
 
-	const groupedTimezones = $derived(() => {
+	const groupedTimezones = $derived.by(() => {
 		const groups: Record<string, typeof timezones> = {};
 		for (const tz of timezones) {
 			if (!groups[tz.group]) groups[tz.group] = [];
@@ -148,6 +149,22 @@
 	}
 
 	let securityStatus = $state<SecurityStatus | null>(null);
+	let apiTokens = $state<APITokenSummary[]>([]);
+	let apiTokensLoading = $state(true);
+	let apiTokenBusy = $state(false);
+	let apiTokenName = $state('OpenPost CLI');
+	let createdAPIToken = $state('');
+
+	interface APITokenSummary {
+		id: string;
+		name: string;
+		token_prefix: string;
+		scope: string;
+		expires_at?: string | null;
+		last_used_at?: string | null;
+		revoked_at?: string | null;
+		created_at: string;
+	}
 
 	const authState = $derived($auth);
 	const passkeyCount = $derived(securityStatus?.passkeys.length ?? 0);
@@ -163,6 +180,58 @@
 			securityError = (e as Error).message;
 		} finally {
 			loadingSecurity = false;
+		}
+	}
+
+	async function loadAPITokens() {
+		apiTokensLoading = true;
+		securityError = '';
+		try {
+			const { data, error: err } = await (client as any).GET('/api-tokens');
+			if (err || !data) throw new Error(err?.detail || 'Failed to load API tokens');
+			apiTokens = data as APITokenSummary[];
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			apiTokensLoading = false;
+		}
+	}
+
+	async function createAPIToken() {
+		apiTokenBusy = true;
+		securityError = '';
+		createdAPIToken = '';
+		try {
+			const { data, error: err } = await (client as any).POST('/api-tokens', {
+				body: { name: apiTokenName.trim() || 'OpenPost CLI', scope: 'cli:full' }
+			});
+			if (err || !data) throw new Error(err?.detail || 'Failed to create API token');
+			createdAPIToken = data.token;
+			apiTokenName = 'OpenPost CLI';
+			await loadAPITokens();
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			apiTokenBusy = false;
+		}
+	}
+
+	async function revokeAPIToken(tokenID: string) {
+		if (!confirm('Revoke this API token? Any CLI or automation using it will stop working.'))
+			return;
+		apiTokenBusy = true;
+		securityError = '';
+		try {
+			const { error: err } = await (client as any).DELETE('/api-tokens/{id}', {
+				params: { path: { id: tokenID } }
+			});
+			if (err) throw new Error(err.detail || 'Failed to revoke API token');
+			await loadAPITokens();
+			toastMessage = 'API token revoked';
+		} catch (e) {
+			securityError = (e as Error).message;
+		} finally {
+			apiTokenBusy = false;
 		}
 	}
 
@@ -579,6 +648,7 @@
 	$effect(() => {
 		if (authState.isAuthenticated) {
 			loadSecurityStatus();
+			loadAPITokens();
 		}
 	});
 
@@ -838,6 +908,84 @@
 			{/if}
 		</section>
 
+		<section class="rounded-lg border p-6">
+			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
+				<TerminalIcon class="h-5 w-5 text-muted-foreground" />
+				CLI Devices & API Tokens
+			</h2>
+			<p class="mb-4 text-sm text-muted-foreground">
+				The CLI signs in through device authorization and receives a revocable API token. Manual
+				tokens can also be created here for CI, cron, and other automation.
+			</p>
+
+			<div class="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+				<div class="space-y-2">
+					<Label for="api-token-name">New token name</Label>
+					<Input
+						id="api-token-name"
+						bind:value={apiTokenName}
+						placeholder="MacBook CLI, GitHub CI"
+					/>
+				</div>
+				<div class="flex items-end">
+					<Button onclick={createAPIToken} disabled={apiTokenBusy}>
+						{#if apiTokenBusy}
+							<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+						{/if}
+						Create Token
+					</Button>
+				</div>
+			</div>
+
+			{#if createdAPIToken}
+				<div
+					class="mb-4 rounded-lg border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-950"
+				>
+					<p class="font-medium">Copy this token now. It will not be shown again.</p>
+					<p class="mt-2 font-mono text-xs break-all">{createdAPIToken}</p>
+				</div>
+			{/if}
+
+			{#if apiTokensLoading}
+				<div class="space-y-2">
+					<Skeleton class="h-14 rounded-md" />
+					<Skeleton class="h-14 rounded-md" />
+				</div>
+			{:else if apiTokens.length === 0}
+				<p class="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
+					No API tokens or CLI devices are currently authorized.
+				</p>
+			{:else}
+				<div class="space-y-2">
+					{#each apiTokens as token (token.id)}
+						<div
+							class="flex flex-col gap-3 rounded-md border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+						>
+							<div>
+								<p class="text-sm font-medium">{token.name}</p>
+								<p class="text-xs text-muted-foreground">
+									Prefix <span class="font-mono">{token.token_prefix}</span> · {token.scope} · Created
+									{new Date(token.created_at).toLocaleString()}
+									{#if token.last_used_at}
+										· Last used {new Date(token.last_used_at).toLocaleString()}
+									{/if}
+								</p>
+							</div>
+							<Button
+								variant="ghost"
+								size="sm"
+								class="text-destructive hover:text-destructive"
+								onclick={() => revokeAPIToken(token.id)}
+								disabled={apiTokenBusy}
+							>
+								Revoke
+							</Button>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</section>
+
 		<section class="space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
@@ -855,10 +1003,10 @@
 							{getTimezoneLabel(workspaceCtx.settings.timezone)}
 						</Select.Trigger>
 						<Select.Content class="max-h-80 overflow-y-auto">
-							{#each Object.entries(groupedTimezones()) as [group, tzs]}
+							{#each Object.entries(groupedTimezones) as [group, tzs] (group)}
 								<Select.Group>
 									<Select.GroupHeading class="text-xs">{group}</Select.GroupHeading>
-									{#each tzs as tz}
+									{#each tzs as tz (tz.value)}
 										<Select.Item value={tz.value}>{tz.label}</Select.Item>
 									{/each}
 								</Select.Group>
@@ -909,7 +1057,7 @@
 							?.label || 'Disabled'}
 					</Select.Trigger>
 					<Select.Content>
-						{#each cleanupDaysOptions as option}
+						{#each cleanupDaysOptions as option (option.value)}
 							<Select.Item value={String(option.value)}>{option.label}</Select.Item>
 						{/each}
 					</Select.Content>
@@ -950,7 +1098,7 @@
 					<div class="space-y-2">
 						<span class="text-sm font-medium">Active days</span>
 						<div class="flex flex-wrap gap-3">
-							{#each dayOrder as dayIndex}
+							{#each dayOrder as dayIndex (dayIndex)}
 								<label
 									class="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm"
 								>
@@ -993,7 +1141,7 @@
 									{suggestedPostsPerDay}
 								</Select.Trigger>
 								<Select.Content class="max-h-60 overflow-y-auto">
-									{#each Array.from({ length: 10 }, (_, i) => i + 1) as n}
+									{#each Array.from({ length: 10 }, (_, i) => i + 1) as n (n)}
 										<Select.Item value={String(n)}>{n}</Select.Item>
 									{/each}
 								</Select.Content>
@@ -1028,7 +1176,7 @@
 						>
 							Time
 						</div>
-						{#each dayOrder as dayIndex}
+						{#each dayOrder as dayIndex (dayIndex)}
 							<div
 								class="px-2 py-3 text-center text-xs font-semibold tracking-wide text-muted-foreground uppercase"
 							>
@@ -1053,7 +1201,7 @@
 										<div class="text-xs text-muted-foreground">{row.label}</div>
 									{/if}
 								</div>
-								{#each dayOrder as dayIndex}
+								{#each dayOrder as dayIndex (`${row.key}-${dayIndex}`)}
 									<div class="flex items-center justify-center px-2 py-3">
 										<Checkbox
 											checked={Boolean(row.days[dayIndex])}
@@ -1159,7 +1307,7 @@
 								{workspaceCtx.settings.slot_start_hour.toString().padStart(2, '0')}:00
 							</Select.Trigger>
 							<Select.Content class="max-h-60 overflow-y-auto">
-								{#each Array.from({ length: 24 }, (_, i) => i) as hour}
+								{#each Array.from({ length: 24 }, (_, i) => i) as hour (hour)}
 									<Select.Item value={String(hour)}
 										>{hour.toString().padStart(2, '0')}:00</Select.Item
 									>
@@ -1178,7 +1326,7 @@
 								{workspaceCtx.settings.slot_end_hour.toString().padStart(2, '0')}:00
 							</Select.Trigger>
 							<Select.Content class="max-h-60 overflow-y-auto">
-								{#each Array.from({ length: 24 }, (_, i) => i) as hour}
+								{#each Array.from({ length: 24 }, (_, i) => i) as hour (hour)}
 									<Select.Item value={String(hour)}
 										>{hour.toString().padStart(2, '0')}:00</Select.Item
 									>

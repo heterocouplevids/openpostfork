@@ -78,6 +78,12 @@
 	let editSetDefault = $state(false);
 	let editSetAccountIds = $state<string[]>([]);
 	let editSetLoading = $state(false);
+	let editAccountDialogOpen = $state(false);
+	let editingAccount = $state<SocialAccount | null>(null);
+	let editAccountSlug = $state('');
+	let editAccountLoading = $state(false);
+	let editAccountError = $state('');
+	const accountSlugPattern = '[a-z0-9][a-z0-9-]{0,62}';
 
 	function resetCreateSetForm() {
 		newSetName = '';
@@ -246,6 +252,39 @@
 		editSetDefault = set.is_default;
 		editSetAccountIds = set.accounts.map((a) => a.social_account_id);
 		editSetDialogOpen = true;
+	}
+
+	function accountDisplayName(account: SocialAccount): string {
+		if (account.account_username) return `@${account.account_username}`;
+		if (account.instance_url) return account.instance_url.replace('https://', '');
+		return account.account_id || account.platform;
+	}
+
+	function openEditAccount(account: SocialAccount) {
+		editingAccount = account;
+		editAccountSlug = (account as SocialAccount & { slug?: string }).slug ?? '';
+		editAccountError = '';
+		editAccountDialogOpen = true;
+	}
+
+	async function updateAccountSlug() {
+		if (!editingAccount) return;
+		editAccountLoading = true;
+		editAccountError = '';
+		try {
+			const { error: err } = await (client as any).PATCH('/accounts/{account_id}', {
+				params: { path: { account_id: editingAccount.id } },
+				body: { slug: editAccountSlug.trim() }
+			});
+			if (err) throw new Error(err.detail || 'Failed to update account slug');
+			editAccountDialogOpen = false;
+			editingAccount = null;
+			await loadAccounts();
+		} catch (e) {
+			editAccountError = (e as Error).message;
+		} finally {
+			editAccountLoading = false;
+		}
 	}
 
 	onMount(() => {
@@ -657,27 +696,36 @@
 											</div>
 											<div>
 												<p class="text-sm font-medium">
-													{#if account.account_username}
-														@{account.account_username}
-													{:else if account.instance_url}
-														{account.instance_url.replace('https://', '')}
-													{:else}
-														{account.account_id}
-													{/if}
+													{accountDisplayName(account)}
 												</p>
 												<p class="text-sm text-muted-foreground">
-													{account.is_active ? 'Connected' : 'Disconnected'}
+													Slug:
+													<span class="font-mono"
+														>{(account as SocialAccount & { slug?: string }).slug ||
+															'not set'}</span
+													>
+													· {account.is_active ? 'Connected' : 'Disconnected'}
 												</p>
 											</div>
 										</div>
-										<Button
-											variant="ghost"
-											size="sm"
-											onclick={() => disconnectAccount(account.id)}
-											class="text-xs text-muted-foreground hover:text-destructive"
-										>
-											Disconnect
-										</Button>
+										<div class="flex items-center gap-2">
+											<Button
+												variant="outline"
+												size="sm"
+												onclick={() => openEditAccount(account)}
+												class="text-xs"
+											>
+												Edit Slug
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												onclick={() => disconnectAccount(account.id)}
+												class="text-xs text-muted-foreground hover:text-destructive"
+											>
+												Disconnect
+											</Button>
+										</div>
 									</div>
 								{/each}
 							</div>
@@ -845,6 +893,62 @@
 	</Dialog.Content>
 </Dialog.Root>
 
+<Dialog.Root bind:open={editAccountDialogOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Edit Account Slug</Dialog.Title>
+			<Dialog.Description>
+				Slugs are stable shortcuts for the CLI, for example
+				<code class="rounded bg-muted px-1 py-0.5"
+					>openpost post create --accounts {editAccountSlug || 'main-x'}</code
+				>.
+			</Dialog.Description>
+		</Dialog.Header>
+		{#if editingAccount}
+			<form
+				class="space-y-4"
+				onsubmit={(e) => {
+					e.preventDefault();
+					updateAccountSlug();
+				}}
+			>
+				<div class="rounded-md border bg-muted/30 p-3 text-sm">
+					<div class="font-medium">{accountDisplayName(editingAccount)}</div>
+					<div class="text-muted-foreground">{getPlatformName(editingAccount.platform)}</div>
+				</div>
+				<div class="space-y-2">
+					<Label for="account-slug">Slug</Label>
+					<Input
+						id="account-slug"
+						bind:value={editAccountSlug}
+						placeholder="main-x"
+						pattern={accountSlugPattern}
+						required
+					/>
+					<p class="text-xs text-muted-foreground">
+						Use lowercase letters, numbers, and hyphens. Slugs must be unique within this workspace.
+					</p>
+				</div>
+				{#if editAccountError}
+					<div
+						class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+					>
+						{editAccountError}
+					</div>
+				{/if}
+				<div class="flex justify-end gap-2">
+					<Dialog.Close>
+						<Button variant="outline" type="button">Cancel</Button>
+					</Dialog.Close>
+					<Button type="submit" disabled={editAccountLoading || !editAccountSlug.trim()}>
+						{editAccountLoading ? 'Saving...' : 'Save Slug'}
+					</Button>
+				</div>
+			</form>
+		{/if}
+	</Dialog.Content>
+</Dialog.Root>
+
 <Dialog.Root bind:open={createSetDialogOpen}>
 	<Dialog.Content class="sm:max-w-md">
 		<Dialog.Header>
@@ -879,7 +983,7 @@
 				<div class="space-y-2">
 					<Label>Accounts to Include</Label>
 					<div class="max-h-48 space-y-2 overflow-y-auto rounded-md border p-2">
-						{#each accounts as account}
+						{#each accounts as account (account.id)}
 							<label class="flex items-center gap-2 rounded p-2 hover:bg-muted/50">
 								<Checkbox
 									checked={newSetAccountIds.includes(account.id)}
@@ -945,7 +1049,7 @@
 					<div class="space-y-2">
 						<Label>Accounts in Set</Label>
 						<div class="max-h-48 space-y-2 overflow-y-auto rounded-md border p-2">
-							{#each accounts as account}
+							{#each accounts as account (account.id)}
 								<label class="flex items-center gap-2 rounded p-2 hover:bg-muted/50">
 									<Checkbox
 										checked={editSetAccountIds.includes(account.id)}
