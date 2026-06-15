@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
+      cli: ${{ steps.filter.outputs.cli }}
       frontend: ${{ steps.filter.outputs.frontend }}
       ci: ${{ steps.filter.outputs.ci }}
     steps:
@@ -32,6 +33,11 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - 'devenv.nix'
+              - 'devenv.yaml'
+              - 'devenv.lock'
+            cli:
+              - 'cli/**'
               - 'devenv.nix'
               - 'devenv.yaml'
               - 'devenv.lock'
@@ -290,3 +296,25 @@ jobs:
           bun install --frozen-lockfile
           bun run test
           bun run build
+
+  cli:
+    name: CLI
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.ci == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - name: Build and test CLI
+        run: |
+          cd cli
+          go mod download
+          go build ./...
+          go test ./...
