@@ -19,6 +19,8 @@ Useful flags:
 | `--yes` | Skip confirmation prompts. |
 | `--json` | Print machine-readable JSON for one command. |
 
+The complete command and flag reference is generated from the Cobra command tree at `docs-site/reference/cli.md` by `scripts/sync-docs-openapi.mjs`.
+
 ## GitHub Actions Example
 
 This workflow posts a daily build summary from a scheduled GitHub Actions run:

@@ -37,3 +37,9 @@ Use `--insecure-storage` only when a keyring is unavailable. That fallback write
 ## Scope
 
 CLI tokens currently use the `cli:full` scope. It grants read and write access to workspaces, social accounts, posts, media, and jobs for every workspace the approving user can access. Fine-grained per-workspace scopes are planned for a later release.
+
+## Managing Tokens
+
+OpenPost exposes CLI/device tokens in **Settings -> CLI Devices & API Tokens**. Use that screen to create a token for automation, inspect token prefixes and last-used timestamps, or revoke a device/token that should no longer have access.
+
+For an exhaustive command and flag listing, see the generated [CLI reference](../../docs-site/reference/cli.md). The reference is built from the Cobra command tree during docs builds.

@@ -57,6 +57,7 @@ const docsSidebar = [
 			{ text: 'Composing Posts', link: '/usage/composing-posts' },
 			{ text: 'Scheduling', link: '/usage/scheduling' },
 			{ text: 'Media Library', link: '/usage/media-library' },
+			{ text: 'CLI', link: '/reference/cli' },
 		],
 	},
 	{
@@ -66,6 +67,17 @@ const docsSidebar = [
 			{ text: 'Backups', link: '/operations/backups' },
 			{ text: 'Upgrades', link: '/operations/upgrades' },
 			{ text: 'Troubleshooting', link: '/operations/troubleshooting' },
+		],
+	},
+	{
+		text: 'Reference',
+		collapsed: false,
+		items: [
+			{ text: 'API', link: '/reference/api' },
+			{ text: 'CLI', link: '/reference/cli' },
+			{ text: 'Environment Variables', link: '/reference/env-vars' },
+			{ text: 'Callback URLs', link: '/reference/callback-urls' },
+			{ text: 'Docker Compose', link: '/reference/docker-compose' },
 		],
 	},
 ];
