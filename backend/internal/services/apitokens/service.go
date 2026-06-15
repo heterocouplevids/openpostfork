@@ -1,0 +1,215 @@
+package apitokens
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/openpost/backend/internal/models"
+	"github.com/uptrace/bun"
+)
+
+const (
+	TokenPrefix       = "op_cli"
+	DefaultScope      = "cli:full"
+	DefaultExpiration = 90 * 24 * time.Hour
+	secretBytes       = 32
+	hashHexLength     = 64
+	prefixHexLength   = 8
+)
+
+var (
+	ErrInvalidToken = errors.New("invalid api token")
+	ErrExpiredToken = errors.New("expired api token")
+	ErrRevokedToken = errors.New("revoked api token")
+)
+
+type Service struct {
+	db *bun.DB
+}
+
+type Principal struct {
+	UserID string
+	Email  string
+	Scope  string
+}
+
+type GeneratedToken struct {
+	Token string
+	Model *models.APIToken
+}
+
+func NewService(db *bun.DB) *Service {
+	return &Service{db: db}
+}
+
+func (s *Service) GenerateToken(ctx context.Context, userID, name, scope string, expiresAt *time.Time) (*GeneratedToken, error) {
+	if scope == "" {
+		scope = DefaultScope
+	}
+	if name == "" {
+		name = "CLI token"
+	}
+
+	secret, err := generateSecret()
+	if err != nil {
+		return nil, err
+	}
+	tokenPrefix, tokenHash := HashToken(secret)
+	rawToken := strings.Join([]string{TokenPrefix, tokenPrefix, secret}, "_")
+
+	var expiry time.Time
+	if expiresAt != nil {
+		expiry = expiresAt.UTC()
+	} else {
+		expiry = time.Now().UTC().Add(DefaultExpiration)
+	}
+
+	model := &models.APIToken{
+		ID:          uuid.NewString(),
+		UserID:      userID,
+		Name:        name,
+		TokenHash:   tokenHash,
+		TokenPrefix: tokenPrefix,
+		Scope:       scope,
+		ExpiresAt:   expiry,
+		CreatedAt:   time.Now().UTC(),
+	}
+
+	if _, err := s.db.NewInsert().Model(model).Exec(ctx); err != nil {
+		return nil, err
+	}
+
+	return &GeneratedToken{Token: rawToken, Model: model}, nil
+}
+
+func HashToken(secret string) (string, string) {
+	sum := sha256.Sum256([]byte(secret))
+	hash := hex.EncodeToString(sum[:])
+	return hash[:prefixHexLength], hash
+}
+
+func (s *Service) ValidateToken(ctx context.Context, rawToken string) (*Principal, error) {
+	prefix, secret, err := parseToken(rawToken)
+	if err != nil {
+		return nil, err
+	}
+
+	_, tokenHash := HashToken(secret)
+	var candidates []models.APIToken
+	if err := s.db.NewSelect().
+		Model(&candidates).
+		Where("token_prefix = ?", prefix).
+		Scan(ctx); err != nil {
+		return nil, ErrInvalidToken
+	}
+
+	for _, token := range candidates {
+		if subtle.ConstantTimeCompare([]byte(token.TokenHash), []byte(tokenHash)) != 1 {
+			continue
+		}
+		return s.validateMatchedToken(ctx, &token)
+	}
+
+	return nil, ErrInvalidToken
+}
+
+func (s *Service) ListTokens(ctx context.Context, userID string) ([]models.APIToken, error) {
+	var tokens []models.APIToken
+	err := s.db.NewSelect().
+		Model(&tokens).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Scan(ctx)
+	return tokens, err
+}
+
+func (s *Service) RevokeToken(ctx context.Context, userID, tokenID string) error {
+	result, err := s.db.NewUpdate().
+		Model((*models.APIToken)(nil)).
+		Set("revoked_at = ?", time.Now().UTC()).
+		Where("id = ? AND user_id = ? AND revoked_at IS NULL", tokenID, userID).
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Service) TouchLastUsedAt(ctx context.Context, tokenID string) error {
+	_, err := s.db.NewUpdate().
+		Model((*models.APIToken)(nil)).
+		Set("last_used_at = ?", time.Now().UTC()).
+		Where("id = ?", tokenID).
+		Exec(ctx)
+	return err
+}
+
+func (s *Service) validateMatchedToken(ctx context.Context, token *models.APIToken) (*Principal, error) {
+	now := time.Now().UTC()
+	if !token.RevokedAt.IsZero() {
+		return nil, ErrRevokedToken
+	}
+	if !token.ExpiresAt.IsZero() && !token.ExpiresAt.After(now) {
+		return nil, ErrExpiredToken
+	}
+
+	var user models.User
+	if err := s.db.NewSelect().
+		Model(&user).
+		Where("id = ?", token.UserID).
+		Scan(ctx); err != nil {
+		return nil, ErrInvalidToken
+	}
+
+	if err := s.TouchLastUsedAt(ctx, token.ID); err != nil {
+		return nil, err
+	}
+
+	return &Principal{
+		UserID: user.ID,
+		Email:  user.Email,
+		Scope:  token.Scope,
+	}, nil
+}
+
+func generateSecret() (string, error) {
+	buf := make([]byte, secretBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func parseToken(rawToken string) (string, string, error) {
+	rest, ok := strings.CutPrefix(rawToken, TokenPrefix+"_")
+	if !ok {
+		return "", "", ErrInvalidToken
+	}
+	prefix, secret, ok := strings.Cut(rest, "_")
+	if !ok {
+		return "", "", ErrInvalidToken
+	}
+	if len(prefix) != prefixHexLength || len(secret) < 43 {
+		return "", "", ErrInvalidToken
+	}
+	if _, err := hex.DecodeString(prefix); err != nil {
+		return "", "", ErrInvalidToken
+	}
+	return prefix, secret, nil
+}

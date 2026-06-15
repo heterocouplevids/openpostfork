@@ -16,7 +16,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
-	"github.com/openpost/backend/internal/services/auth"
 	"github.com/uptrace/bun"
 )
 
@@ -28,11 +27,11 @@ const (
 
 type PostHandler struct {
 	db   *bun.DB
-	auth *auth.Service
+	auth middleware.Authenticator
 }
 
-func NewPostHandler(db *bun.DB, authService *auth.Service) *PostHandler {
-	return &PostHandler{db: db, auth: authService}
+func NewPostHandler(db *bun.DB, authenticator middleware.Authenticator) *PostHandler {
+	return &PostHandler{db: db, auth: authenticator}
 }
 
 type CreatePostInput struct {

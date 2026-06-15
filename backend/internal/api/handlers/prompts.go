@@ -11,22 +11,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
-	"github.com/openpost/backend/internal/services/auth"
 	"github.com/uptrace/bun"
 )
 
 // Built-in prompts seeded on first request.
 type PromptHandler struct {
 	db             *bun.DB
-	auth           *auth.Service
+	auth           middleware.Authenticator
 	seeded         bool
 	builtinPrompts []models.Prompt
 }
 
-func NewPromptHandler(db *bun.DB, authService *auth.Service) *PromptHandler {
+func NewPromptHandler(db *bun.DB, authenticator middleware.Authenticator) *PromptHandler {
 	return &PromptHandler{
 		db:   db,
-		auth: authService,
+		auth: authenticator,
 		builtinPrompts: []models.Prompt{
 			// Bold & Provoking
 			{ID: "builtin-001", Text: "Share a bold, slightly extreme take on something you genuinely believe. Controversial opinions spark the best conversations — don't water it down.", Category: promptCategoryBoldProvoking, IsBuiltIn: true},

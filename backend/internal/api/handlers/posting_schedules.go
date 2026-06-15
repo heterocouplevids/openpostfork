@@ -13,17 +13,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
-	"github.com/openpost/backend/internal/services/auth"
 	"github.com/uptrace/bun"
 )
 
 type PostingScheduleHandler struct {
 	db   *bun.DB
-	auth *auth.Service
+	auth middleware.Authenticator
 }
 
-func NewPostingScheduleHandler(db *bun.DB, authService *auth.Service) *PostingScheduleHandler {
-	return &PostingScheduleHandler{db: db, auth: authService}
+func NewPostingScheduleHandler(db *bun.DB, authenticator middleware.Authenticator) *PostingScheduleHandler {
+	return &PostingScheduleHandler{db: db, auth: authenticator}
 }
 
 type PostingScheduleResponse struct {

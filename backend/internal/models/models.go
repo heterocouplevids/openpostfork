@@ -67,6 +67,41 @@ type AuthChallenge struct {
 	CreatedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+type APIToken struct {
+	bun.BaseModel `bun:"table:api_tokens"`
+
+	ID          string    `bun:",pk" json:"id"`
+	UserID      string    `bun:",notnull" json:"user_id"`
+	Name        string    `bun:",notnull" json:"name"`
+	TokenHash   string    `bun:",unique,notnull" json:"-"`
+	TokenPrefix string    `bun:",notnull" json:"token_prefix"`
+	Scope       string    `bun:",notnull,default:'cli:full'" json:"scope"`
+	ExpiresAt   time.Time `bun:",nullzero" json:"expires_at"`
+	LastUsedAt  time.Time `bun:",nullzero" json:"last_used_at"`
+	RevokedAt   time.Time `bun:",nullzero" json:"revoked_at"`
+	CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+type CLIAuthSession struct {
+	bun.BaseModel `bun:"table:cli_auth_sessions"`
+
+	ID              string    `bun:",pk" json:"id"`
+	UserID          string    `json:"user_id"`
+	DeviceCodeHash  string    `bun:",unique,notnull" json:"-"`
+	UserCodeHash    string    `bun:",unique,notnull" json:"-"`
+	ClientName      string    `bun:",notnull" json:"client_name"`
+	ClientVersion   string    `json:"client_version"`
+	ClientOS        string    `json:"client_os"`
+	RequestedScopes string    `bun:",notnull,default:'cli:full'" json:"requested_scopes"`
+	Status          string    `bun:",notnull,default:'pending'" json:"status"`
+	IntervalSeconds int       `bun:",notnull,default:5" json:"interval_seconds"`
+	ExpiresAt       time.Time `bun:",notnull" json:"expires_at"`
+	LastPolledAt    time.Time `bun:",nullzero" json:"last_polled_at"`
+	ApprovedAt      time.Time `bun:",nullzero" json:"approved_at"`
+	DeniedAt        time.Time `bun:",nullzero" json:"denied_at"`
+	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 type WorkspaceMember struct {
 	bun.BaseModel `bun:"table:workspace_members"`
 

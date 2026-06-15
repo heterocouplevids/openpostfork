@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/apitokens"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/uptrace/bun"
 )
@@ -23,7 +24,60 @@ const (
 	errorKey       contextKey = "error"
 )
 
-func AuthMiddleware(api huma.API, authService *auth.Service) func(ctx huma.Context, next func(huma.Context)) {
+type Principal struct {
+	UserID string
+	Email  string
+}
+
+type Authenticator interface {
+	AuthenticateBearer(ctx context.Context, token string) (*Principal, error)
+}
+
+type JWTAuthenticator struct {
+	service *auth.Service
+}
+
+func NewJWTAuthenticator(service *auth.Service) *JWTAuthenticator {
+	return &JWTAuthenticator{service: service}
+}
+
+func (a *JWTAuthenticator) AuthenticateBearer(_ context.Context, token string) (*Principal, error) {
+	claims, err := a.service.ValidateToken(token)
+	if err != nil {
+		return nil, err
+	}
+	return &Principal{UserID: claims.UserID, Email: claims.Email}, nil
+}
+
+type CompositeService struct {
+	jwt       Authenticator
+	apiTokens *apitokens.Service
+}
+
+func NewCompositeService(jwtService *auth.Service, apiTokenService *apitokens.Service) *CompositeService {
+	return &CompositeService{
+		jwt:       NewJWTAuthenticator(jwtService),
+		apiTokens: apiTokenService,
+	}
+}
+
+func (s *CompositeService) AuthenticateBearer(ctx context.Context, token string) (*Principal, error) {
+	principal, err := s.jwt.AuthenticateBearer(ctx, token)
+	if err == nil {
+		return principal, nil
+	}
+	if s.apiTokens == nil {
+		return nil, err
+	}
+
+	apiPrincipal, apiErr := s.apiTokens.ValidateToken(ctx, token)
+	if apiErr != nil {
+		return nil, err
+	}
+	return &Principal{UserID: apiPrincipal.UserID, Email: apiPrincipal.Email}, nil
+}
+
+func AuthMiddleware(api huma.API, authenticator Authenticator) func(ctx huma.Context, next func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		authHeader := ctx.Header("Authorization")
 		if authHeader == "" {
@@ -37,15 +91,15 @@ func AuthMiddleware(api huma.API, authService *auth.Service) func(ctx huma.Conte
 			return
 		}
 
-		claims, err := authService.ValidateToken(tokenParts[1])
+		principal, err := authenticator.AuthenticateBearer(ctx.Context(), tokenParts[1])
 		if err != nil {
 			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid or expired token")
 			return
 		}
 
 		next(huma.WithValue(
-			huma.WithValue(ctx, UserIDKey, claims.UserID),
-			EmailKey, claims.Email,
+			huma.WithValue(ctx, UserIDKey, principal.UserID),
+			EmailKey, principal.Email,
 		))
 	}
 }

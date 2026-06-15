@@ -39,11 +39,21 @@ type MediaHandler struct {
 	db      *bun.DB
 	storage mediastore.BlobStorage
 	auth    *auth.Service
+	authn   middleware.Authenticator
 	signer  *mediasigner.Signer
 }
 
-func NewMediaHandler(db *bun.DB, storage mediastore.BlobStorage, authService *auth.Service, signer *mediasigner.Signer) *MediaHandler {
-	return &MediaHandler{db: db, storage: storage, auth: authService, signer: signer}
+func NewMediaHandler(
+	db *bun.DB,
+	storage mediastore.BlobStorage,
+	authService *auth.Service,
+	authenticator middleware.Authenticator,
+	signer *mediasigner.Signer,
+) *MediaHandler {
+	if authenticator == nil && authService != nil {
+		authenticator = middleware.NewJWTAuthenticator(authService)
+	}
+	return &MediaHandler{db: db, storage: storage, auth: authService, authn: authenticator, signer: signer}
 }
 
 type Thumbnails struct {
@@ -177,7 +187,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Path:        "/media",
 		Summary:     "List media attachments for a workspace",
 		Tags:        []string{tagMedia},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)},
 		Errors:      []int{400, 403},
 	}, func(ctx context.Context, input *ListMediaInput) (*ListMediaOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -283,7 +293,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Path:        "/media/{id}/usage",
 		Summary:     "Get posts that use a media attachment",
 		Tags:        []string{tagMedia},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *GetMediaUsageInput) (*GetMediaUsageOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -340,7 +350,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Path:        "/media/{id}",
 		Summary:     "Delete a media attachment (only if not used in any post)",
 		Tags:        []string{tagMedia},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *DeleteMediaInput) (*DeleteMediaOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -394,7 +404,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Path:        "/media/batch-delete",
 		Summary:     "Delete multiple media attachments at once",
 		Tags:        []string{tagMedia},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)},
 		Errors:      []int{400, 403},
 	}, func(ctx context.Context, input *BatchDeleteMediaInput) (*BatchDeleteMediaOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -465,7 +475,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Path:        "/media/{id}/favorite",
 		Summary:     "Toggle favorite status of a media attachment",
 		Tags:        []string{tagMedia},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *UpdateMediaFavoriteInput) (*UpdateMediaFavoriteOutput, error) {
 		userID := middleware.GetUserID(ctx)
@@ -504,7 +514,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		Path:        "/media/{id}",
 		Summary:     "Update media metadata (alt text)",
 		Tags:        []string{tagMedia},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)},
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *UpdateMediaInput) (*UpdateMediaOutput, error) {
 		userID := middleware.GetUserID(ctx)

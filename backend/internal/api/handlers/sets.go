@@ -12,17 +12,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
-	"github.com/openpost/backend/internal/services/auth"
 	"github.com/uptrace/bun"
 )
 
 type SetHandler struct {
 	db   *bun.DB
-	auth *auth.Service
+	auth middleware.Authenticator
 }
 
-func NewSetHandler(db *bun.DB, authService *auth.Service) *SetHandler {
-	return &SetHandler{db: db, auth: authService}
+func NewSetHandler(db *bun.DB, authenticator middleware.Authenticator) *SetHandler {
+	return &SetHandler{db: db, auth: authenticator}
 }
 
 type CreateSetInput struct {

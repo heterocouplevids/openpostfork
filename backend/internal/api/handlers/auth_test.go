@@ -16,7 +16,7 @@ func TestRegisterUserMakesFirstUserAdminEvenWhenRegistrationsDisabled(t *testing
 	t.Parallel()
 
 	db := createHandlerTestDB(t, (*models.User)(nil))
-	handler := NewAuthHandler(db, auth.NewService("test-secret"), nil, nil, true)
+	handler := NewAuthHandler(db, auth.NewService("test-secret"), nil, nil, nil, true)
 
 	user, err := handler.registerUser(context.Background(), "admin@example.com", "password123")
 	require.NoError(t, err)
@@ -27,7 +27,7 @@ func TestRegisterUserRejectsAdditionalUsersWhenRegistrationsDisabled(t *testing.
 	t.Parallel()
 
 	db := createHandlerTestDB(t, (*models.User)(nil))
-	handler := NewAuthHandler(db, auth.NewService("test-secret"), nil, nil, true)
+	handler := NewAuthHandler(db, auth.NewService("test-secret"), nil, nil, nil, true)
 
 	_, err := handler.registerUser(context.Background(), "admin@example.com", "password123")
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestRegisterUserOnlyPromotesTheFirstUser(t *testing.T) {
 	t.Parallel()
 
 	db := createHandlerTestDB(t, (*models.User)(nil))
-	handler := NewAuthHandler(db, auth.NewService("test-secret"), nil, nil, false)
+	handler := NewAuthHandler(db, auth.NewService("test-secret"), nil, nil, nil, false)
 
 	firstUser, err := handler.registerUser(context.Background(), "admin@example.com", "password123")
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestResolveTOTPSetupSecretDecryptsEncryptedPayload(t *testing.T) {
 	t.Parallel()
 
 	encryptor := crypto.NewTokenEncryptor("test-secret")
-	handler := NewAuthHandler(nil, nil, encryptor, nil, false)
+	handler := NewAuthHandler(nil, nil, nil, encryptor, nil, false)
 
 	secretEnc, err := encryptor.Encrypt("super-secret-seed")
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestCreateChallengeDoesNotPersistPlaintextTOTPSecret(t *testing.T) {
 
 	db := createHandlerTestDB(t, (*models.AuthChallenge)(nil))
 	encryptor := crypto.NewTokenEncryptor("test-secret")
-	handler := NewAuthHandler(db, nil, encryptor, nil, false)
+	handler := NewAuthHandler(db, nil, nil, encryptor, nil, false)
 	ctx := context.Background()
 
 	secretEnc, err := encryptor.Encrypt("super-secret-seed")

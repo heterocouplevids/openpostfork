@@ -20,10 +20,12 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/openpost/backend/internal/api/handlers"
+	apimiddleware "github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/config"
 	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/queue"
+	"github.com/openpost/backend/internal/services/apitokens"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/mediasigner"
@@ -62,6 +64,8 @@ func main() {
 
 	tokenEncryptor := crypto.NewTokenEncryptor(cfg.EncryptionKey)
 	authService := auth.NewService(cfg.JWTSecret)
+	apiTokenService := apitokens.NewService(db)
+	authenticator := apimiddleware.NewCompositeService(authService, apiTokenService)
 	mediaSigner := mediasigner.New(cfg.EncryptionKey)
 	mfaService, err := mfa.NewService("OpenPost", mfa.RelyingPartyConfig{
 		Name:    "OpenPost",
@@ -140,7 +144,7 @@ func main() {
 	if err := os.MkdirAll(filepath.Clean(cfg.MediaPath), 0755); err != nil {
 		log.Printf("Warning: could not create media directory %s: %v", cfg.MediaPath, err)
 	}
-	mediaHandler := handlers.NewMediaHandler(db, storage, authService, mediaSigner)
+	mediaHandler := handlers.NewMediaHandler(db, storage, authService, authenticator, mediaSigner)
 
 	worker := queue.NewWorker(db, "worker-1", 1*time.Second, publishSvc, tokenManager, storage)
 
@@ -168,7 +172,7 @@ func main() {
 	e.GET("/robots.txt", robotsHandler)
 	e.HEAD("/robots.txt", robotsHandler)
 
-	authHandler := handlers.NewAuthHandler(db, authService, tokenEncryptor, mfaService, cfg.DisableRegistrations)
+	authHandler := handlers.NewAuthHandler(db, authService, authenticator, tokenEncryptor, mfaService, cfg.DisableRegistrations)
 	authHandler.Register(api)
 	authHandler.Login(api)
 	authHandler.VerifyTOTPLogin(api)
@@ -183,13 +187,16 @@ func main() {
 	authHandler.FinishPasskeyRegistration(api)
 	authHandler.RemovePasskey(api)
 
-	workspaceHandler := handlers.NewWorkspaceHandler(db, authService)
+	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService, authenticator)
+	apiTokenHandler.RegisterRoutes(api)
+
+	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator)
 	workspaceHandler.CreateWorkspace(api)
 	workspaceHandler.ListWorkspaces(api)
 	workspaceHandler.GetWorkspaceSettings(api)
 	workspaceHandler.UpdateWorkspaceSettings(api)
 
-	postHandler := handlers.NewPostHandler(db, authService)
+	postHandler := handlers.NewPostHandler(db, authenticator)
 	postHandler.CreatePost(api)
 	postHandler.CreateThread(api)
 	postHandler.ListPosts(api)
@@ -201,7 +208,7 @@ func main() {
 	postHandler.GetVariants(api)
 	postHandler.DeleteVariants(api)
 
-	setHandler := handlers.NewSetHandler(db, authService)
+	setHandler := handlers.NewSetHandler(db, authenticator)
 	setHandler.CreateSet(api)
 	setHandler.ListSets(api)
 	setHandler.GetSet(api)
@@ -210,7 +217,7 @@ func main() {
 	setHandler.AddSetAccounts(api)
 	setHandler.RemoveSetAccount(api)
 
-	postingScheduleHandler := handlers.NewPostingScheduleHandler(db, authService)
+	postingScheduleHandler := handlers.NewPostingScheduleHandler(db, authenticator)
 	postingScheduleHandler.ListSchedules(api)
 	postingScheduleHandler.CreateSchedule(api)
 	postingScheduleHandler.UpdateSchedule(api)
@@ -218,17 +225,17 @@ func main() {
 	postingScheduleHandler.SuggestSchedule(api)
 	postingScheduleHandler.GetNextAvailableSlot(api)
 
-	promptHandler := handlers.NewPromptHandler(db, authService)
+	promptHandler := handlers.NewPromptHandler(db, authenticator)
 	promptHandler.ListPrompts(api)
 	promptHandler.CreatePrompt(api)
 	promptHandler.DeletePrompt(api)
 	promptHandler.GetRandomPrompt(api)
 	promptHandler.GetCategories(api)
 
-	jobHandler := handlers.NewJobHandler(db, authService)
+	jobHandler := handlers.NewJobHandler(db, authenticator)
 	jobHandler.RegisterRoutes(api)
 
-	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authService, cfg.DisableLinkedInThreadReplies, cfg.FrontendURL)
+	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authenticator, cfg.DisableLinkedInThreadReplies, cfg.FrontendURL)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
 	oauthHandler.Callback(api)

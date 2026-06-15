@@ -9,7 +9,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
-	"github.com/openpost/backend/internal/services/auth"
 	"github.com/uptrace/bun"
 )
 
@@ -38,11 +37,11 @@ type ListJobsOutput struct {
 
 type JobHandler struct {
 	db   *bun.DB
-	auth *auth.Service
+	auth middleware.Authenticator
 }
 
-func NewJobHandler(db *bun.DB, authService *auth.Service) *JobHandler {
-	return &JobHandler{db: db, auth: authService}
+func NewJobHandler(db *bun.DB, authenticator middleware.Authenticator) *JobHandler {
+	return &JobHandler{db: db, auth: authenticator}
 }
 
 func (h *JobHandler) RegisterRoutes(api huma.API) {

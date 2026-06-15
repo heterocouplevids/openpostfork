@@ -12,17 +12,16 @@ import (
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/queue"
-	"github.com/openpost/backend/internal/services/auth"
 	"github.com/uptrace/bun"
 )
 
 type WorkspaceHandler struct {
 	db   *bun.DB
-	auth *auth.Service
+	auth middleware.Authenticator
 }
 
-func NewWorkspaceHandler(db *bun.DB, authService *auth.Service) *WorkspaceHandler {
-	return &WorkspaceHandler{db: db, auth: authService}
+func NewWorkspaceHandler(db *bun.DB, authenticator middleware.Authenticator) *WorkspaceHandler {
+	return &WorkspaceHandler{db: db, auth: authenticator}
 }
 
 type CreateWorkspaceInput struct {

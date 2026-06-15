@@ -37,16 +37,28 @@ const (
 type AuthHandler struct {
 	db                    *bun.DB
 	auth                  *auth.Service
+	authenticator         middleware.Authenticator
 	encryptor             *crypto.TokenEncryptor
 	mfa                   *mfa.Service
 	registrationsDisabled bool
 	limiter               *ratelimit.Limiter
 }
 
-func NewAuthHandler(db *bun.DB, authService *auth.Service, encryptor *crypto.TokenEncryptor, mfaService *mfa.Service, registrationsDisabled bool) *AuthHandler {
+func NewAuthHandler(
+	db *bun.DB,
+	authService *auth.Service,
+	authenticator middleware.Authenticator,
+	encryptor *crypto.TokenEncryptor,
+	mfaService *mfa.Service,
+	registrationsDisabled bool,
+) *AuthHandler {
+	if authenticator == nil && authService != nil {
+		authenticator = middleware.NewJWTAuthenticator(authService)
+	}
 	return &AuthHandler{
 		db:                    db,
 		auth:                  authService,
+		authenticator:         authenticator,
 		encryptor:             encryptor,
 		mfa:                   mfaService,
 		registrationsDisabled: registrationsDisabled,
@@ -507,7 +519,7 @@ func (h *AuthHandler) Me(api huma.API) {
 		Path:        "/auth/me",
 		Summary:     "Get current authenticated user",
 		Tags:        []string{tagAuth},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
 	}, func(ctx context.Context, _ *struct{}) (*MeOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
@@ -527,7 +539,7 @@ func (h *AuthHandler) SecurityStatus(api huma.API) {
 		Path:        "/auth/security",
 		Summary:     "Get account security settings",
 		Tags:        []string{tagAuth},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
 	}, func(ctx context.Context, _ *struct{}) (*SecurityStatusOutput, error) {
 		userID := middleware.GetUserID(ctx)
 		user, err := h.getUserByID(ctx, userID)
@@ -561,7 +573,7 @@ func (h *AuthHandler) BeginTOTPSetup(api huma.API) {
 		Path:        "/auth/security/totp/setup",
 		Summary:     "Start TOTP enrollment for the current user",
 		Tags:        []string{tagAuth},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
 		Errors:      []int{400, 401, 409},
 	}, func(ctx context.Context, input *SetupTOTPInput) (*SetupTOTPOutput, error) {
 		if strings.TrimSpace(input.Body.CurrentPassword) == "" {
@@ -613,7 +625,7 @@ func (h *AuthHandler) ConfirmTOTPSetup(api huma.API) {
 		Path:        "/auth/security/totp/confirm",
 		Summary:     "Confirm TOTP enrollment with a verification code",
 		Tags:        []string{tagAuth},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *ConfirmTOTPSetupInput) (*SecurityStatusOutput, error) {
 		challenge, err := h.getChallenge(ctx, input.Body.ChallengeID, authChallengeTOTPSetup)
@@ -664,7 +676,7 @@ func (h *AuthHandler) DisableTOTP(api huma.API) {
 		Path:        "/auth/security/totp/disable",
 		Summary:     "Disable TOTP for the current user",
 		Tags:        []string{tagAuth},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *DisableTOTPInput) (*SecurityStatusOutput, error) {
 		if strings.TrimSpace(input.Body.CurrentPassword) == "" {
@@ -699,7 +711,7 @@ func (h *AuthHandler) BeginPasskeyRegistration(api huma.API) {
 		Path:        "/auth/security/passkeys/begin",
 		Summary:     "Begin passkey registration for the current user",
 		Tags:        []string{tagAuth},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *BeginPasskeyRegistrationInput) (*PasskeyCeremonyOutput, error) {
 		if strings.TrimSpace(input.Body.CurrentPassword) == "" {
@@ -756,7 +768,7 @@ func (h *AuthHandler) FinishPasskeyRegistration(api huma.API) {
 		Path:        "/auth/security/passkeys/finish",
 		Summary:     "Finish passkey registration for the current user",
 		Tags:        []string{tagAuth},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *FinishPasskeyRegistrationInput) (*SecurityStatusOutput, error) {
 		challenge, err := h.getChallenge(ctx, input.Body.ChallengeID, authChallengePasskeySetup)
@@ -840,7 +852,7 @@ func (h *AuthHandler) RemovePasskey(api huma.API) {
 		Path:        "/auth/security/passkeys/{passkey_id}/remove",
 		Summary:     "Remove a passkey from the current user",
 		Tags:        []string{tagAuth},
-		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
 		Errors:      []int{400, 401, 404},
 	}, func(ctx context.Context, input *RemovePasskeyInput) (*SecurityStatusOutput, error) {
 		if strings.TrimSpace(input.Body.CurrentPassword) == "" {

@@ -16,7 +16,6 @@ import (
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	account_saver "github.com/openpost/backend/internal/services/account_saver"
-	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/oauthstate"
 	"github.com/uptrace/bun"
@@ -28,7 +27,7 @@ type OAuthHandler struct {
 	db                           *bun.DB
 	crypto                       *crypto.TokenEncryptor
 	providers                    map[string]platform.Adapter
-	auth                         *auth.Service
+	auth                         middleware.Authenticator
 	disableLinkedInThreadReplies bool
 	accountSaver                 *account_saver.AccountSaver
 	oauthStates                  *oauthstate.Store
@@ -50,7 +49,7 @@ func NewOAuthHandler(
 	db *bun.DB,
 	encryptor *crypto.TokenEncryptor,
 	providers map[string]platform.Adapter,
-	authService *auth.Service,
+	authenticator middleware.Authenticator,
 	disableLinkedInThreadReplies bool,
 	frontendURL string,
 ) *OAuthHandler {
@@ -64,7 +63,7 @@ func NewOAuthHandler(
 		db:                           db,
 		crypto:                       encryptor,
 		providers:                    providers,
-		auth:                         authService,
+		auth:                         authenticator,
 		disableLinkedInThreadReplies: disableLinkedInThreadReplies,
 		accountSaver:                 account_saver.NewAccountSaver(db, encryptor),
 		oauthStates:                  oauthstate.NewStore(db),
