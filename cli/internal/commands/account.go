@@ -3,6 +3,7 @@ package commands
 import (
 	"bufio"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -15,10 +16,11 @@ func newAccountCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "account",
 		Short: "Manage connected social accounts",
+		Long: "List and disconnect social accounts. New accounts are connected\n" +
+			"in the OpenPost web UI at <instance>/accounts.",
 	}
 	cmd.AddCommand(newAccountListCmd())
 	cmd.AddCommand(newAccountDisconnectCmd())
-	cmd.AddCommand(newAccountConnectCmd())
 	return cmd
 }
 
@@ -55,11 +57,7 @@ func newAccountListCmd() *cobra.Command {
 				return p.PrintJSON(accounts)
 			}
 			if len(accounts) == 0 {
-				if platform != "" {
-					p.Printf("No %s accounts are connected for this workspace.", platform)
-				} else {
-					p.Printf("No accounts are connected for this workspace.")
-				}
+				p.Printf("%s", emptyAccountsMessage(platform, cfg.Instance))
 				return nil
 			}
 			rows := make([][]string, 0, len(accounts))
@@ -118,35 +116,10 @@ func newAccountDisconnectCmd() *cobra.Command {
 	}
 }
 
-func newAccountConnectCmd() *cobra.Command {
-	var server string
-
-	cmd := &cobra.Command{
-		Use:   "connect <platform>",
-		Short: "Connect a social account",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := runtimeFrom(cmd)
-			if err != nil {
-				return err
-			}
-			platform := args[0]
-			if cfg.AsJSON {
-				return printerFrom(cfg).PrintJSON(map[string]string{
-					"platform": platform,
-					"server":   server,
-					"status":   "not_implemented",
-					"message":  "Account connection is not yet implemented in the CLI. Use the web UI to connect " + platform + ".",
-				})
-			}
-			printerFrom(cfg).Printf("Account connection is not yet implemented in the CLI. Use the web UI to connect %s.", platform)
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&server, "server", "", "server URL for platforms that need one")
-	return cmd
-}
-
+// filterAccountsByPlatform returns the accounts whose Platform field
+// matches the given platform. The input slice is reused as the
+// backing array; the call site in account list does not need the
+// original slice afterwards, so the in-place filter is safe.
 func filterAccountsByPlatform(accounts []api.SocialAccount, platform string) []api.SocialAccount {
 	out := accounts[:0]
 	for _, acc := range accounts {
@@ -155,6 +128,41 @@ func filterAccountsByPlatform(accounts []api.SocialAccount, platform string) []a
 		}
 	}
 	return out
+}
+
+// accountsWebURL resolves <instance>/accounts. Returns "" when the
+// instance is empty or unparseable so the caller can fall back to a
+// generic message.
+func accountsWebURL(instance string) string {
+	base := strings.TrimRight(strings.TrimSpace(instance), "/")
+	if base == "" {
+		return ""
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/accounts"
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
+}
+
+// emptyAccountsMessage is shown by `account list` when the workspace
+// has no matching accounts. It points the user at the web UI so the
+// absence of `account connect` in the CLI is discoverable.
+func emptyAccountsMessage(platform, instance string) string {
+	u := accountsWebURL(instance)
+	switch {
+	case platform != "" && u != "":
+		return fmt.Sprintf("No %s accounts are connected for this workspace. Connect one in the web UI: %s", platform, u)
+	case platform != "":
+		return fmt.Sprintf("No %s accounts are connected for this workspace. Connect one in the web UI.", platform)
+	case u != "":
+		return fmt.Sprintf("No accounts are connected for this workspace. Connect one in the web UI: %s", u)
+	default:
+		return "No accounts are connected for this workspace. Connect one in the web UI."
+	}
 }
 
 func confirm(prompt string) (bool, error) {

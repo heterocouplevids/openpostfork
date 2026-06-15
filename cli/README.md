@@ -66,11 +66,11 @@ openpost account list --platform x
 openpost account disconnect <account-id> --yes
 ```
 
-Connecting accounts is still handled in the web UI:
-
-```sh
-openpost account connect x
-```
+New accounts are connected in the OpenPost web UI at `<instance>/accounts`.
+The CLI does not have a `connect` subcommand by design: provider credentials
+live on the server, and the web UI is the only place to authorize a new social
+account. Running `account list` against a workspace with no accounts prints
+the instance's `/accounts` URL so the path is discoverable.
 
 Upload and list workspace media:
 
