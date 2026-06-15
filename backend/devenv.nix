@@ -36,6 +36,35 @@ let
       go test ./...
     '';
   };
+
+  cli-gofmt-check = pkgs.writeShellApplication {
+    name = "cli-gofmt-check";
+    text = ''
+      cd cli
+      unformatted=$(gofmt -l .)
+      if [ -n "$unformatted" ]; then
+        echo "$unformatted"
+        exit 1
+      fi
+    '';
+  };
+
+  cli-golangci-lint = pkgs.writeShellApplication {
+    name = "cli-golangci-lint";
+    text = ''
+      cd cli
+      golangci-lint run ./...
+    '';
+  };
+
+  cli-go-test = pkgs.writeShellApplication {
+    name = "cli-go-test";
+    text = ''
+      cd cli
+      go clean -testcache
+      go test ./...
+    '';
+  };
 in
 
 {
@@ -84,6 +113,14 @@ in
       pass_filenames = false;
     };
 
+    # CLI gofmt check (mirrors backend gofmt, only runs for cli/**)
+    cli-gofmt = {
+      enable = true;
+      entry = lib.getExe cli-gofmt-check;
+      files = "^cli/.*\\.go$";
+      pass_filenames = false;
+    };
+
     # Lint check (golangci-lint)
     golangci-lint = {
       enable = true;
@@ -92,11 +129,27 @@ in
       pass_filenames = false;
     };
 
+    # CLI golangci-lint (mirrors backend lint, only runs for cli/**)
+    cli-golangci-lint = {
+      enable = true;
+      entry = lib.getExe cli-golangci-lint;
+      files = "^cli/.*\\.go$";
+      pass_filenames = false;
+    };
+
     # Unit tests (go test)
     go-test = {
       enable = true;
       entry = lib.getExe backend-go-test;
       files = "\\.go$";
+      pass_filenames = false;
+    };
+
+    # CLI unit tests (mirrors backend go-test, only runs for cli/**)
+    cli-go-test = {
+      enable = true;
+      entry = lib.getExe cli-go-test;
+      files = "^cli/.*\\.go$";
       pass_filenames = false;
     };
   };
