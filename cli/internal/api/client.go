@@ -251,6 +251,7 @@ func (c *Client) GetWorkspaceSettings(ctx context.Context, workspaceID string) (
 
 type SocialAccount struct {
 	ID                     string `json:"id"`
+	Slug                   string `json:"slug"`
 	Platform               string `json:"platform"`
 	AccountID              string `json:"account_id"`
 	AccountUsername        string `json:"account_username"`
@@ -259,12 +260,24 @@ type SocialAccount struct {
 	ThreadRepliesSupported bool   `json:"thread_replies_supported"`
 }
 
+type UpdateAccountInput struct {
+	Slug string `json:"slug"`
+}
+
 func (c *Client) ListAccounts(ctx context.Context, workspaceID string) ([]SocialAccount, error) {
 	var out []SocialAccount
 	if err := c.GetJSON(ctx, "/api/v1/accounts?workspace_id="+url.QueryEscape(workspaceID), &out); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+func (c *Client) UpdateAccount(ctx context.Context, accountID string, in UpdateAccountInput) (*SocialAccount, error) {
+	var out SocialAccount
+	if err := c.PatchJSON(ctx, "/api/v1/accounts/"+url.PathEscape(accountID), in, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // DisconnectAccount deactivates a connected social account.

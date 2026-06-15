@@ -50,6 +50,58 @@ func TestResolve(t *testing.T) {
 			want:      []string{"acct-linkedin-1"},
 		},
 		{
+			name:      "slug match returns account directly",
+			selectors: []string{"mastodon-masto"},
+			accounts: []api.SocialAccount{{
+				ID:              "acct-m-1",
+				Slug:            "mastodon-masto",
+				Platform:        "mastodon",
+				AccountUsername: "alice",
+				IsActive:        true,
+			}},
+			want: []string{"acct-m-1"},
+		},
+		{
+			name:      "slug match beats bare platform match",
+			selectors: []string{"x"},
+			accounts: []api.SocialAccount{
+				{
+					ID:              "acct-x-1",
+					Slug:            "x",
+					Platform:        "x",
+					AccountUsername: "alice",
+					IsActive:        true,
+				},
+				{
+					ID:              "acct-x-2",
+					Platform:        "x",
+					AccountUsername: "bob",
+					IsActive:        true,
+				},
+			},
+			want: []string{"acct-x-1"},
+		},
+		{
+			name:      "slug match beats platform username form",
+			selectors: []string{"x:bob"},
+			accounts: []api.SocialAccount{
+				{
+					ID:              "acct-x-1",
+					Slug:            "x:bob",
+					Platform:        "x",
+					AccountUsername: "alice",
+					IsActive:        true,
+				},
+				{
+					ID:              "acct-x-2",
+					Platform:        "x",
+					AccountUsername: "bob",
+					IsActive:        true,
+				},
+			},
+			want: []string{"acct-x-1"},
+		},
+		{
 			name:      "platform alias returns account when there is one",
 			selectors: []string{"x"},
 			accounts: []api.SocialAccount{{

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/openpost/cli/internal/accountpicker"
 	"github.com/openpost/cli/internal/api"
 )
 
@@ -16,10 +17,12 @@ func newAccountCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "account",
 		Short: "Manage connected social accounts",
-		Long: "List and disconnect social accounts. New accounts are connected\n" +
-			"in the OpenPost web UI at <instance>/accounts.",
+		Long: "List, rename, and disconnect social accounts. Account slugs are the\n" +
+			"preferred selector for --accounts. New accounts are connected in the\n" +
+			"OpenPost web UI at <instance>/accounts.",
 	}
 	cmd.AddCommand(newAccountListCmd())
+	cmd.AddCommand(newAccountRenameCmd())
 	cmd.AddCommand(newAccountDisconnectCmd())
 	return cmd
 }
@@ -30,7 +33,9 @@ func newAccountListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List connected social accounts",
-		Args:  cobra.NoArgs,
+		Long: "List connected social accounts for the active workspace.\n\n" +
+			"Use the SLUG column as the preferred selector for --accounts and account rename.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := runtimeFrom(cmd)
 			if err != nil {
@@ -64,17 +69,68 @@ func newAccountListCmd() *cobra.Command {
 			for _, acc := range accounts {
 				rows = append(rows, []string{
 					acc.ID,
+					emptyDash(acc.Slug),
 					acc.Platform,
 					emptyDash(acc.AccountUsername),
 					emptyDash(acc.InstanceURL),
 					yesNo(acc.IsActive),
 				})
 			}
-			p.Table([]string{"ID", "PLATFORM", "USERNAME", "INSTANCE", "ACTIVE"}, rows)
+			p.Table([]string{"ID", "SLUG", "PLATFORM", "USERNAME", "INSTANCE", "ACTIVE"}, rows)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&platform, "platform", "", "filter by platform")
+	return cmd
+}
+
+func newAccountRenameCmd() *cobra.Command {
+	var slug string
+
+	cmd := &cobra.Command{
+		Use:   "rename <selector> --slug <new-slug>",
+		Short: "Rename a social account slug",
+		Long: "Rename a connected account's slug. The selector can be an account id,\n" +
+			"slug, platform:username value, bare platform when unambiguous, or mastodon host.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(slug) == "" {
+				return fmt.Errorf("--slug is required")
+			}
+			cfg, err := runtimeFrom(cmd)
+			if err != nil {
+				return err
+			}
+			client, err := clientFrom(cfg)
+			if err != nil {
+				return err
+			}
+			workspaceID, err := activeWorkspaceID(cmd, client)
+			if err != nil {
+				return err
+			}
+			accounts, err := client.ListAccounts(cmd.Context(), workspaceID)
+			if err != nil {
+				return err
+			}
+			accountIDs, err := accountpicker.Resolve(workspaceID, []string{args[0]}, accounts)
+			if err != nil {
+				return err
+			}
+			account, err := client.UpdateAccount(cmd.Context(), accountIDs[0], api.UpdateAccountInput{Slug: slug})
+			if err != nil {
+				return err
+			}
+			p := printerFrom(cfg)
+			if cfg.AsJSON {
+				return p.PrintJSON(account)
+			}
+			p.Printf("Renamed account %s to slug %s.", account.ID, account.Slug)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&slug, "slug", "", "new account slug")
+	_ = cmd.MarkFlagRequired("slug")
 	return cmd
 }
 

@@ -3,6 +3,7 @@
 //
 // Supported forms:
 //   - <id>                  raw account id
+//   - <slug>                account slug shown by `openpost account list`
 //   - x                     first/only x account in the workspace
 //   - x:@username           x account whose AccountUsername is "username"
 //   - linkedin              first/only linkedin account
@@ -47,11 +48,20 @@ func Resolve(workspaceID string, selectors []string, accounts []api.SocialAccoun
 
 func resolveOne(workspaceID, sel string, accounts []api.SocialAccount) (string, error) {
 	var matches []api.SocialAccount
+	best := noAccountMatch
 	for _, a := range accounts {
 		if !a.IsActive {
 			continue
 		}
-		if accountMatches(a, sel) {
+		kind := accountMatches(a, sel)
+		if kind == noAccountMatch {
+			continue
+		}
+		if best == noAccountMatch || kind < best {
+			best = kind
+			matches = matches[:0]
+		}
+		if kind == best {
 			matches = append(matches, a)
 		}
 	}
@@ -69,35 +79,44 @@ func resolveOne(workspaceID, sel string, accounts []api.SocialAccount) (string, 
 	}
 }
 
-func accountMatches(a api.SocialAccount, sel string) bool {
-	// exact id
+type accountMatch int
+
+const (
+	noAccountMatch accountMatch = iota
+	accountIDMatch
+	accountSlugMatch
+	accountPlatformUsernameMatch
+	accountBarePlatformMatch
+	accountMastodonHostMatch
+)
+
+func accountMatches(a api.SocialAccount, sel string) accountMatch {
 	if a.ID == sel {
-		return true
+		return accountIDMatch
 	}
-	// platform:username form
+	if a.Slug != "" && a.Slug == sel {
+		return accountSlugMatch
+	}
 	if idx := strings.Index(sel, ":"); idx > 0 {
 		platform := sel[:idx]
 		handle := strings.TrimPrefix(sel[idx+1:], "@")
 		if a.Platform == platform && strings.EqualFold(a.AccountUsername, handle) {
-			return true
+			return accountPlatformUsernameMatch
 		}
-		return false
 	}
-	// bare platform
 	if a.Platform == sel {
-		return true
+		return accountBarePlatformMatch
 	}
-	// mastodon:server.example  → match InstanceURL host
 	if strings.HasPrefix(sel, "mastodon:") {
 		if a.Platform != "mastodon" {
-			return false
+			return noAccountMatch
 		}
-		// Account.InstanceURL is the full URL; user passes the host
-		// in the bare "mastodon:server" form. Compare on host.
 		want := strings.TrimPrefix(sel, "mastodon:")
-		return hostOf(a.InstanceURL) == want
+		if hostOf(a.InstanceURL) == want {
+			return accountMastodonHostMatch
+		}
 	}
-	return false
+	return noAccountMatch
 }
 
 func hostOf(u string) string {

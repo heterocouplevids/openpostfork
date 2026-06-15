@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,8 +21,8 @@ func TestListAccounts_WireFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[
-			{"id":"acc_1","platform":"x","account_id":"x_handle","account_username":"@rodrigo","is_active":true},
-			{"id":"acc_2","platform":"bluesky","account_id":"did:plc:abc","account_username":"rodrigo.bsky.social","is_active":true}
+			{"id":"acc_1","slug":"x","platform":"x","account_id":"x_handle","account_username":"@rodrigo","is_active":true},
+			{"id":"acc_2","slug":"bluesky","platform":"bluesky","account_id":"did:plc:abc","account_username":"rodrigo.bsky.social","is_active":true}
 		]`))
 	}))
 	defer srv.Close()
@@ -34,11 +35,41 @@ func TestListAccounts_WireFormat(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 accounts, got %d", len(got))
 	}
-	if got[0].ID != "acc_1" || got[0].Platform != "x" {
+	if got[0].ID != "acc_1" || got[0].Slug != "x" || got[0].Platform != "x" {
 		t.Errorf("account[0] wrong: %+v", got[0])
 	}
-	if got[1].ID != "acc_2" || got[1].Platform != "bluesky" {
+	if got[1].ID != "acc_2" || got[1].Slug != "bluesky" || got[1].Platform != "bluesky" {
 		t.Errorf("account[1] wrong: %+v", got[1])
+	}
+}
+
+func TestUpdateAccount_WireFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Errorf("method = %s, want PATCH", r.Method)
+		}
+		if r.URL.Path != "/api/v1/accounts/acc_1" {
+			t.Errorf("path = %s, want /api/v1/accounts/acc_1", r.URL.Path)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if body["slug"] != "main-x" {
+			t.Errorf("slug body = %q, want main-x", body["slug"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"acc_1","slug":"main-x","platform":"x","account_id":"x_handle","account_username":"@rodrigo","is_active":true}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "")
+	got, err := c.UpdateAccount(context.Background(), "acc_1", UpdateAccountInput{Slug: "main-x"})
+	if err != nil {
+		t.Fatalf("UpdateAccount returned error: %v", err)
+	}
+	if got.ID != "acc_1" || got.Slug != "main-x" || got.Platform != "x" {
+		t.Errorf("account wrong: %+v", got)
 	}
 }
 
