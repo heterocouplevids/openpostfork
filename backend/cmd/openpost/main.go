@@ -27,6 +27,7 @@ import (
 	"github.com/openpost/backend/internal/queue"
 	"github.com/openpost/backend/internal/services/apitokens"
 	"github.com/openpost/backend/internal/services/auth"
+	cliauth "github.com/openpost/backend/internal/services/cli_auth"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
@@ -66,6 +67,7 @@ func main() {
 	authService := auth.NewService(cfg.JWTSecret)
 	apiTokenService := apitokens.NewService(db)
 	authenticator := apimiddleware.NewCompositeService(authService, apiTokenService)
+	cliAuthService := cliauth.NewService(db, apiTokenService)
 	mediaSigner := mediasigner.New(cfg.EncryptionKey)
 	mfaService, err := mfa.NewService("OpenPost", mfa.RelyingPartyConfig{
 		Name:    "OpenPost",
@@ -189,6 +191,9 @@ func main() {
 
 	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService, authenticator)
 	apiTokenHandler.RegisterRoutes(api)
+
+	cliAuthHandler := handlers.NewCLIAuthHandler(cliAuthService, authenticator, cfg.PublicURL)
+	cliAuthHandler.RegisterRoutes(api)
 
 	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator)
 	workspaceHandler.CreateWorkspace(api)
