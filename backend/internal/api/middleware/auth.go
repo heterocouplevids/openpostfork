@@ -22,6 +22,12 @@ const (
 	WorkspaceIDKey contextKey = "workspace_id"
 	ClientIPKey    contextKey = "client_ip"
 	errorKey       contextKey = "error"
+
+	// bearerPrefix is the canonical HTTP Authorization scheme this
+	// middleware accepts. Centralised as a const to satisfy
+	// golangci-lint's goconst rule across all three middleware
+	// implementations (AuthMiddleware, JWTMiddleware, BearerMiddleware).
+	bearerPrefix = "Bearer"
 )
 
 type Principal struct {
@@ -86,7 +92,7 @@ func AuthMiddleware(api huma.API, authenticator Authenticator) func(ctx huma.Con
 		}
 
 		tokenParts := strings.Split(authHeader, " ")
-		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		if len(tokenParts) != 2 || tokenParts[0] != bearerPrefix {
 			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid authorization header format")
 			return
 		}
@@ -169,7 +175,7 @@ func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {
 			}
 
 			tokenParts := strings.Split(authHeader, " ")
-			if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			if len(tokenParts) != 2 || tokenParts[0] != bearerPrefix {
 				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "invalid authorization header format"})
 			}
 
@@ -180,6 +186,37 @@ func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {
 
 			c.Set(string(UserIDKey), claims.UserID)
 			c.Set(string(EmailKey), claims.Email)
+
+			return next(c)
+		}
+	}
+}
+
+// BearerMiddleware is the Echo-shaped counterpart of AuthMiddleware.
+// It accepts a JWT session token OR an API/CLI token (op_cli_...) via
+// the unified Authenticator, and exposes the resolved principal on the
+// Echo context. Use it on legacy Echo routes (e.g. /api/v1/media/upload)
+// that need to support CLI tokens but cannot be expressed as Huma ops.
+func BearerMiddleware(authenticator Authenticator) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader == "" {
+				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "missing authorization header"})
+			}
+
+			tokenParts := strings.Split(authHeader, " ")
+			if len(tokenParts) != 2 || tokenParts[0] != bearerPrefix {
+				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "invalid authorization header format"})
+			}
+
+			principal, err := authenticator.AuthenticateBearer(c.Request().Context(), tokenParts[1])
+			if err != nil {
+				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "invalid or expired token"})
+			}
+
+			c.Set(string(UserIDKey), principal.UserID)
+			c.Set(string(EmailKey), principal.Email)
 
 			return next(c)
 		}

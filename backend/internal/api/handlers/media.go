@@ -771,9 +771,13 @@ func (h *MediaHandler) deleteMediaFiles(media *models.MediaAttachment) error {
 }
 
 func (h *MediaHandler) RegisterLegacyRoutes(e *echo.Echo) {
-	e.POST("/api/v1/media/upload", h.uploadMedia, middleware.JWTMiddleware(h.auth))
-	e.POST("/api/v1/media/batch-upload", h.batchUploadMedia, middleware.JWTMiddleware(h.auth))
-	e.GET("/api/v1/media/metadata", h.mediaMetadata, middleware.JWTMiddleware(h.auth))
+	// Legacy upload routes support both web (JWT) and CLI (op_cli_...)
+	// credentials via the unified Authenticator. AuthMiddleware cannot
+	// be used here because these are raw Echo handlers, not Huma ops.
+	uploadAuth := middleware.BearerMiddleware(h.authn)
+	e.POST("/api/v1/media/upload", h.uploadMedia, uploadAuth)
+	e.POST("/api/v1/media/batch-upload", h.batchUploadMedia, uploadAuth)
+	e.GET("/api/v1/media/metadata", h.mediaMetadata, uploadAuth)
 	e.GET("/media/:id", h.serveMedia, h.optionalMediaAuth())
 	e.HEAD("/media/:id", h.serveMedia, h.optionalMediaAuth())
 	e.GET("/media/:id/thumb/:size", h.serveThumbnailSize, h.optionalMediaAuth())
