@@ -362,6 +362,8 @@ type Post struct {
 	RandomDelayMinutes int               `json:"random_delay_minutes"`
 	Destinations       []PostDestination `json:"destinations,omitempty"`
 	MediaIDs           []string          `json:"media_ids,omitempty"`
+	Media              []PostMedia       `json:"media,omitempty"`
+	ThreadDraft        *string           `json:"thread_draft,omitempty"`
 }
 
 type CreatePostInput struct {
@@ -371,6 +373,7 @@ type CreatePostInput struct {
 	SocialAccountIDs   []string   `json:"social_account_ids"`
 	MediaIDs           []string   `json:"media_ids,omitempty"`
 	RandomDelayMinutes int        `json:"random_delay_minutes,omitempty"`
+	ThreadDraft        *string    `json:"thread_draft,omitempty"`
 }
 
 func (c *Client) CreatePost(ctx context.Context, in CreatePostInput) (*Post, error) {
@@ -421,28 +424,63 @@ func (c *Client) GetPost(ctx context.Context, id string) (*Post, error) {
 	var out struct {
 		Body Post `json:"body"`
 	}
-	if err := c.GetJSON(ctx, "/api/v1/posts/"+id, &out); err != nil {
+	if err := c.GetJSON(ctx, "/api/v1/posts/"+url.PathEscape(id), &out); err != nil {
 		return nil, err
 	}
 	return &out.Body, nil
 }
 
 func (c *Client) DeletePost(ctx context.Context, id string) error {
-	return c.DeleteJSON(ctx, "/api/v1/posts/"+id, nil)
+	return c.DeleteJSON(ctx, "/api/v1/posts/"+url.PathEscape(id), nil)
+}
+
+type UpdatePostInput struct {
+	Content            *string  `json:"content,omitempty"`
+	ScheduledAt        *string  `json:"scheduled_at,omitempty"`
+	SocialAccountIDs   []string `json:"social_account_ids,omitempty"`
+	MediaIDs           []string `json:"media_ids,omitempty"`
+	RandomDelayMinutes *int     `json:"random_delay_minutes,omitempty"`
+	ThreadDraft        *string  `json:"thread_draft,omitempty"`
+}
+
+func (c *Client) UpdatePost(ctx context.Context, id string, in UpdatePostInput) (*Post, error) {
+	var out struct {
+		Body Post `json:"body"`
+	}
+	if err := c.PatchJSON(ctx, "/api/v1/posts/"+url.PathEscape(id), in, &out); err != nil {
+		return nil, err
+	}
+	return &out.Body, nil
+}
+
+type PostMedia struct {
+	MediaID      string `json:"media_id"`
+	DisplayOrder int    `json:"display_order"`
+	FilePath     string `json:"file_path"`
+	MimeType     string `json:"mime_type"`
+	AltText      string `json:"alt_text"`
+}
+
+type ThreadPostInput struct {
+	Content  string   `json:"content"`
+	MediaIDs []string `json:"media_ids,omitempty"`
 }
 
 type CreateThreadInput struct {
-	WorkspaceID        string     `json:"workspace_id"`
-	Posts              []string   `json:"posts"`
-	ScheduledAt        *time.Time `json:"scheduled_at,omitempty"`
-	SocialAccountIDs   []string   `json:"social_account_ids"`
-	MediaIDs           []string   `json:"media_ids,omitempty"`
-	RandomDelayMinutes int        `json:"random_delay_minutes,omitempty"`
+	WorkspaceID        string            `json:"workspace_id"`
+	Posts              []ThreadPostInput `json:"posts"`
+	ScheduledAt        *time.Time        `json:"scheduled_at,omitempty"`
+	SocialAccountIDs   []string          `json:"social_account_ids"`
+	RandomDelayMinutes int               `json:"random_delay_minutes,omitempty"`
 }
 
-func (c *Client) CreateThread(ctx context.Context, in CreateThreadInput) (*Post, error) {
+type CreateThreadOutput struct {
+	PostIDs []string `json:"post_ids"`
+}
+
+func (c *Client) CreateThread(ctx context.Context, in CreateThreadInput) (*CreateThreadOutput, error) {
 	var out struct {
-		Body Post `json:"body"`
+		Body CreateThreadOutput `json:"body"`
 	}
 	if err := c.PostJSON(ctx, "/api/v1/posts/thread", in, &out); err != nil {
 		return nil, err
@@ -543,21 +581,41 @@ func (c *Client) RevokeAPIToken(ctx context.Context, id string) error {
 // ----- Jobs -----
 
 type Job struct {
-	ID          string    `json:"id"`
-	Type        string    `json:"type"`
-	Payload     string    `json:"payload"`
-	Status      string    `json:"status"`
-	RunAt       time.Time `json:"run_at"`
-	Attempts    int       `json:"attempts"`
-	MaxAttempts int       `json:"max_attempts"`
-	LastError   string    `json:"last_error,omitempty"`
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	Payload     string `json:"payload"`
+	Status      string `json:"status"`
+	RunAt       string `json:"run_at"`
+	Attempts    int    `json:"attempts"`
+	MaxAttempts int    `json:"max_attempts"`
+	LastError   string `json:"last_error,omitempty"`
 }
 
-func (c *Client) ListJobs(ctx context.Context) ([]Job, error) {
+type ListJobsInput struct {
+	Status      string
+	Limit       int
+	WorkspaceID string
+}
+
+func (c *Client) ListJobs(ctx context.Context, in ListJobsInput) ([]Job, error) {
+	v := url.Values{}
+	if in.Status != "" {
+		v.Set("status", in.Status)
+	}
+	if in.Limit > 0 {
+		v.Set("limit", strconv.Itoa(in.Limit))
+	}
+	if in.WorkspaceID != "" {
+		v.Set("workspace_id", in.WorkspaceID)
+	}
+	path := "/api/v1/jobs"
+	if encoded := v.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
 	var out struct {
 		Body []Job `json:"body"`
 	}
-	if err := c.GetJSON(ctx, "/api/v1/jobs", &out); err != nil {
+	if err := c.GetJSON(ctx, path, &out); err != nil {
 		return nil, err
 	}
 	return out.Body, nil

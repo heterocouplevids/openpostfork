@@ -79,6 +79,34 @@ openpost media upload ./image.png --alt "Product screenshot"
 openpost media list --limit 25
 ```
 
+## Posting
+
+Create a draft:
+
+```sh
+openpost post create --content "Hello from OpenPost" --accounts x --workspace personal
+```
+
+Schedule a post with natural language or RFC3339:
+
+```sh
+openpost post create --content "Launch note" --accounts x,linkedin --schedule "tomorrow 2pm"
+openpost post create --content "Launch note" --accounts x --schedule 2026-06-20T14:00:00Z
+```
+
+List and inspect posts:
+
+```sh
+openpost post list --status scheduled --limit 20
+openpost post view <post-id>
+```
+
+Create a thread from markdown segments separated by `---` lines:
+
+```sh
+openpost thread create ./thread.md --accounts x --schedule "next monday 9am"
+```
+
 Useful diagnostics:
 
 ```sh

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,6 +109,13 @@ func Parse(input string, opts Options) (Result, error) {
 		}
 	}
 
+	if t, ok := parseNextWeekday(input, opts.Now, loc); ok {
+		if !opts.AllowPast && t.Before(opts.Now) && !opts.Now.IsZero() {
+			return Result{}, fmt.Errorf("scheduled time %s is in the past", t.Format(time.RFC3339))
+		}
+		return Result{Time: t, Source: "natural", Original: input}, nil
+	}
+
 	// 5) Natural-language: "tomorrow 2pm", "in 3 hours", "next monday 9am".
 	cfg := &dateparser.Configuration{
 		CurrentTime:         opts.Now,
@@ -141,6 +149,53 @@ func pickLocation(opts Options) *time.Location {
 		return opts.DefaultLocation
 	}
 	return time.Local
+}
+
+var nextWeekday = regexp.MustCompile(`(?i)^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$`)
+
+func parseNextWeekday(input string, now time.Time, loc *time.Location) (time.Time, bool) {
+	m := nextWeekday.FindStringSubmatch(strings.TrimSpace(input))
+	if m == nil {
+		return time.Time{}, false
+	}
+	weekdays := map[string]time.Weekday{
+		"sunday":    time.Sunday,
+		"monday":    time.Monday,
+		"tuesday":   time.Tuesday,
+		"wednesday": time.Wednesday,
+		"thursday":  time.Thursday,
+		"friday":    time.Friday,
+		"saturday":  time.Saturday,
+	}
+	hour, err := strconv.Atoi(m[2])
+	if err != nil {
+		return time.Time{}, false
+	}
+	minute := 0
+	if m[3] != "" {
+		minute, err = strconv.Atoi(m[3])
+		if err != nil {
+			return time.Time{}, false
+		}
+	}
+	ampm := strings.ToLower(m[4])
+	if ampm == "pm" && hour < 12 {
+		hour += 12
+	}
+	if ampm == "am" && hour == 12 {
+		hour = 0
+	}
+	if hour > 23 || minute > 59 {
+		return time.Time{}, false
+	}
+	base := now.In(loc)
+	want := weekdays[strings.ToLower(m[1])]
+	days := (int(want) - int(base.Weekday()) + 7) % 7
+	if days == 0 {
+		days = 7
+	}
+	day := base.AddDate(0, 0, days)
+	return time.Date(day.Year(), day.Month(), day.Day(), hour, minute, 0, 0, loc), true
 }
 
 // FormatHuman is a small helper used by post/thread commands when

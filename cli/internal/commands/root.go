@@ -7,6 +7,9 @@
 // ├── workspace (list, use, create)
 // ├── account (list, connect, disconnect)
 // ├── media   (upload, list)
+// ├── post    (create, list, view, update, delete)
+// ├── thread  (create)
+// ├── jobs    (list)
 // └── completion
 //
 // Each subcommand file owns its own RunE and flags. Global flags
@@ -80,6 +83,9 @@ func NewRoot(version string) *cobra.Command {
 	root.AddCommand(newWorkspaceCmd())
 	root.AddCommand(newAccountCmd())
 	root.AddCommand(newMediaCmd())
+	root.AddCommand(newPostCmd())
+	root.AddCommand(newThreadCmd())
+	root.AddCommand(newJobsCmd())
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newVersionCmd(version))
 
