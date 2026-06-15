@@ -240,13 +240,11 @@ type WorkspaceSettings struct {
 }
 
 func (c *Client) GetWorkspaceSettings(ctx context.Context, workspaceID string) (*WorkspaceSettings, error) {
-	var out struct {
-		Body WorkspaceSettings `json:"body"`
-	}
+	var out WorkspaceSettings
 	if err := c.GetJSON(ctx, "/api/v1/workspaces/"+workspaceID+"/settings", &out); err != nil {
 		return nil, err
 	}
-	return &out.Body, nil
+	return &out, nil
 }
 
 // ----- Accounts -----
@@ -262,13 +260,11 @@ type SocialAccount struct {
 }
 
 func (c *Client) ListAccounts(ctx context.Context, workspaceID string) ([]SocialAccount, error) {
-	var out struct {
-		Body []SocialAccount `json:"body"`
-	}
+	var out []SocialAccount
 	if err := c.GetJSON(ctx, "/api/v1/accounts?workspace_id="+url.QueryEscape(workspaceID), &out); err != nil {
 		return nil, err
 	}
-	return out.Body, nil
+	return out, nil
 }
 
 // DisconnectAccount deactivates a connected social account.
@@ -313,15 +309,13 @@ func (c *Client) ListMedia(ctx context.Context, workspaceID string, limit int) (
 		v.Set("limit", strconv.Itoa(limit))
 	}
 	var out struct {
-		Body struct {
-			Media []MediaListItem `json:"media"`
-			Total int             `json:"total"`
-		} `json:"body"`
+		Media []MediaListItem `json:"media"`
+		Total int             `json:"total"`
 	}
 	if err := c.GetJSON(ctx, "/api/v1/media?"+v.Encode(), &out); err != nil {
 		return nil, err
 	}
-	return out.Body.Media, nil
+	return out.Media, nil
 }
 
 // UploadMedia uploads a local file to the active workspace using the legacy multipart media endpoint.
@@ -377,13 +371,11 @@ type CreatePostInput struct {
 }
 
 func (c *Client) CreatePost(ctx context.Context, in CreatePostInput) (*Post, error) {
-	var out struct {
-		Body Post `json:"body"`
-	}
+	var out Post
 	if err := c.PostJSON(ctx, "/api/v1/posts", in, &out); err != nil {
 		return nil, err
 	}
-	return &out.Body, nil
+	return &out, nil
 }
 
 type ListPostsInput struct {
@@ -411,23 +403,19 @@ func (c *Client) ListPosts(ctx context.Context, in ListPostsInput) ([]Post, erro
 	if encoded := v.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
-	var out struct {
-		Body []Post `json:"body"`
-	}
+	var out []Post
 	if err := c.GetJSON(ctx, path, &out); err != nil {
 		return nil, err
 	}
-	return out.Body, nil
+	return out, nil
 }
 
 func (c *Client) GetPost(ctx context.Context, id string) (*Post, error) {
-	var out struct {
-		Body Post `json:"body"`
-	}
+	var out Post
 	if err := c.GetJSON(ctx, "/api/v1/posts/"+url.PathEscape(id), &out); err != nil {
 		return nil, err
 	}
-	return &out.Body, nil
+	return &out, nil
 }
 
 func (c *Client) DeletePost(ctx context.Context, id string) error {
@@ -444,13 +432,11 @@ type UpdatePostInput struct {
 }
 
 func (c *Client) UpdatePost(ctx context.Context, id string, in UpdatePostInput) (*Post, error) {
-	var out struct {
-		Body Post `json:"body"`
-	}
+	var out Post
 	if err := c.PatchJSON(ctx, "/api/v1/posts/"+url.PathEscape(id), in, &out); err != nil {
 		return nil, err
 	}
-	return &out.Body, nil
+	return &out, nil
 }
 
 type PostMedia struct {
@@ -479,13 +465,11 @@ type CreateThreadOutput struct {
 }
 
 func (c *Client) CreateThread(ctx context.Context, in CreateThreadInput) (*CreateThreadOutput, error) {
-	var out struct {
-		Body CreateThreadOutput `json:"body"`
-	}
+	var out CreateThreadOutput
 	if err := c.PostJSON(ctx, "/api/v1/posts/thread", in, &out); err != nil {
 		return nil, err
 	}
-	return &out.Body, nil
+	return &out, nil
 }
 
 // ----- Auth: CLI device flow + API token management -----
@@ -554,8 +538,8 @@ type CreateAPITokenInput struct {
 }
 
 type CreateAPITokenOutput struct {
-	Token
 	RawToken string `json:"token"`
+	Item     Token  `json:"item"`
 }
 
 func (c *Client) ListAPITokens(ctx context.Context) ([]Token, error) {
@@ -612,13 +596,11 @@ func (c *Client) ListJobs(ctx context.Context, in ListJobsInput) ([]Job, error) 
 	if encoded := v.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
-	var out struct {
-		Body []Job `json:"body"`
-	}
+	var out []Job
 	if err := c.GetJSON(ctx, path, &out); err != nil {
 		return nil, err
 	}
-	return out.Body, nil
+	return out, nil
 }
 
 // ----- helpers -----
