@@ -10,7 +10,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -40,13 +39,13 @@ type FlagOverrides struct {
 
 // Profile is one named entry in the config file.
 type Profile struct {
-	Instance       string   `toml:"instance"`
-	WorkspaceID    string   `toml:"workspace_id"`
-	WorkspaceName  string   `toml:"workspace_name"`
-	DefaultSet     string   `toml:"default_set"`
-	Timezone       string   `toml:"timezone"`
-	Output         string   `toml:"output"`     // "table" or "json"
-	TokenLabel     string   `toml:"token_label"` // keyring user-key; defaults to "profile:<name>"
+	Instance      string `toml:"instance"`
+	WorkspaceID   string `toml:"workspace_id"`
+	WorkspaceName string `toml:"workspace_name"`
+	DefaultSet    string `toml:"default_set"`
+	Timezone      string `toml:"timezone"`
+	Output        string `toml:"output"`      // "table" or "json"
+	TokenLabel    string `toml:"token_label"` // keyring user-key; defaults to "profile:<name>"
 }
 
 // Config is the full file on disk.
@@ -58,16 +57,16 @@ type Config struct {
 // Runtime is the effective resolved view for a single command
 // invocation. It is what every subcommand reads.
 type Runtime struct {
-	ProfileName  string
-	Profile      Profile
-	Instance     string
-	Workspace    string // resolved name or id; subcommands can pass through to API
-	Token        string // resolved token (from flag, env, or keyring)
-	AsJSON       bool
-	Quiet        bool
-	Yes          bool
-	NoColor      bool
-	ConfigPath   string
+	ProfileName    string
+	Profile        Profile
+	Instance       string
+	Workspace      string // resolved name or id; subcommands can pass through to API
+	Token          string // resolved token (from flag, env, or keyring)
+	AsJSON         bool
+	Quiet          bool
+	Yes            bool
+	NoColor        bool
+	ConfigPath     string
 	CredentialPath string
 }
 
@@ -104,13 +103,9 @@ func Load(overrides FlagOverrides) (*Runtime, error) {
 		return nil, err
 	}
 
-	cfg := Config{Profiles: map[string]Profile{}}
-	if data, err := os.ReadFile(path); err == nil {
-		if err := toml.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("invalid config at %s: %w", path, err)
-		}
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("failed to read config: %w", err)
+	cfg, err := LoadConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	profileName := pickString(overrides.Profile, os.Getenv("OPENPOST_PROFILE"), cfg.CurrentProfile)
@@ -146,6 +141,27 @@ func Load(overrides FlagOverrides) (*Runtime, error) {
 	return rt, nil
 }
 
+// LoadConfig reads the on-disk config file, returning an empty config
+// when it does not exist yet.
+func LoadConfig() (Config, error) {
+	path, err := configPath()
+	if err != nil {
+		return Config{}, err
+	}
+	cfg := Config{Profiles: map[string]Profile{}}
+	if data, err := os.ReadFile(path); err == nil {
+		if err := toml.Unmarshal(data, &cfg); err != nil {
+			return cfg, fmt.Errorf("invalid config at %s: %w", path, err)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return cfg, fmt.Errorf("failed to read config: %w", err)
+	}
+	if cfg.Profiles == nil {
+		cfg.Profiles = map[string]Profile{}
+	}
+	return cfg, nil
+}
+
 // Save writes the config back to disk with 0600 perms. It does not
 // touch the credential file. Use this from `instance add/use`,
 // `workspace use`, etc.
@@ -164,42 +180,9 @@ func Save(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	enc := toml.NewEncoder(f)
 	return enc.Encode(cfg)
-}
-
-// Credentials is the on-disk shape for the --insecure-storage
-// fallback. Keys are profile names, values are raw op_cli_ tokens.
-// MarshalJSON is custom so the file is human-readable.
-type Credentials struct {
-	Profiles map[string]string `json:"profiles"`
-}
-
-func loadCredentials(path string) (Credentials, error) {
-	c := Credentials{Profiles: map[string]string{}}
-	data, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return c, nil
-	}
-	if err != nil {
-		return c, err
-	}
-	if err := json.Unmarshal(data, &c); err != nil {
-		return c, err
-	}
-	return c, nil
-}
-
-func saveCredentials(path string, c Credentials) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0600)
 }
 
 func pickString(flagVal, envVal, fileVal string) string {

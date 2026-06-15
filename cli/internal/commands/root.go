@@ -5,11 +5,6 @@
 // ├── auth    (login, status, logout, token list/revoke)
 // ├── instance (add, list, use, remove)
 // ├── workspace (list, use, create)
-// ├── account (list, connect, disconnect)
-// ├── media   (upload, list, delete)
-// ├── post    (create, list, view, update, delete, publish-now)
-// ├── thread  (create)
-// ├── jobs    (list, retry)
 // └── completion
 //
 // Each subcommand file owns its own RunE and flags. Global flags
@@ -66,6 +61,7 @@ func NewRoot(version string) *cobra.Command {
 			return nil
 		},
 	}
+	root.SetVersionTemplate("openpost {{.Version}}\n")
 
 	pf := root.PersistentFlags()
 	pf.StringVar(&profileName, "profile", "", "profile name from config (default: $OPENPOST_PROFILE or 'default')")
@@ -80,11 +76,6 @@ func NewRoot(version string) *cobra.Command {
 	root.AddCommand(newAuthCmd())
 	root.AddCommand(newInstanceCmd())
 	root.AddCommand(newWorkspaceCmd())
-	root.AddCommand(newAccountCmd())
-	root.AddCommand(newMediaCmd())
-	root.AddCommand(newPostCmd())
-	root.AddCommand(newThreadCmd())
-	root.AddCommand(newJobsCmd())
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newVersionCmd(version))
 

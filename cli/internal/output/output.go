@@ -38,12 +38,12 @@ func (p *Printer) Printf(format string, args ...any) {
 	if p.Quiet {
 		return
 	}
-	fmt.Fprintf(p.Out, format+"\n", args...)
+	_, _ = fmt.Fprintf(p.Out, format+"\n", args...)
 }
 
 // Errorf writes a single line to Err.
 func (p *Printer) Errorf(format string, args ...any) {
-	fmt.Fprintf(p.Err, format+"\n", args...)
+	_, _ = fmt.Fprintf(p.Err, format+"\n", args...)
 }
 
 // Table writes a tabwriter-aligned block of rows. Each row is a slice
@@ -73,10 +73,10 @@ func (p *Printer) Table(header []string, rows [][]string) {
 	}
 	tw := tabwriter.NewWriter(p.Out, 0, 0, 2, ' ', 0)
 	if len(header) > 0 {
-		fmt.Fprintln(tw, joinTabs(header))
+		_, _ = fmt.Fprintln(tw, joinTabs(header))
 	}
 	for _, r := range rows {
-		fmt.Fprintln(tw, joinTabs(r))
+		_, _ = fmt.Fprintln(tw, joinTabs(r))
 	}
 	_ = tw.Flush()
 }

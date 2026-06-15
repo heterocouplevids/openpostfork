@@ -120,7 +120,7 @@ func formatAccount(a api.SocialAccount) string {
 	return fmt.Sprintf("%s:@%s", a.Platform, username)
 }
 
-func disambiguateHint(sel string, matches []api.SocialAccount) string {
+func disambiguateHint(_ string, matches []api.SocialAccount) string {
 	parts := make([]string, 0, len(matches))
 	for _, m := range matches {
 		parts = append(parts, fmt.Sprintf("--accounts %s", formatAccount(m)))

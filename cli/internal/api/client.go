@@ -97,7 +97,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any,
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -145,7 +145,7 @@ func (c *Client) PostForm(ctx context.Context, path, fileField, filePath string,
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -207,13 +207,23 @@ type Workspace struct {
 }
 
 func (c *Client) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
-	var out struct {
-		Body []Workspace `json:"body"`
-	}
+	var out []Workspace
 	if err := c.GetJSON(ctx, "/api/v1/workspaces", &out); err != nil {
 		return nil, err
 	}
-	return out.Body, nil
+	return out, nil
+}
+
+type CreateWorkspaceInput struct {
+	Name string `json:"name"`
+}
+
+func (c *Client) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) (*Workspace, error) {
+	var out Workspace
+	if err := c.PostJSON(ctx, "/api/v1/workspaces", in, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 type WorkspaceSettings struct {
@@ -430,10 +440,10 @@ func (c *Client) CreateThread(ctx context.Context, in CreateThreadInput) (*Post,
 // ----- Auth: CLI device flow + API token management -----
 
 type CLIAuthStartInput struct {
-	ClientName      string   `json:"client_name"`
-	ClientVersion   string   `json:"client_version"`
-	ClientOS        string   `json:"client_os"`
-	RequestedScopes []string `json:"requested_scopes"`
+	ClientName      string `json:"client_name"`
+	ClientVersion   string `json:"client_version"`
+	ClientOS        string `json:"client_os"`
+	RequestedScopes string `json:"requested_scopes"`
 }
 
 type CLIAuthStartOutput struct {
@@ -473,38 +483,36 @@ func (c *Client) PollCLIAuth(ctx context.Context, deviceCode string) (*CLIAuthPo
 	return &out, nil
 }
 
-type APIToken struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	TokenPrefix string    `json:"token_prefix"`
-	Scopes     string     `json:"scopes"`
-	WorkspaceID string    `json:"workspace_id"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
-	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+type Token struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	TokenPrefix string     `json:"token_prefix"`
+	Scope       string     `json:"scope"`
+	WorkspaceID string     `json:"workspace_id"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type CreateAPITokenInput struct {
 	Name        string     `json:"name"`
-	Scopes      string     `json:"scopes"`
+	Scope       string     `json:"scope"`
 	WorkspaceID string     `json:"workspace_id,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
 type CreateAPITokenOutput struct {
-	APIToken
+	Token
 	RawToken string `json:"token"`
 }
 
-func (c *Client) ListAPITokens(ctx context.Context) ([]APIToken, error) {
-	var out struct {
-		Body []APIToken `json:"body"`
-	}
+func (c *Client) ListAPITokens(ctx context.Context) ([]Token, error) {
+	var out []Token
 	if err := c.GetJSON(ctx, "/api/v1/api-tokens", &out); err != nil {
 		return nil, err
 	}
-	return out.Body, nil
+	return out, nil
 }
 
 func (c *Client) CreateAPIToken(ctx context.Context, in CreateAPITokenInput) (*CreateAPITokenOutput, error) {

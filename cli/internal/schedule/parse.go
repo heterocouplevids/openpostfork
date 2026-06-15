@@ -2,11 +2,11 @@
 // a time.Time in the user's resolved timezone.
 //
 // The precedence for choosing a timezone on ambiguous input is:
-//   1. explicit offset/zone in the string itself (e.g. "tomorrow 2pm Europe/Lisbon" or RFC3339 with offset)
-//   2. --timezone flag supplied to the command
-//   3. workspace timezone (caller passes it in Options.WorkspaceTimezone)
-//   4. profile timezone (config)
-//   5. local machine timezone (last-resort fallback)
+//  1. explicit offset/zone in the string itself (e.g. "tomorrow 2pm Europe/Lisbon" or RFC3339 with offset)
+//  2. --timezone flag supplied to the command
+//  3. workspace timezone (caller passes it in Options.WorkspaceTimezone)
+//  4. profile timezone (config)
+//  5. local machine timezone (last-resort fallback)
 //
 // Ambiguous input is treated as an error rather than a silent guess:
 //   - "tomorrow"        → error (no time)
@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -30,18 +29,18 @@ import (
 
 // Options is the input to Parse.
 type Options struct {
-	Now                time.Time     // when the user typed it (for "2pm")
-	DefaultLocation    *time.Location // flag or profile timezone
-	WorkspaceTimezone  string         // IANA name; takes precedence over DefaultLocation if non-empty
-	AllowPast          bool           // permit times in the past (for testing/back-dating)
+	Now               time.Time      // when the user typed it (for "2pm")
+	DefaultLocation   *time.Location // flag or profile timezone
+	WorkspaceTimezone string         // IANA name; takes precedence over DefaultLocation if non-empty
+	AllowPast         bool           // permit times in the past (for testing/back-dating)
 }
 
 // Result is the output of Parse.
 type Result struct {
-	Time    time.Time
-	Source  string // "absolute" | "natural" | "alias"
+	Time     time.Time
+	Source   string // "absolute" | "natural" | "alias"
 	Original string
-	Warning string
+	Warning  string
 }
 
 // Pre-defined aliases. "now" schedules for the next minute so it ends
@@ -110,16 +109,16 @@ func Parse(input string, opts Options) (Result, error) {
 	}
 
 	// 5) Natural-language: "tomorrow 2pm", "in 3 hours", "next monday 9am".
-	cfg := &dateparser.Config{
-		CurrentTime:        opts.Now,
-		DefaultTimezone:    loc,
-		PreferFuture:       true,
-		DetectFutureTime:   true,
+	cfg := &dateparser.Configuration{
+		CurrentTime:         opts.Now,
+		DefaultTimezone:     loc,
+		PreferredDateSource: dateparser.Future,
 	}
-	t, err := dateparser.Parse(cfg, input)
+	parsed, err := dateparser.Parse(cfg, input)
 	if err != nil {
 		return Result{}, fmt.Errorf("could not parse %q: %w", input, err)
 	}
+	t := parsed.Time
 
 	// "tomorrow" with no time is a common mistake: reject it.
 	if lower := strings.ToLower(input); lower == "tomorrow" || lower == "today" {
@@ -163,18 +162,4 @@ func MustLoadLocation(name string) *time.Location {
 		return time.Local
 	}
 	return loc
-}
-
-// Helper for unit tests: convert a HH:MM string to minutes.
-func parseHHMM(s string) (int, int, bool) {
-	parts := strings.SplitN(s, ":", 2)
-	if len(parts) != 2 {
-		return 0, 0, false
-	}
-	h, err1 := strconv.Atoi(parts[0])
-	m, err2 := strconv.Atoi(parts[1])
-	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
-		return 0, 0, false
-	}
-	return h, m, true
 }
