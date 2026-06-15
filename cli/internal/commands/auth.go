@@ -306,10 +306,3 @@ func timePtr(t *time.Time) string {
 	}
 	return t.UTC().Format(time.RFC3339)
 }
-
-func emptyDash(s string) string {
-	if strings.TrimSpace(s) == "" {
-		return "-"
-	}
-	return s
-}

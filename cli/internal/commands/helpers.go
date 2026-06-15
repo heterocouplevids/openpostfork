@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -66,4 +67,39 @@ func yesNo(ok bool) string {
 
 func normalizeInstanceURL(raw string) string {
 	return strings.TrimRight(strings.TrimSpace(raw), "/")
+}
+
+func emptyDash(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "-"
+	}
+	return s
+}
+
+func activeWorkspaceID(cmd *cobra.Command, client *api.Client) (string, error) {
+	cfg, err := runtimeFrom(cmd)
+	if err != nil {
+		return "", err
+	}
+	if cfg.Workspace == "" {
+		return "", fmt.Errorf("workspace is required: run `openpost workspace use <name-or-id>` or pass --workspace")
+	}
+	if cfg.Workspace == cfg.Profile.WorkspaceID || cfg.Workspace == cfg.Profile.WorkspaceName {
+		if cfg.Profile.WorkspaceID != "" {
+			return cfg.Profile.WorkspaceID, nil
+		}
+	}
+	return resolveWorkspaceID(cmd.Context(), client, cfg.Workspace)
+}
+
+func resolveWorkspaceID(ctx context.Context, client *api.Client, selector string) (string, error) {
+	workspaces, err := client.ListWorkspaces(ctx)
+	if err != nil {
+		return "", err
+	}
+	ws, err := findWorkspace(workspaces, selector)
+	if err != nil {
+		return "", err
+	}
+	return ws.ID, nil
 }

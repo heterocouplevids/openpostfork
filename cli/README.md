@@ -56,6 +56,29 @@ openpost workspace list
 openpost workspace use personal
 ```
 
+## Account and media commands
+
+List and disconnect connected social accounts:
+
+```sh
+openpost account list
+openpost account list --platform x
+openpost account disconnect <account-id> --yes
+```
+
+Connecting accounts is still handled in the web UI:
+
+```sh
+openpost account connect x
+```
+
+Upload and list workspace media:
+
+```sh
+openpost media upload ./image.png --alt "Product screenshot"
+openpost media list --limit 25
+```
+
 Useful diagnostics:
 
 ```sh

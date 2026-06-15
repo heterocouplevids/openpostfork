@@ -68,7 +68,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any,
 	}
 	var rdr io.Reader
 	if body != nil {
-		if s, ok := body.(string); ok && contentType == "" {
+		if r, ok := body.(io.Reader); ok {
+			rdr = r
+		} else if s, ok := body.(string); ok && contentType == "" {
 			rdr = strings.NewReader(s)
 		} else {
 			data, err := json.Marshal(body)
@@ -269,6 +271,11 @@ func (c *Client) ListAccounts(ctx context.Context, workspaceID string) ([]Social
 	return out.Body, nil
 }
 
+// DisconnectAccount deactivates a connected social account.
+func (c *Client) DisconnectAccount(ctx context.Context, accountID string) error {
+	return c.DeleteJSON(ctx, "/api/v1/accounts/"+url.PathEscape(accountID), nil)
+}
+
 // ----- Media -----
 
 type Media struct {
@@ -299,19 +306,25 @@ type MediaListItem struct {
 	ProcessingStatus string `json:"processing_status"`
 }
 
-func (c *Client) ListMedia(ctx context.Context, workspaceID string) ([]MediaListItem, error) {
+func (c *Client) ListMedia(ctx context.Context, workspaceID string, limit int) ([]MediaListItem, error) {
+	v := url.Values{}
+	v.Set("workspace_id", workspaceID)
+	if limit > 0 {
+		v.Set("limit", strconv.Itoa(limit))
+	}
 	var out struct {
 		Body struct {
 			Media []MediaListItem `json:"media"`
 			Total int             `json:"total"`
 		} `json:"body"`
 	}
-	if err := c.GetJSON(ctx, "/api/v1/media?workspace_id="+url.QueryEscape(workspaceID), &out); err != nil {
+	if err := c.GetJSON(ctx, "/api/v1/media?"+v.Encode(), &out); err != nil {
 		return nil, err
 	}
 	return out.Body.Media, nil
 }
 
+// UploadMedia uploads a local file to the active workspace using the legacy multipart media endpoint.
 func (c *Client) UploadMedia(ctx context.Context, workspaceID, filePath, altText string) (*Media, error) {
 	fields := map[string]string{"workspace_id": workspaceID}
 	if altText != "" {
