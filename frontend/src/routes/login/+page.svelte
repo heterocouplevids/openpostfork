@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { Button } from '$lib/components/ui/button';
 	import {
 		Card,
@@ -27,6 +28,19 @@
 
 	const needsMfa = $derived(mfaToken.length > 0);
 
+	function loginTarget() {
+		const redirect = $page.url.searchParams.get('redirect');
+		if (!redirect || redirect.startsWith('//') || redirect.startsWith('\\')) return '/';
+
+		try {
+			const target = new URL(redirect, $page.url.origin);
+			if (target.origin !== $page.url.origin || !target.pathname.startsWith('/')) return '/';
+			return `${target.pathname}${target.search}${target.hash}`;
+		} catch {
+			return '/';
+		}
+	}
+
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		error = '';
@@ -35,7 +49,7 @@
 		const result = await auth.login(email, password);
 
 		if (result.success) {
-			goto('/');
+			goto(loginTarget());
 		} else if (result.requiresMfa && result.mfaToken) {
 			mfaToken = result.mfaToken;
 			mfaMethods = result.mfaMethods ?? [];
@@ -54,7 +68,7 @@
 
 		const result = await auth.verifyTOTP(mfaToken, totpCode);
 		if (result.success) {
-			goto('/');
+			goto(loginTarget());
 		} else {
 			error = result.error || 'Authenticator verification failed';
 		}
@@ -68,7 +82,7 @@
 
 		const result = await auth.verifyPasskey(mfaToken);
 		if (result.success) {
-			goto('/');
+			goto(loginTarget());
 		} else {
 			error = result.error || 'Passkey verification failed';
 		}

@@ -29,6 +29,7 @@
 		'/connect',
 		'/demo',
 		'/demo/paraglide',
+		'/cli/authorize',
 		'/accounts/mastodon/callback',
 		'/accounts/callback'
 	];
@@ -36,6 +37,7 @@
 	const standaloneRoutes = [
 		'/onboarding',
 		'/connect',
+		'/cli/authorize',
 		'/accounts/mastodon/callback',
 		'/accounts/callback'
 	];
