@@ -18,6 +18,13 @@ Useful flags:
 | --- | --- |
 | `--yes` | Skip confirmation prompts. |
 | `--json` | Print machine-readable JSON for one command. |
+| `--set <name-or-id>` | Publish through a managed social set instead of spelling out `--accounts`. |
+| `--schedule next-slot` | Use the next available posting schedule slot instead of posting immediately or choosing a fixed time. |
+
+For recurring jobs, prefer a workspace default social set and `--schedule
+next-slot`. After creating a default set with `openpost set create <name>
+--accounts ... --default`, automation can omit both `--accounts` and `--set`;
+the CLI resolves the default set at runtime.
 
 The complete command and flag reference is generated from the Cobra command tree at `docs-site/reference/cli.md` by `scripts/sync-docs-openapi.mjs`.
 
@@ -47,9 +54,8 @@ jobs:
       - name: Post summary
         run: |
           openpost post create \
-            --accounts x \
             --content "Daily build completed for ${GITHUB_REPOSITORY}@${GITHUB_SHA}" \
-            --schedule now \
+            --schedule next-slot \
             --yes \
             --json
 ```

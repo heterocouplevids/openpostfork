@@ -46,6 +46,7 @@ openpost [flags]
 | `openpost jobs` | List background jobs |
 | `openpost media` | Upload and list media attachments |
 | `openpost post` | Create, list, view, update, and delete posts |
+| `openpost set` | Manage workspace social sets |
 | `openpost thread` | Create multi-post threads |
 | `openpost version` | Print the openpost CLI version |
 | `openpost workspace` | Manage the active OpenPost workspace |
@@ -703,7 +704,8 @@ openpost post create [flags]
 | `--media` | `[]` | media id or local file path; repeatable |
 | `--media-alt` | `[]` | alt text for the matching uploaded --media |
 | `--random-delay` | `0` | random delay in minutes |
-| `--schedule` | `-` | natural-language or RFC3339 schedule |
+| `--schedule` | `-` | natural-language, RFC3339, next-slot, now, or draft |
+| `--set` | `-` | social set name or ID to publish to |
 | `--thread-draft` | `-` | encoded thread draft to attach |
 
 **Inherited Flags**
@@ -789,7 +791,8 @@ openpost post update &lt;post-id&gt; [flags]
 | `--accounts` | `-` | comma-separated account selectors |
 | `--content` | `-` | post content |
 | `--random-delay` | `0` | random delay in minutes |
-| `--schedule` | `-` | natural-language or RFC3339 schedule; empty string unschedules |
+| `--schedule` | `-` | natural-language, RFC3339, next-slot, now, or draft; empty string unschedules |
+| `--set` | `-` | social set name or ID to publish to |
 
 **Inherited Flags**
 
@@ -812,6 +815,230 @@ View a post
 
 ```text
 openpost post view &lt;post-id&gt;
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost set`
+
+Manage workspace social sets
+
+Manage workspace social sets: reusable groups of social accounts.  Posts and threads use the workspace default set when neither --accounts nor --set is passed.
+
+**Usage**
+
+```text
+openpost set
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+**Subcommands**
+
+| Command | Description |
+| --- | --- |
+| `openpost set add` | Add accounts to a social set |
+| `openpost set create` | Create a social set |
+| `openpost set default` | Set or clear the workspace default social set |
+| `openpost set delete` | Delete a social set |
+| `openpost set list` | List social sets |
+| `openpost set remove` | Remove accounts from a social set |
+| `openpost set rename` | Rename a social set |
+
+### `openpost set add`
+
+Add accounts to a social set
+
+**Usage**
+
+```text
+openpost set add &lt;set&gt; --accounts &lt;selectors&gt; [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--accounts` | `-` | comma-separated account selectors to add |
+| `--main` | `false` | mark added accounts as main accounts |
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost set create`
+
+Create a social set
+
+**Usage**
+
+```text
+openpost set create &lt;name&gt; [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--accounts` | `-` | comma-separated account selectors to include |
+| `--default` | `false` | make this the workspace default set |
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost set default`
+
+Set or clear the workspace default social set
+
+**Usage**
+
+```text
+openpost set default &lt;set&gt; [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--unset` | `false` | clear default status instead of making the set default |
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost set delete`
+
+Delete a social set
+
+**Usage**
+
+```text
+openpost set delete &lt;set&gt;
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost set list`
+
+List social sets
+
+**Usage**
+
+```text
+openpost set list
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost set remove`
+
+Remove accounts from a social set
+
+**Usage**
+
+```text
+openpost set remove &lt;set&gt; --accounts &lt;selectors&gt; [flags]
+```
+
+**Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--accounts` | `-` | comma-separated account selectors to remove |
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost set rename`
+
+Rename a social set
+
+**Usage**
+
+```text
+openpost set rename &lt;set&gt; &lt;name&gt;
 ```
 
 **Inherited Flags**
@@ -872,7 +1099,8 @@ openpost thread create &lt;file&gt; [flags]
 | --- | --- | --- |
 | `--accounts` | `-` | comma-separated account selectors |
 | `--random-delay` | `0` | random delay in minutes |
-| `--schedule` | `-` | natural-language or RFC3339 schedule |
+| `--schedule` | `-` | natural-language, RFC3339, next-slot, now, or draft |
+| `--set` | `-` | social set name or ID to publish to |
 
 **Inherited Flags**
 

@@ -58,11 +58,12 @@ openpost workspace use personal
 
 ## Account and media commands
 
-List and disconnect connected social accounts:
+List, rename, and disconnect connected social accounts:
 
 ```sh
 openpost account list
 openpost account list --platform x
+openpost account rename x --slug main-x
 openpost account disconnect <account-id> --yes
 ```
 
@@ -79,12 +80,33 @@ openpost media upload ./image.png --alt "Product screenshot"
 openpost media list --limit 25
 ```
 
+## Social sets
+
+Social sets are reusable groups of social accounts in a workspace. Create a
+default set once, then `post create` and `thread create` use it automatically
+when neither `--accounts` nor `--set` is passed:
+
+```sh
+openpost set create launch --accounts main-x,linkedin --default
+openpost set list
+openpost set add launch --accounts bluesky
+openpost set remove launch --accounts linkedin
+```
+
+You can also target a specific set per command:
+
+```sh
+openpost post create --content "Launch note" --set launch
+openpost thread create ./thread.md --set launch --schedule "next monday 9am"
+```
+
 ## Posting
 
 Create a draft:
 
 ```sh
 openpost post create --content "Hello from OpenPost" --accounts x --workspace personal
+openpost post create --content "Hello from the default social set"
 ```
 
 Schedule a post with natural language or RFC3339:
@@ -92,6 +114,13 @@ Schedule a post with natural language or RFC3339:
 ```sh
 openpost post create --content "Launch note" --accounts x,linkedin --schedule "tomorrow 2pm"
 openpost post create --content "Launch note" --accounts x --schedule 2026-06-20T14:00:00Z
+```
+
+Use the next available posting slot from the workspace schedule:
+
+```sh
+openpost post create --content "Launch note" --schedule next-slot
+openpost thread create ./thread.md --set launch --schedule next-slot
 ```
 
 List and inspect posts:
