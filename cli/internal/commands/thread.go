@@ -15,6 +15,7 @@ import (
 type threadFrontMatter struct {
 	Workspace   string
 	Accounts    string
+	Set         string
 	Schedule    string
 	RandomDelay int
 }
@@ -68,6 +69,13 @@ func newThreadCreateCmd() *cobra.Command {
 				return err
 			}
 			accountCSV := firstSet(flags.accounts, fm.Accounts)
+			setSelector := firstSet(flags.set, fm.Set)
+			if strings.TrimSpace(flags.accounts) != "" && strings.TrimSpace(flags.set) == "" {
+				setSelector = ""
+			}
+			if strings.TrimSpace(flags.set) != "" && strings.TrimSpace(flags.accounts) == "" {
+				accountCSV = ""
+			}
 			scheduleRaw := firstSet(flags.schedule, fm.Schedule)
 			randomDelay := flags.randomDelay
 			if !cmd.Flags().Changed("random-delay") {
@@ -80,7 +88,7 @@ func newThreadCreateCmd() *cobra.Command {
 			if err := confirmNaturalSchedule(cfg.Yes, scheduledAt, label); err != nil {
 				return err
 			}
-			accountIDs, err := resolveAccounts(cmd, client, workspaceID, accountCSV)
+			accountIDs, err := resolveSocialTargets(cmd, client, workspaceID, accountCSV, setSelector, true)
 			if err != nil {
 				return err
 			}
@@ -111,6 +119,7 @@ func newThreadCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
+	cmd.Flags().StringVar(&flags.set, "set", "", "social set name or ID to publish to")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language or RFC3339 schedule")
 	cmd.Flags().IntVar(&flags.randomDelay, "random-delay", 0, "random delay in minutes")
 	return cmd
@@ -173,6 +182,8 @@ func parseFrontMatter(raw string) threadFrontMatter {
 			fm.Workspace = val
 		case "accounts":
 			fm.Accounts = val
+		case "set":
+			fm.Set = val
 		case "schedule":
 			fm.Schedule = val
 		case "random_delay":

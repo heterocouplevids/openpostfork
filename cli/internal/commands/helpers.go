@@ -76,6 +76,44 @@ func emptyDash(s string) string {
 	return s
 }
 
+func resolveSet(cmd *cobra.Command, client *api.Client, workspaceID, selector string) (*api.SocialSet, error) {
+	sets, err := client.ListSets(cmd.Context(), workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return findSet(sets, selector)
+}
+
+func findSet(sets []api.SocialSet, selector string) (*api.SocialSet, error) {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return nil, fmt.Errorf("set selector is required")
+	}
+	for i := range sets {
+		if sets[i].ID == selector || sets[i].Name == selector {
+			return &sets[i], nil
+		}
+	}
+	if strings.EqualFold(selector, "default") {
+		for i := range sets {
+			if sets[i].IsDefault {
+				return &sets[i], nil
+			}
+		}
+		return nil, fmt.Errorf("workspace has no default social set")
+	}
+	return nil, fmt.Errorf("social set %q not found", selector)
+}
+
+func defaultSet(sets []api.SocialSet) *api.SocialSet {
+	for i := range sets {
+		if sets[i].IsDefault {
+			return &sets[i]
+		}
+	}
+	return nil
+}
+
 func activeWorkspaceID(cmd *cobra.Command, client *api.Client) (string, error) {
 	cfg, err := runtimeFrom(cmd)
 	if err != nil {

@@ -15,10 +15,11 @@ func TestParseThreadMarkdown(t *testing.T) {
 	}{
 		{
 			name:  "front-matter plus three posts",
-			input: "---\nworkspace: personal\naccounts: x,linkedin\nschedule: tomorrow 2pm\nrandom_delay: 7\n---\nOne\n---\nTwo\n---\nThree\n",
+			input: "---\nworkspace: personal\naccounts: x,linkedin\nset: launch\nschedule: tomorrow 2pm\nrandom_delay: 7\n---\nOne\n---\nTwo\n---\nThree\n",
 			wantFM: threadFrontMatter{
 				Workspace:   "personal",
 				Accounts:    "x,linkedin",
+				Set:         "launch",
 				Schedule:    "tomorrow 2pm",
 				RandomDelay: 7,
 			},

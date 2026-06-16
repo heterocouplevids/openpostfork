@@ -73,6 +73,108 @@ func TestUpdateAccount_WireFormat(t *testing.T) {
 	}
 }
 
+func TestListSets_WireFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("workspace_id") != "ws_1" {
+			t.Errorf("workspace_id = %q, want ws_1", r.URL.Query().Get("workspace_id"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{
+			"id":"set_1",
+			"workspace_id":"ws_1",
+			"name":"Launch",
+			"is_default":true,
+			"created_at":"2026-06-16T10:00:00Z",
+			"accounts":[{"social_account_id":"acc_1","platform":"x","account_username":"rodrigo","is_main":false}]
+		}]`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "")
+	got, err := c.ListSets(context.Background(), "ws_1")
+	if err != nil {
+		t.Fatalf("ListSets returned error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 set, got %d", len(got))
+	}
+	if got[0].ID != "set_1" || got[0].Name != "Launch" || !got[0].IsDefault {
+		t.Errorf("set wrong: %+v", got[0])
+	}
+	if len(got[0].Accounts) != 1 || got[0].Accounts[0].SocialAccountID != "acc_1" {
+		t.Errorf("accounts wrong: %+v", got[0].Accounts)
+	}
+}
+
+func TestSetMutations_WireFormat(t *testing.T) {
+	var sawCreate, sawUpdate, sawAdd, sawRemove, sawDelete bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/sets":
+			sawCreate = true
+			var body CreateSetInput
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create body: %v", err)
+			}
+			if body.WorkspaceID != "ws_1" || body.Name != "Launch" || !body.IsDefault || len(body.AccountIDs) != 1 || body.AccountIDs[0] != "acc_1" {
+				t.Errorf("create body wrong: %+v", body)
+			}
+			_, _ = w.Write([]byte(`{"id":"set_1","workspace_id":"ws_1","name":"Launch","is_default":true,"created_at":"2026-06-16T10:00:00Z"}`))
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/sets/set_1":
+			sawUpdate = true
+			var body UpdateSetInput
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode update body: %v", err)
+			}
+			if body.Name == nil || *body.Name != "Renamed" {
+				t.Errorf("update body wrong: %+v", body)
+			}
+			_, _ = w.Write([]byte(`{"id":"set_1","workspace_id":"ws_1","name":"Renamed","is_default":true,"created_at":"2026-06-16T10:00:00Z"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/sets/set_1/accounts":
+			sawAdd = true
+			var body AddSetAccountsInput
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode add body: %v", err)
+			}
+			if len(body.AccountIDs) != 1 || body.AccountIDs[0] != "acc_2" {
+				t.Errorf("add body wrong: %+v", body)
+			}
+			_, _ = w.Write([]byte(`{"id":"set_1","workspace_id":"ws_1","name":"Renamed","is_default":true,"created_at":"2026-06-16T10:00:00Z","accounts":[{"social_account_id":"acc_2","platform":"x"}]}`))
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/sets/set_1/accounts/acc_2":
+			sawRemove = true
+			_, _ = w.Write([]byte(`{"id":"set_1","workspace_id":"ws_1","name":"Renamed","is_default":true,"created_at":"2026-06-16T10:00:00Z","accounts":[]}`))
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/v1/sets/set_1":
+			sawDelete = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "")
+	if _, err := c.CreateSet(context.Background(), CreateSetInput{WorkspaceID: "ws_1", Name: "Launch", IsDefault: true, AccountIDs: []string{"acc_1"}}); err != nil {
+		t.Fatalf("CreateSet returned error: %v", err)
+	}
+	name := "Renamed"
+	if _, err := c.UpdateSet(context.Background(), "set_1", UpdateSetInput{Name: &name}); err != nil {
+		t.Fatalf("UpdateSet returned error: %v", err)
+	}
+	if _, err := c.AddSetAccounts(context.Background(), "set_1", AddSetAccountsInput{AccountIDs: []string{"acc_2"}}); err != nil {
+		t.Fatalf("AddSetAccounts returned error: %v", err)
+	}
+	if _, err := c.RemoveSetAccount(context.Background(), "set_1", "acc_2"); err != nil {
+		t.Fatalf("RemoveSetAccount returned error: %v", err)
+	}
+	if err := c.DeleteSet(context.Background(), "set_1"); err != nil {
+		t.Fatalf("DeleteSet returned error: %v", err)
+	}
+	if !sawCreate || !sawUpdate || !sawAdd || !sawRemove || !sawDelete {
+		t.Fatalf("missing request create=%t update=%t add=%t remove=%t delete=%t", sawCreate, sawUpdate, sawAdd, sawRemove, sawDelete)
+	}
+}
+
 // TestListMedia_WireFormat verifies that ListMedia decodes the
 // server's `{media: [...], total: N}` shape, not a `{body: {media,
 // total}}` envelope.

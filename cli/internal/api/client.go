@@ -285,6 +285,85 @@ func (c *Client) DisconnectAccount(ctx context.Context, accountID string) error 
 	return c.DeleteJSON(ctx, "/api/v1/accounts/"+url.PathEscape(accountID), nil)
 }
 
+// ----- Social media sets -----
+
+type SetAccount struct {
+	SocialAccountID string `json:"social_account_id"`
+	Platform        string `json:"platform"`
+	AccountUsername string `json:"account_username"`
+	IsMain          bool   `json:"is_main"`
+}
+
+type SocialSet struct {
+	ID          string       `json:"id"`
+	WorkspaceID string       `json:"workspace_id"`
+	Name        string       `json:"name"`
+	IsDefault   bool         `json:"is_default"`
+	CreatedAt   string       `json:"created_at"`
+	Accounts    []SetAccount `json:"accounts,omitempty"`
+}
+
+type CreateSetInput struct {
+	WorkspaceID string   `json:"workspace_id"`
+	Name        string   `json:"name"`
+	IsDefault   bool     `json:"is_default"`
+	AccountIDs  []string `json:"account_ids"`
+}
+
+func (c *Client) ListSets(ctx context.Context, workspaceID string) ([]SocialSet, error) {
+	var out []SocialSet
+	if err := c.GetJSON(ctx, "/api/v1/sets?workspace_id="+url.QueryEscape(workspaceID), &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) CreateSet(ctx context.Context, in CreateSetInput) (*SocialSet, error) {
+	var out SocialSet
+	if err := c.PostJSON(ctx, "/api/v1/sets", in, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+type UpdateSetInput struct {
+	Name      *string `json:"name,omitempty"`
+	IsDefault *bool   `json:"is_default,omitempty"`
+}
+
+func (c *Client) UpdateSet(ctx context.Context, setID string, in UpdateSetInput) (*SocialSet, error) {
+	var out SocialSet
+	if err := c.PatchJSON(ctx, "/api/v1/sets/"+url.PathEscape(setID), in, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) DeleteSet(ctx context.Context, setID string) error {
+	return c.DeleteJSON(ctx, "/api/v1/sets/"+url.PathEscape(setID), nil)
+}
+
+type AddSetAccountsInput struct {
+	AccountIDs []string `json:"account_ids"`
+	IsMain     *bool    `json:"is_main,omitempty"`
+}
+
+func (c *Client) AddSetAccounts(ctx context.Context, setID string, in AddSetAccountsInput) (*SocialSet, error) {
+	var out SocialSet
+	if err := c.PostJSON(ctx, "/api/v1/sets/"+url.PathEscape(setID)+"/accounts", in, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) RemoveSetAccount(ctx context.Context, setID, accountID string) (*SocialSet, error) {
+	var out SocialSet
+	if err := c.DeleteJSON(ctx, "/api/v1/sets/"+url.PathEscape(setID)+"/accounts/"+url.PathEscape(accountID), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ----- Media -----
 
 type Media struct {

@@ -20,6 +20,7 @@ type postFlags struct {
 	content     string
 	file        string
 	accounts    string
+	set         string
 	schedule    string
 	media       []string
 	mediaAlt    []string
@@ -61,7 +62,7 @@ func newPostCreateCmd() *cobra.Command {
 			if err := confirmNaturalSchedule(cfg.Yes, scheduledAt, label); err != nil {
 				return err
 			}
-			accountIDs, err := resolveAccounts(cmd, client, workspaceID, flags.accounts)
+			accountIDs, err := resolveSocialTargets(cmd, client, workspaceID, flags.accounts, flags.set, true)
 			if err != nil {
 				return err
 			}
@@ -197,8 +198,8 @@ func newPostUpdateCmd() *cobra.Command {
 					in.ScheduledAt = &v
 				}
 			}
-			if cmd.Flags().Changed("accounts") {
-				accountIDs, err := resolveAccounts(cmd, client, workspaceID, flags.accounts)
+			if cmd.Flags().Changed("accounts") || cmd.Flags().Changed("set") {
+				accountIDs, err := resolveSocialTargets(cmd, client, workspaceID, flags.accounts, flags.set, false)
 				if err != nil {
 					return err
 				}
@@ -217,6 +218,7 @@ func newPostUpdateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.content, "content", "", "post content")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language or RFC3339 schedule; empty string unschedules")
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
+	cmd.Flags().StringVar(&flags.set, "set", "", "social set name or ID to publish to")
 	cmd.Flags().IntVar(&flags.randomDelay, "random-delay", 0, "random delay in minutes")
 	return cmd
 }
@@ -261,6 +263,7 @@ func addCreatePostFlags(cmd *cobra.Command, flags *postFlags) {
 	cmd.Flags().StringVar(&flags.content, "content", "", "post content")
 	cmd.Flags().StringVar(&flags.file, "file", "", "read post content from a file")
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
+	cmd.Flags().StringVar(&flags.set, "set", "", "social set name or ID to publish to")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language or RFC3339 schedule")
 	cmd.Flags().StringArrayVar(&flags.media, "media", nil, "media id or local file path; repeatable")
 	cmd.Flags().StringArrayVar(&flags.mediaAlt, "media-alt", nil, "alt text for the matching uploaded --media")
@@ -356,6 +359,47 @@ func resolveAccounts(cmd *cobra.Command, client *api.Client, workspaceID, csv st
 		return nil, err
 	}
 	return accountpicker.Resolve(workspaceID, selectors, accounts)
+}
+
+func resolveSocialTargets(cmd *cobra.Command, client *api.Client, workspaceID, accountCSV, setSelector string, useDefaultSet bool) ([]string, error) {
+	if strings.TrimSpace(accountCSV) != "" && strings.TrimSpace(setSelector) != "" {
+		return nil, fmt.Errorf("use either --accounts or --set, not both")
+	}
+	if strings.TrimSpace(accountCSV) != "" {
+		return resolveAccounts(cmd, client, workspaceID, accountCSV)
+	}
+
+	var set *api.SocialSet
+	if strings.TrimSpace(setSelector) != "" {
+		resolved, err := resolveSet(cmd, client, workspaceID, setSelector)
+		if err != nil {
+			return nil, err
+		}
+		set = resolved
+	} else if useDefaultSet {
+		sets, err := client.ListSets(cmd.Context(), workspaceID)
+		if err != nil {
+			return nil, err
+		}
+		set = defaultSet(sets)
+	}
+	if set == nil {
+		return nil, nil
+	}
+
+	accountIDs := make([]string, 0, len(set.Accounts))
+	seen := map[string]struct{}{}
+	for _, acc := range set.Accounts {
+		if acc.SocialAccountID == "" {
+			continue
+		}
+		if _, ok := seen[acc.SocialAccountID]; ok {
+			continue
+		}
+		seen[acc.SocialAccountID] = struct{}{}
+		accountIDs = append(accountIDs, acc.SocialAccountID)
+	}
+	return accountIDs, nil
 }
 
 func resolveMedia(cmd *cobra.Command, client *api.Client, workspaceID string, mediaValues, altValues []string) ([]string, error) {
