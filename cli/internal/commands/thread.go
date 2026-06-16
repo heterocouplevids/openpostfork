@@ -81,15 +81,15 @@ func newThreadCreateCmd() *cobra.Command {
 			if !cmd.Flags().Changed("random-delay") {
 				randomDelay = fm.RandomDelay
 			}
-			scheduledAt, label, err := parseScheduleFlag(cmd, scheduleRaw, settings.Timezone)
+			targets, err := resolveSocialTargets(cmd, client, workspaceID, accountCSV, setSelector, true)
+			if err != nil {
+				return err
+			}
+			scheduledAt, label, err := parseScheduleFlag(cmd, client, workspaceID, targets.SetID, scheduleRaw, settings.Timezone)
 			if err != nil {
 				return err
 			}
 			if err := confirmNaturalSchedule(cfg.Yes, scheduledAt, label); err != nil {
-				return err
-			}
-			accountIDs, err := resolveSocialTargets(cmd, client, workspaceID, accountCSV, setSelector, true)
-			if err != nil {
 				return err
 			}
 			posts := make([]api.ThreadPostInput, 0, len(segments))
@@ -100,7 +100,7 @@ func newThreadCreateCmd() *cobra.Command {
 				WorkspaceID:        workspaceID,
 				Posts:              posts,
 				ScheduledAt:        scheduledAt,
-				SocialAccountIDs:   accountIDs,
+				SocialAccountIDs:   targets.AccountIDs,
 				RandomDelayMinutes: randomDelay,
 			})
 			if err != nil {
@@ -120,7 +120,7 @@ func newThreadCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
 	cmd.Flags().StringVar(&flags.set, "set", "", "social set name or ID to publish to")
-	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language or RFC3339 schedule")
+	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language, RFC3339, next-slot, now, or draft")
 	cmd.Flags().IntVar(&flags.randomDelay, "random-delay", 0, "random delay in minutes")
 	return cmd
 }

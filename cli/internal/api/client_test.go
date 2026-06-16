@@ -285,6 +285,42 @@ func TestGetWorkspaceSettings_WireFormat(t *testing.T) {
 	}
 }
 
+func TestNextAvailableSlot_WireFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/api/v1/posting-schedules/next-slot" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("workspace_id"); got != "ws_1" {
+			t.Errorf("workspace_id = %q, want ws_1", got)
+		}
+		if got := r.URL.Query().Get("set_id"); got != "set_1" {
+			t.Errorf("set_id = %q, want set_1", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"slot":{"id":"slot_1","workspace_id":"ws_1","set_id":"set_1","utc_hour":9,"utc_minute":0,"day_of_week":2,"local_hour":9,"local_minute":0,"local_day_of_week":2,"label":"Morning","is_active":true,"created_at":"2026-06-16T08:00:00Z"},
+			"slot_time":"2026-06-16T09:00:00Z",
+			"message":"Next available slot found"
+		}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "")
+	got, err := c.NextAvailableSlot(context.Background(), NextAvailableSlotInput{WorkspaceID: "ws_1", SetID: "set_1"})
+	if err != nil {
+		t.Fatalf("NextAvailableSlot returned error: %v", err)
+	}
+	if got.SlotTime != "2026-06-16T09:00:00Z" {
+		t.Fatalf("slot_time = %q", got.SlotTime)
+	}
+	if got.Slot == nil || got.Slot.ID != "slot_1" || got.Slot.SetID != "set_1" {
+		t.Fatalf("slot = %+v", got.Slot)
+	}
+}
+
 // TestCreatePost_WireFormat: server returns the Post object directly.
 func TestCreatePost_WireFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

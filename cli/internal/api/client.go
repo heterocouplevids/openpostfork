@@ -247,6 +247,47 @@ func (c *Client) GetWorkspaceSettings(ctx context.Context, workspaceID string) (
 	return &out, nil
 }
 
+// ----- Posting schedules -----
+
+type PostingSchedule struct {
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	SetID          string `json:"set_id,omitempty"`
+	UTCHour        int    `json:"utc_hour"`
+	UTCMinute      int    `json:"utc_minute"`
+	DayOfWeek      int    `json:"day_of_week"`
+	LocalHour      int    `json:"local_hour"`
+	LocalMinute    int    `json:"local_minute"`
+	LocalDayOfWeek int    `json:"local_day_of_week"`
+	Label          string `json:"label,omitempty"`
+	IsActive       bool   `json:"is_active"`
+	CreatedAt      string `json:"created_at"`
+}
+
+type NextAvailableSlotInput struct {
+	WorkspaceID string
+	SetID       string
+}
+
+type NextAvailableSlotOutput struct {
+	Slot     *PostingSchedule `json:"slot,omitempty"`
+	SlotTime string           `json:"slot_time"`
+	Message  string           `json:"message"`
+}
+
+func (c *Client) NextAvailableSlot(ctx context.Context, in NextAvailableSlotInput) (*NextAvailableSlotOutput, error) {
+	v := url.Values{}
+	v.Set("workspace_id", in.WorkspaceID)
+	if in.SetID != "" {
+		v.Set("set_id", in.SetID)
+	}
+	var out NextAvailableSlotOutput
+	if err := c.GetJSON(ctx, "/api/v1/posting-schedules/next-slot?"+v.Encode(), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ----- Accounts -----
 
 type SocialAccount struct {
