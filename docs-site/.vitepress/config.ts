@@ -57,7 +57,18 @@ const docsSidebar = [
 			{ text: 'Composing Posts', link: '/usage/composing-posts' },
 			{ text: 'Scheduling', link: '/usage/scheduling' },
 			{ text: 'Media Library', link: '/usage/media-library' },
-			{ text: 'CLI', link: '/reference/cli' },
+		],
+	},
+	{
+		text: 'CLI',
+		collapsed: false,
+		items: [
+			{ text: 'Overview', link: '/cli/' },
+			{ text: 'Installation', link: '/cli/installation' },
+			{ text: 'Authentication', link: '/cli/authentication' },
+			{ text: 'Posting', link: '/cli/posting' },
+			{ text: 'Automation', link: '/cli/automation' },
+			{ text: 'Command Reference', link: '/reference/cli' },
 		],
 	},
 	{
@@ -118,6 +129,7 @@ export default defineConfig({
 		nav: [
 			{ text: 'Guide', link: '/guide/quickstart' },
 			{ text: 'Installation', link: '/installation/docker-compose' },
+			{ text: 'CLI', link: '/cli/' },
 			{ text: 'Providers', link: '/providers/overview' },
 			{ text: 'Operations', link: '/operations/backups' },
 			{ text: 'Development', link: '/development/setup' },

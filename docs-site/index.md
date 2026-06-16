@@ -41,6 +41,12 @@ features:
   - icon: ⚡
     title: Fast to deploy
     details: Run OpenPost with Docker Compose or a single binary without turning setup into a platform project.
+  - icon: 🧰
+    title: CLI for automation
+    details: Create posts, upload media, use social sets, and schedule into the next available slot from scripts or CI.
+  - icon: 📱
+    title: Android app
+    details: Install the release APK and use the same self-hosted OpenPost instance from your phone.
 ---
 
 <p>
@@ -116,3 +122,8 @@ volumes:
 ::: tip
 New to OpenPost? Start with the [Quickstart](/guide/quickstart) guide.
 :::
+
+## More ways to use OpenPost
+
+- Use the [CLI](/cli/) for terminal workflows, cron jobs, and CI automation.
+- Install the [Android app](/installation/android) from the APK shipped with each GitHub release.
