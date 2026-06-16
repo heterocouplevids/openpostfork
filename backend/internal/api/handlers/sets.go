@@ -212,6 +212,11 @@ func (h *SetHandler) CreateSet(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to create set")
 		}
 
+		accounts, err := h.loadSingleSetAccounts(ctx, set.ID)
+		if err != nil {
+			return nil, err
+		}
+
 		resp := &CreateSetOutput{}
 		resp.Body = &SetResponse{
 			ID:          set.ID,
@@ -219,7 +224,7 @@ func (h *SetHandler) CreateSet(api huma.API) {
 			Name:        set.Name,
 			IsDefault:   set.IsDefault,
 			CreatedAt:   set.CreatedAt.Format(time.RFC3339),
-			Accounts:    []SetAccountResponse{},
+			Accounts:    accounts,
 		}
 		return resp, nil
 	})
