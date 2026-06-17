@@ -5,9 +5,13 @@
 }:
 
 let
+  goToolchain = pkgs.go_1_26;
+
   backend-gofmt-check = pkgs.writeShellApplication {
     name = "backend-gofmt-check";
+    runtimeInputs = [ goToolchain pkgs.gnumake ];
     text = ''
+      export GOROOT="${goToolchain}/share/go"
       cd backend
       unformatted=$(gofmt -l .)
       if [ -n "$unformatted" ]; then
@@ -19,7 +23,9 @@ let
 
   backend-golangci-lint = pkgs.writeShellApplication {
     name = "backend-golangci-lint";
+    runtimeInputs = [ goToolchain pkgs.golangci-lint pkgs.gnumake ];
     text = ''
+      export GOROOT="${goToolchain}/share/go"
       mkdir -p backend/cmd/openpost/public
       touch backend/cmd/openpost/public/.gitkeep
       cd backend
@@ -29,7 +35,9 @@ let
 
   backend-go-test = pkgs.writeShellApplication {
     name = "backend-go-test";
+    runtimeInputs = [ goToolchain pkgs.gnumake ];
     text = ''
+      export GOROOT="${goToolchain}/share/go"
       mkdir -p backend/cmd/openpost/public
       touch backend/cmd/openpost/public/.gitkeep
       cd backend
@@ -39,7 +47,9 @@ let
 
   cli-gofmt-check = pkgs.writeShellApplication {
     name = "cli-gofmt-check";
+    runtimeInputs = [ goToolchain pkgs.gnumake ];
     text = ''
+      export GOROOT="${goToolchain}/share/go"
       cd cli
       unformatted=$(gofmt -l .)
       if [ -n "$unformatted" ]; then
@@ -51,7 +61,9 @@ let
 
   cli-golangci-lint = pkgs.writeShellApplication {
     name = "cli-golangci-lint";
+    runtimeInputs = [ goToolchain pkgs.golangci-lint pkgs.gnumake ];
     text = ''
+      export GOROOT="${goToolchain}/share/go"
       cd cli
       golangci-lint run ./...
     '';
@@ -59,7 +71,9 @@ let
 
   cli-go-test = pkgs.writeShellApplication {
     name = "cli-go-test";
+    runtimeInputs = [ goToolchain pkgs.gnumake ];
     text = ''
+      export GOROOT="${goToolchain}/share/go"
       cd cli
       go clean -testcache
       go test ./...
@@ -71,7 +85,7 @@ in
   # Go language support
   languages.go = {
     enable = true;
-    package = pkgs.go_1_26;
+    package = goToolchain;
   };
 
   # Additional packages for backend development
