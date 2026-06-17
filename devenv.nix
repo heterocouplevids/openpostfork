@@ -138,6 +138,22 @@
       source backend/.env
       set +a
     fi
+
+    # Install the pre-push lint gate. Pre-commit hooks only fire on
+    # staged files matching their `files` regex, so a commit that
+    # only touches go.mod / docs / changelogs slips past the lint
+    # step. The pre-push hook re-runs the full lint suite on every
+    # push, so a failed release never happens because of a stale
+    # branch. See scripts/pre-push-lint.sh and AGENTS.md.
+    if [ -d .git ] && [ -f scripts/pre-push-lint.sh ]; then
+      dest=".git/hooks/pre-push"
+      if [ ! -f "$dest" ] || [ "scripts/pre-push-lint.sh" -nt "$dest" ]; then
+        mkdir -p .git/hooks
+        cp scripts/pre-push-lint.sh "$dest"
+        chmod +x "$dest"
+        echo "  Installed pre-push lint gate -> $dest"
+      fi
+    fi
   '';
 
   # Test that key tools are available
