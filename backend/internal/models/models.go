@@ -15,6 +15,13 @@ const (
 	PostStatusFailed     = "failed"
 )
 
+// Workspace role values stored in the `workspace_members.role` column.
+const (
+	WorkspaceRoleAdmin  = "admin"
+	WorkspaceRoleEditor = "editor"
+	WorkspaceRoleViewer = "viewer"
+)
+
 type Workspace struct {
 	bun.BaseModel `bun:"table:workspaces"`
 

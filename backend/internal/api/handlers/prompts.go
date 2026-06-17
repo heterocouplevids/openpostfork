@@ -339,7 +339,7 @@ func (h *PromptHandler) DeletePrompt(api huma.API) {
 					Model(&member).
 					Where("workspace_id = ? AND user_id = ?", prompt.WorkspaceID, userID).
 					Scan(ctx)
-				if err != nil || member.Role != "admin" {
+				if err != nil || member.Role != models.WorkspaceRoleAdmin {
 					return nil, huma.Error403Forbidden("you do not have permission to delete this prompt")
 				}
 			} else {

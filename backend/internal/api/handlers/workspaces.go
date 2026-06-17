@@ -67,7 +67,7 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		member := &models.WorkspaceMember{
 			WorkspaceID: workspace.ID,
 			UserID:      userID,
-			Role:        "admin",
+			Role:        models.WorkspaceRoleAdmin,
 		}
 
 		err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
