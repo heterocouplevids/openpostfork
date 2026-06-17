@@ -397,7 +397,7 @@ func (h *PostHandler) ListPosts(api huma.API) {
 			limit = 50
 		}
 
-		err := query.Order("COALESCE(scheduled_at, created_at) DESC").Limit(limit).Scan(ctx)
+		err := applyListPostsOrder(query).Limit(limit).Scan(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list posts")
 		}
@@ -477,6 +477,10 @@ func (h *PostHandler) ListPosts(api huma.API) {
 		}
 		return &ListPostsOutput{Body: result}, nil
 	})
+}
+
+func applyListPostsOrder(query *bun.SelectQuery) *bun.SelectQuery {
+	return query.OrderExpr("COALESCE(scheduled_at, created_at) DESC")
 }
 
 //nolint:gocyclo
