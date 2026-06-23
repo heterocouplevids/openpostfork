@@ -660,7 +660,10 @@
 	// --------------------------------------------------------------------------
 	// Data loading
 	// --------------------------------------------------------------------------
-	async function loadAccounts(workspaceId: string, preferredAccountIds?: string[]) {
+	async function loadAccounts(
+		workspaceId: string,
+		preferredAccountIds: string[] | undefined = undefined
+	) {
 		if (!workspaceId) return;
 		try {
 			const { data, error: err } = await client.GET('/accounts', {

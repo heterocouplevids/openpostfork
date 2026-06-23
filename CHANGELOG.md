@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.12] - 2026-06-23
+
+### Fixed
+- Added the frontend production build to devenv-managed pre-commit and pre-push checks so Vite compiler failures are caught before release tags are pushed.
+- Avoided optional-parameter syntax in the composer account loader to keep the Vite/PWA release build parser path happy.
+
 ## [1.0.11] - 2026-06-23
 
 ### Fixed

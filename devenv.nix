@@ -77,9 +77,10 @@
     '';
 
     lint.exec = ''
-      frontend-lint
-      frontend-check
-      backend-format-check
+      frontend-lint &&
+      frontend-check &&
+      frontend-build &&
+      backend-format-check &&
       backend-lint
     '';
 
