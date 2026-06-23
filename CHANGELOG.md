@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.13] - 2026-06-23
+
+### Fixed
+- Track the frontend Bun lockfile so CI and local hooks use the same formatter/build dependency graph.
+
 ## [1.0.12] - 2026-06-23
 
 ### Fixed
