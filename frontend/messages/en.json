@@ -147,6 +147,7 @@
 	"compose_synced_state": "synced",
 	"compose_custom_state": "custom",
 	"compose_thread_reply_limited": "{platform} thread replies are limited",
+	"compose_linkedin_thread_replies_unsupported": "LinkedIn doesn't support thread replies. Unsync LinkedIn before publishing this thread, or remove the LinkedIn account from this post.",
 	"compose_sync_back": "Sync back to shared content",
 	"compose_unsync": "Unsync this account",
 	"compose_unsync_to_edit": "Unsync to edit",

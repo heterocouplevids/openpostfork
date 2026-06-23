@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.11] - 2026-06-23
+
+### Fixed
+- Kept LinkedIn account icons clickable in the composer while moving the thread-reply warning to publish-time validation.
+
 ## [1.0.10] - 2026-06-17
 
 ### Added

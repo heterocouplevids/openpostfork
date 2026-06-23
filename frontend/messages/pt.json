@@ -130,6 +130,7 @@
 	"compose_synced_state": "sincronizado",
 	"compose_custom_state": "personalizado",
 	"compose_thread_reply_limited": "As respostas em thread no {platform} são limitadas",
+	"compose_linkedin_thread_replies_unsupported": "O LinkedIn não suporta respostas em thread. Dessincroniza o LinkedIn antes de publicar esta thread ou remove a conta LinkedIn desta publicação.",
 	"compose_sync_back": "Voltar ao conteúdo partilhado",
 	"compose_unsync": "Dessincronizar esta conta",
 	"compose_unsync_to_edit": "Dessincronizar para editar",

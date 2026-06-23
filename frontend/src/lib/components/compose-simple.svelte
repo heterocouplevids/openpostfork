@@ -176,6 +176,12 @@
 	const isThread = $derived(posts.length > 1);
 
 	const selectedAccounts = $derived(accounts.filter((a) => selectedAccountIds.includes(a.id)));
+	const syncedLinkedInThreadAccounts = $derived.by(() => {
+		if (!isThread) return [];
+		return selectedAccounts.filter(
+			(account) => getPlatformKey(account.platform) === 'linkedin' && !variants.has(account.id)
+		);
+	});
 	const mediaCapabilityWarnings = $derived.by(() => {
 		const warnings: string[] = [];
 		const sourcePosts = isThread ? posts : activePost ? [activePost] : [];
@@ -363,12 +369,6 @@
 			selectedAccounts: selectedAccountsSnapshot,
 			variants: variantEntries
 		});
-	}
-
-	function canUnsyncAccount(account: SocialAccount | null | undefined): boolean {
-		if (!account) return false;
-		if (!isThread) return true;
-		return getPlatformKey(account.platform) !== 'linkedin';
 	}
 
 	function getVariantPost(accountId: string, postKey: string): VariantPost | null {
@@ -655,12 +655,6 @@
 		if (activeVariantAccountId && !selected.has(activeVariantAccountId)) {
 			activeVariantAccountId = null;
 		}
-		if (activeVariantAccountId) {
-			const activeAccount = accounts.find((account) => account.id === activeVariantAccountId);
-			if (!canUnsyncAccount(activeAccount)) {
-				activeVariantAccountId = null;
-			}
-		}
 	});
 
 	// --------------------------------------------------------------------------
@@ -890,6 +884,12 @@
 				);
 				if (validPosts.length < 2) {
 					error = m.compose_thread_minimum();
+					isSubmitting = false;
+					return;
+				}
+				if (syncedLinkedInThreadAccounts.length > 0) {
+					error = m.compose_linkedin_thread_replies_unsupported();
+					activeVariantAccountId = syncedLinkedInThreadAccounts[0].id;
 					isSubmitting = false;
 					return;
 				}
@@ -1587,7 +1587,7 @@
 				</Button>
 
 				<div
-					class="flex max-w-[min(62vw,30rem)] [scrollbar-width:none] items-center gap-1 overflow-x-auto overflow-y-hidden py-1 pr-2 pl-1 [-ms-overflow-style:none] sm:max-w-[min(58vw,34rem)] lg:max-w-[40rem] lg:pr-3 [&::-webkit-scrollbar]:hidden"
+					class="flex max-w-[min(62vw,30rem)] items-center gap-1 overflow-x-auto overflow-y-hidden py-1 pr-2 pl-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:max-w-[min(58vw,34rem)] lg:max-w-[40rem] lg:pr-3 [&::-webkit-scrollbar]:hidden"
 				>
 					<Tooltip.Root>
 						<Tooltip.Trigger>
@@ -1611,7 +1611,6 @@
 
 					{#each selectedAccounts as account (account.id)}
 						{@const isUnsynced = variants.has(account.id)}
-						{@const accountCanUnsync = canUnsyncAccount(account)}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								{#snippet child({ props })}
@@ -1623,10 +1622,8 @@
 											? isUnsynced
 												? 'border-amber-500/70 bg-amber-500/12 text-amber-700'
 												: 'border-foreground bg-foreground text-background'
-											: 'border-border bg-background text-foreground hover:border-foreground/30'} {!accountCanUnsync
-											? 'opacity-55'
-											: ''}"
-										onclick={() => activateVariantTab(accountCanUnsync ? account.id : null)}
+											: 'border-border bg-background text-foreground hover:border-foreground/30'}"
+										onclick={() => activateVariantTab(account.id)}
 										title={getPlatformName(account.platform)}
 									>
 										<PlatformIcon platform={getPlatformKey(account.platform)} class="h-3.5 w-3.5" />
@@ -1642,24 +1639,18 @@
 							</Tooltip.Trigger>
 							<Tooltip.Content>
 								<p class="text-sm">
-									{#if accountCanUnsync}
-										{getPlatformName(account.platform)}{account.account_username
-											? ` @${account.account_username}`
-											: ''}{isUnsynced
-											? ` · ${m.compose_custom_state()}`
-											: ` · ${m.compose_synced_state()}`}
-									{:else}
-										{m.compose_thread_reply_limited({
-											platform: getPlatformName(account.platform)
-										})}
-									{/if}
+									{getPlatformName(account.platform)}{account.account_username
+										? ` @${account.account_username}`
+										: ''}{isUnsynced
+										? ` · ${m.compose_custom_state()}`
+										: ` · ${m.compose_synced_state()}`}
 								</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 					{/each}
 				</div>
 
-				{#if activeVariantAccount && canUnsyncAccount(activeVariantAccount)}
+				{#if activeVariantAccount}
 					<Tooltip.Root>
 						<Tooltip.Trigger>
 							{#snippet child({ props })}
