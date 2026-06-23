@@ -73,6 +73,7 @@
 		"mode-watcher": "^1.1.0",
 		"openapi-fetch": "^0.17.0",
 		"svelte-reorderable-list": "^1.0.5",
+		"svelte-toolbelt": "0.10.6",
 		"tailwind-merge": "^3.5.0",
 		"tailwind-variants": "^3.2.2"
 	}

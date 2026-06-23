@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.14] - 2026-06-23
+
+### Fixed
+- Pin `svelte-toolbelt` at the frontend root so `bits-ui` resolves the export required by the production build in CI.
+
 ## [1.0.13] - 2026-06-23
 
 ### Fixed
