@@ -69,6 +69,7 @@
 		"@fontsource-variable/geist": "^5.2.8",
 		"bits-ui": "^2.16.3",
 		"clsx": "^2.1.1",
+		"estree-walker": "2.0.2",
 		"lucide-svelte": "^0.577.0",
 		"mode-watcher": "^1.1.0",
 		"openapi-fetch": "^0.17.0",

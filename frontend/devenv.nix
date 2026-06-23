@@ -122,7 +122,7 @@ in
     vitest = {
       enable = true;
       entry = "${lib.getExe vitest-wrapper}";
-      files = "\\.(ts|svelte)$";
+      files = "^(frontend/(src|messages|static|assets)/|frontend/(package\\.json|bun\\.lock|vite\\.config\\.ts|svelte\\.config\\.js|vitest\\.config\\.[jt]s|tsconfig\\.json)|assets/|scripts/sync-assets\\.mjs)";
       pass_filenames = false;
     };
 

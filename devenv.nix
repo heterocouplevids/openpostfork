@@ -79,6 +79,7 @@
     lint.exec = ''
       frontend-lint &&
       frontend-check &&
+      frontend-test &&
       frontend-build &&
       backend-format-check &&
       backend-lint
