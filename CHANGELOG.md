@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.16] - 2026-06-23
+
+### Fixed
+- Build release frontend assets once on Ubuntu and reuse them for server binary packaging, avoiding the macOS runner's post-build Node/libuv abort.
+
 ## [1.0.15] - 2026-06-23
 
 ### Fixed

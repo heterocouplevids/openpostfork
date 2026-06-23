@@ -52,9 +52,41 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
 
+  build-frontend-assets:
+    name: Build Frontend Assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Set up devenv cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+
+      - name: Install devenv
+        shell: bash
+        run: nix profile add nixpkgs#devenv
+
+      - name: Build frontend
+        shell: devenv shell bash -- -e {0}
+        run: frontend-build
+
+      - name: Upload frontend assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-public
+          path: backend/cmd/openpost/public
+          if-no-files-found: error
+
   build-binaries:
     name: Build Release Binaries
     runs-on: ${{ matrix.runner }}
+    needs: build-frontend-assets
     permissions:
       contents: write
 
@@ -86,12 +118,11 @@ jobs:
         shell: bash
         run: nix profile add nixpkgs#devenv
 
-      - name: Build frontend
-        shell: devenv shell bash -- -e {0}
-        run: |
-          cd frontend
-          bun install --frozen-lockfile
-          bun run build
+      - name: Download frontend assets
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-public
+          path: backend/cmd/openpost/public
 
       - name: Build binary
         shell: devenv shell bash -- -e {0}
