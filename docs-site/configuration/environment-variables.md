@@ -1,6 +1,6 @@
 # Environment Variables
 
-This page summarizes the env vars used by the backend. Some values in `backend/.env.example` are recommended deployment examples; code defaults may differ.
+This page summarizes the env vars used by the backend. Some values in `.env.example` are recommended deployment examples; code defaults may differ.
 
 ## Core settings
 
@@ -22,38 +22,38 @@ This page summarizes the env vars used by the backend. Some values in `backend/.
 
 | Variable | Required | Default | Description |
 |---|---:|---|---|
-| `X_CLIENT_ID` | Yes for X | empty | X OAuth client ID. |
+| `X_CLIENT_ID` | Yes for X | empty | X OAuth client ID. Leave empty to disable X. |
 | `X_CLIENT_SECRET` | Yes for X | empty | X OAuth client secret. |
-| `X_REDIRECT_URI` | No | `http://localhost:8080/api/v1/accounts/x/callback` | X OAuth 1.0a callback URL override. |
+| `X_REDIRECT_URI` | No | derived from `OPENPOST_APP_URL` | X OAuth callback URL override. |
 
 ## Mastodon
 
 | Variable | Required | Default | Description |
 |---|---:|---|---|
-| `MASTODON_REDIRECT_URI` | No | `http://localhost:8080/api/v1/accounts/mastodon/callback` | Mastodon callback URL override. |
-| `MASTODON_SERVERS` | Yes for Mastodon | empty | JSON array of configured Mastodon apps and instance URLs. |
+| `MASTODON_REDIRECT_URI` | No | `urn:ietf:wg:oauth:2.0:oob` | Mastodon redirect URI. The default uses the OOB flow and does not need a public callback URL. |
+| `MASTODON_SERVERS` | Yes for Mastodon | `[]` | JSON array of configured Mastodon apps and instance URLs. Leave empty to disable Mastodon. |
 
 ## LinkedIn
 
 | Variable | Required | Default | Description |
 |---|---:|---|---|
-| `LINKEDIN_CLIENT_ID` | Yes for LinkedIn | empty | LinkedIn OAuth client ID. |
+| `LINKEDIN_CLIENT_ID` | Yes for LinkedIn | empty | LinkedIn OAuth client ID. Leave empty to disable LinkedIn. |
 | `LINKEDIN_CLIENT_SECRET` | Yes for LinkedIn | empty | LinkedIn OAuth client secret. |
-| `LINKEDIN_REDIRECT_URI` | No | `http://localhost:8080/api/v1/accounts/linkedin/callback` | LinkedIn callback URL override. |
+| `LINKEDIN_REDIRECT_URI` | No | derived from `OPENPOST_APP_URL` | LinkedIn callback URL override. |
 | `LINKEDIN_DISABLE_THREAD_REPLIES` | No | `false` | Disable LinkedIn comment-style child replies for thread posts. |
 
 ## Threads
 
 | Variable | Required | Default | Description |
 |---|---:|---|---|
-| `THREADS_CLIENT_ID` | Yes for Threads | empty | Meta app ID. |
+| `THREADS_CLIENT_ID` | Yes for Threads | empty | Meta app ID. Leave empty to disable Threads. |
 | `THREADS_CLIENT_SECRET` | Yes for Threads | empty | Meta app secret. |
-| `THREADS_REDIRECT_URI` | No | `http://localhost:8080/api/v1/accounts/threads/callback` | Threads callback URL override. |
+| `THREADS_REDIRECT_URI` | No | derived from `OPENPOST_APP_URL` | Threads callback URL override. Threads production redirects must use HTTPS. |
 
 ## Notes
 
 - The preferred names above are what new deployments should use.
 - Backward-compatible aliases still work for existing installs: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.
-- `backend/.env.example` is still the best copy-paste starting point.
+- The root `.env.example` is the best copy-paste starting point.
 - Set explicit public URLs in production even when defaults exist.
 - For Threads, treat `OPENPOST_MEDIA_URL` as mandatory.
