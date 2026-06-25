@@ -26,7 +26,6 @@ services:
       - OPENPOST_PORT=8080
       - OPENPOST_DATABASE_PATH=/data/db/openpost.db
       - OPENPOST_MEDIA_PATH=/data/media
-      - OPENPOST_MEDIA_URL=http://localhost:8080/media
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
       interval: 30s
@@ -40,15 +39,22 @@ volumes:
 
 ## Create `.env`
 
+From the repository root:
+
 ```bash
-cp backend/.env.example .env
+cp .env.example .env
 ```
 
-Set at least:
+If you only copied the Compose file, create `.env` manually and set at least:
 
 - `OPENPOST_JWT_SECRET`
 - `OPENPOST_ENCRYPTION_KEY`
+- `OPENPOST_APP_URL`
+- `OPENPOST_PUBLIC_URL`
+- `OPENPOST_MEDIA_URL`
 - Provider credentials for the networks you want to enable
+
+For local testing, `http://localhost:8080` is fine for the public URL values. In production, use your real HTTPS origin.
 
 ## Generate secrets
 
@@ -98,7 +104,7 @@ docker compose logs -f openpost
 ## Production warnings
 
 - Put OpenPost behind HTTPS before enabling OAuth in production.
-- Set `OPENPOST_APP_URL` and `OPENPOST_MEDIA_URL` to public URLs.
+- Set `OPENPOST_APP_URL`, `OPENPOST_PUBLIC_URL`, and `OPENPOST_MEDIA_URL` to public URLs.
 - Back up both the SQLite database and media directory.
 
 ## Next steps
