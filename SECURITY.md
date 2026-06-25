@@ -2,108 +2,74 @@
 
 ## Supported Versions
 
-We release patches for security vulnerabilities. The following versions are currently supported:
+Security patches are currently provided for the latest OpenPost release line.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| latest  | ✅ Yes             |
-| v0.x    | ✅ Security fixes |
+| Version | Supported |
+| ------- | --------- |
+| latest  | Yes       |
+| v1.x    | Yes       |
 
 We recommend always using the latest release for security patches and improvements.
 
 ## Reporting a Vulnerability
 
-We take security vulnerabilities seriously. If you discover a security issue, please report it responsibly.
+Please do not create a public GitHub issue for security vulnerabilities.
 
-### How to Report
+Email the maintainer at `openpost+security@rgo.pt` and include:
 
-1. **Do NOT** create a public GitHub issue for security vulnerabilities
-2. Email the maintainer directly at: `openpost+security@rgo.pt`
-3. Include in your report:
-   - Description of the vulnerability
-   - Steps to reproduce the issue
-   - Potential impact
-   - Any suggested fixes (optional)
-
-### What to Expect
-
-- **Acknowledgment:** We will acknowledge your report within 48 hours
-- **Status Update:** We will provide regular updates on the progress of addressing the vulnerability
-- **Disclosure:** We will publicly disclose the vulnerability after a fix is available
-- **Credit:** We will credit reporters in the security advisory (unless you prefer to remain anonymous)
-
-### Response Timeline
-
-- **Initial response:** Within 48 hours
-- **Severity assessment:** Within 7 days
-- **Fix development:** Varies by complexity (typically 1-4 weeks)
-- **Public disclosure:** After patch is available
+- Description of the vulnerability
+- Steps to reproduce the issue
+- Potential impact
+- Any suggested fixes, if available
 
 ## Security Best Practices for Self-Hosters
 
-When running OpenPost, follow these security practices:
-
 ### Secrets Management
 
-- **Never commit `.env`** files to version control
-- Use strong, randomly generated secrets (`openssl rand -base64 32`)
-- Rotate secrets periodically
-- Use Docker secrets, Kubernetes secrets, or a secrets manager in production
-- Restrict access to `OPENPOST_ENCRYPTION_KEY`: encrypted provider tokens still depend on that key to be decrypted
-- Limit read access to the OpenPost runtime user for `.env`, backup archives, and service configuration files
+- Never commit `.env` files to version control.
+- Use strong, randomly generated secrets, for example `openssl rand -base64 32`.
+- Rotate secrets periodically.
+- Use Docker secrets, Kubernetes secrets, or a secrets manager in production where possible.
+- Restrict access to `OPENPOST_ENCRYPTION_KEY`, `.env`, backup archives, and service configuration files.
 
 ### Network Security
 
-- Run behind a reverse proxy with TLS/HTTPS
-- Configure a proper firewall
-- Don't expose the OpenPost port directly to the internet (except for OAuth callbacks)
-- For Threads: ensure `/media/` endpoint is publicly accessible for media uploads
-- Use HTTPS before configuring production OAuth callbacks for X, Mastodon, LinkedIn, or Threads
+- Run behind a reverse proxy with TLS.
+- Configure a proper firewall.
+- Do not expose the OpenPost port directly to the internet unless that is part of your deliberate reverse-proxy setup.
+- For Threads media publishing, make sure the public media endpoint is reachable by Meta.
+- Use HTTPS before configuring production OAuth callbacks for X, Mastodon, LinkedIn, or Threads.
 
 ### Data Protection
 
-- Back up your database and media directory regularly
-- Back up your `.env` or secret-management configuration together with the database and media directory
-- Store backups in a secure location
-- Consider encrypting backups at rest
-- Restrict filesystem permissions on the SQLite database, media folder, and backup artifacts
+- Back up the database and media directory regularly.
+- Back up secrets together with the database and media directory.
+- Store backups in a secure location.
+- Consider encrypting backups at rest.
+- Restrict filesystem permissions on the SQLite database, media folder, and backup artifacts.
 
 ### OAuth Provider Security
 
-- Regularly review connected accounts
-- Rotate OAuth tokens and secrets periodically
-- Revoke access for accounts no longer in use
+- Regularly review connected accounts.
+- Rotate OAuth tokens and secrets periodically.
+- Revoke access for accounts no longer in use.
 
 ## Security Features in OpenPost
 
-OpenPost includes the following security measures:
+OpenPost includes:
 
-- **Token encryption:** All OAuth tokens are encrypted at rest using AES-256-GCM
-- **Password hashing:** User passwords are hashed with bcrypt
-- **JWT authentication:** Secure token-based session management
-- **Account MFA:** TOTP enrollment and verification for user accounts
-- **Passkeys:** WebAuthn passkey registration and login support
-- **OAuth PKCE:** Twitter authentication uses PKCE for improved security
-- **No external dependencies:** Self-contained binary with no external service dependencies
+- Encrypted OAuth tokens at rest
+- Bcrypt password hashing
+- JWT authentication
+- Account MFA with TOTP
+- WebAuthn passkeys
+- OAuth PKCE for X authentication
+- A self-contained server binary with no required external queue or database service
 
 ## Third-Party Dependencies
 
-We regularly update dependencies to address security vulnerabilities. We use:
-
-- Go dependencies (via Go modules)
-- Frontend dependencies (via Bun/npm)
-- Docker base images from trusted sources
+OpenPost uses Go modules, Bun/npm frontend dependencies, and Docker base images. Keep deployments updated to receive dependency fixes.
 
 ## Scope
 
-This security policy applies to:
-
-- The OpenPost server application
-- The embedded SvelteKit frontend
-- OAuth integration with supported platforms
-
-This does not apply to:
-
-- Third-party OAuth providers (Twitter, Mastodon, Bluesky, LinkedIn, Threads)
-- Your deployment infrastructure (reverse proxy, firewall, etc.)
-- External databases or storage systems you configure
+This policy applies to the OpenPost server, embedded frontend, and OAuth integrations. It does not cover third-party OAuth providers, deployment infrastructure, or external storage services you configure.
