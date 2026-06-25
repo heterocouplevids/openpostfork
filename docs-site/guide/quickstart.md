@@ -22,7 +22,6 @@ services:
       - OPENPOST_PORT=8080
       - OPENPOST_DATABASE_PATH=/data/db/openpost.db
       - OPENPOST_MEDIA_PATH=/data/media
-      - OPENPOST_MEDIA_URL=http://localhost:8080/media
 
 volumes:
   openpost_data:
@@ -30,21 +29,15 @@ volumes:
 
 ## 2. Create `.env`
 
-Create a `.env` file next to `docker-compose.yml`:
+From the repository root, copy the safe deployment example:
 
-```dotenv
-OPENPOST_PORT=8080
-OPENPOST_DATABASE_PATH=/data/db/openpost.db
-OPENPOST_MEDIA_PATH=/data/media
-OPENPOST_MEDIA_URL=http://localhost:8080/media
-
-OPENPOST_JWT_SECRET=replace-with-a-random-secret-at-least-32-characters-long
-OPENPOST_ENCRYPTION_KEY=replace-with-a-random-secret-at-least-32-characters-long
-
-# Start with Bluesky if you want the easiest first provider:
-# no server-side OAuth app is required.
-# Add other provider env vars later as needed.
+```bash
+cp .env.example .env
 ```
+
+Set fresh values for the two required secrets, then set `OPENPOST_APP_URL`, `OPENPOST_PUBLIC_URL`, and `OPENPOST_MEDIA_URL` for the URL where users will actually reach the app. For a local trial, `http://localhost:8080` is fine.
+
+Start with Bluesky if you want the easiest first provider: no server-side OAuth app is required. Add other provider env vars later as needed.
 
 ## 3. Generate secrets
 
@@ -53,7 +46,7 @@ openssl rand -base64 32
 openssl rand -base64 32
 ```
 
-Set the generated values as `OPENPOST_JWT_SECRET` and `OPENPOST_ENCRYPTION_KEY`.
+Use one generated value for the JWT secret and the other for the encryption key.
 
 ::: warning
 Do not use placeholder secrets in production.
@@ -96,7 +89,7 @@ Start with **Bluesky** if you want the fastest validation path:
 
 ## HTTPS note
 
-`http://localhost:8080` is fine for a local trial. Before configuring production OAuth callbacks, put OpenPost behind HTTPS with a real domain. That matters for X, Mastodon, LinkedIn, and Threads callback validation, and for Threads public media fetches.
+`http://localhost:8080` is fine for a local trial. Before configuring production OAuth callbacks, put OpenPost behind HTTPS with a real domain and update `OPENPOST_APP_URL`, `OPENPOST_PUBLIC_URL`, and `OPENPOST_MEDIA_URL`. That matters for X, LinkedIn, Threads callback validation, WebAuthn/passkeys, and Threads public media fetches.
 
 If you want to close self-service signups after setup, set `OPENPOST_DISABLE_REGISTRATIONS=true` and restart OpenPost. The first account is still allowed on a brand-new instance even when that flag is enabled.
 
