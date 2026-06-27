@@ -90,3 +90,6 @@ marketing-site/bun.lock
 
 # Astro generated
 marketing-site/.astro/
+
+# Wrangler
+.wrangler/
