@@ -16,13 +16,14 @@ import (
 )
 
 const (
-	jobTypePublishPost  = "publish_post"
-	jobStatusPending    = "pending"
-	jobTypeMediaCleanup = "media_cleanup"
-	jobTypeRefreshToken = "refresh_token"
-	jobStatusProcessing = "processing"
-	jobStatusFailed     = "failed"
-	jobStatusCompleted  = "completed"
+	jobTypePublishPost    = "publish_post"
+	jobStatusPending      = "pending"
+	jobTypeMediaCleanup   = "media_cleanup"
+	jobTypeRefreshToken   = "refresh_token"
+	jobStatusProcessing   = "processing"
+	jobStatusFailed       = "failed"
+	jobStatusCompleted    = "completed"
+	staleProcessingJobAge = "-15 minutes"
 )
 
 // BackgroundWorker polls the SQLite database for pending jobs.
@@ -73,10 +74,29 @@ func (w *BackgroundWorker) Stop() {
 }
 
 func (w *BackgroundWorker) processDueJobs(ctx context.Context) {
+	w.requeueStaleProcessingJobs(ctx)
 	for {
 		if !w.processNextJobIfAvailable(ctx) {
 			return
 		}
+	}
+}
+
+func (w *BackgroundWorker) requeueStaleProcessingJobs(ctx context.Context) {
+	result, err := w.db.NewRaw(`
+		UPDATE jobs
+		SET status = ?, locked_at = NULL, locked_by = ''
+		WHERE status = ?
+			AND locked_at IS NOT NULL
+			AND locked_at <= datetime('now', ?)
+	`, jobStatusPending, jobStatusProcessing, staleProcessingJobAge).Exec(ctx)
+	if err != nil {
+		log.Printf("[Worker %s] failed to requeue stale processing jobs: %v\n", w.workerID, err)
+		return
+	}
+	rows, err := result.RowsAffected()
+	if err == nil && rows > 0 {
+		log.Printf("[Worker %s] requeued %d stale processing job(s)\n", w.workerID, rows)
 	}
 }
 

@@ -17,36 +17,20 @@ hero:
       link: https://github.com/rodrgds/openpost
 
 features:
-  - icon: ✍️
-    title: Typefully-like composer
-    details: Write once, customize per platform. Tailor copy for each connected account when needed.
-  - icon: 🧵
-    title: Thread composer
-    details: Build multi-post threads and publish them in sequence instead of stitching replies together manually.
-  - icon: 📅
-    title: Scheduling that stays queued
-    details: Plan posts ahead, use posting schedules, and keep jobs durable through restarts.
-  - icon: 🖼️
-    title: Reusable media library
-    details: Upload once, reuse across drafts and scheduled posts, and keep media close to your content workflow.
-  - icon: 🗂️
-    title: Workspaces for separate brands
-    details: Keep accounts, media, prompts, and schedules organized per workspace.
-  - icon: 🌐
-    title: One post, many networks
-    details: Publish from one place to X, Mastodon, Bluesky, Threads, and LinkedIn.
-  - icon: 🔐
-    title: Your server, your credentials
-    details: Keep content, schedules, and connected account tokens under your own control.
-  - icon: ⚡
-    title: Fast to deploy
-    details: Run OpenPost with Docker Compose or a single binary without turning setup into a platform project.
-  - icon: 🧰
-    title: CLI for automation
-    details: Create posts, upload media, use social sets, and schedule into the next available slot from scripts or CI.
-  - icon: 📱
-    title: Android app
-    details: Install the release APK and use the same self-hosted OpenPost instance from your phone.
+  - title: Composer
+    details: Write once, customize per platform, and preview posts before scheduling.
+  - title: Threads
+    details: Build multi-post threads and publish them in sequence.
+  - title: Scheduling
+    details: Plan posts ahead with durable jobs that survive restarts.
+  - title: Media library
+    details: Upload once and reuse media across drafts and scheduled posts.
+  - title: Workspaces
+    details: Keep separate brands, accounts, media, prompts, and schedules organized.
+  - title: CLI
+    details: Create posts, upload media, use social sets, and automate workflows from scripts or CI.
+  - title: Android app
+    details: Install the release APK and connect it to your self-hosted instance.
 ---
 
 <p>
@@ -56,45 +40,6 @@ features:
     style="width: 100%; max-width: 1200px; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
   >
 </p>
-
-<div style="margin-top: 24px;">
-  <!-- TODO: update this demo URL! -->
-  <iframe
-    width="100%"
-    max-width="1200px"
-    height="500"
-    src="https://www.youtube.com/embed/dqTTojTija8"
-    title="OpenPost Demo"
-    frameborder="0"
-    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-    allowfullscreen
-    style="border-radius: 16px; border: 1px solid var(--vp-c-divider);"
-  ></iframe>
-</div>
-
-<div
-  style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start;"
->
-  <div>
-    <img
-      src="/assets/screenshots/settings-dark.png"
-      alt="OpenPost settings page"
-      style="width: 100%; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
-    >
-  </div>
-  <div style="display: grid; gap: 16px;">
-    <img
-      src="/assets/screenshots/accounts-dark.png"
-      alt="OpenPost accounts page"
-      style="width: 100%; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
-    >
-    <img
-      src="/assets/screenshots/media-dark.png"
-      alt="OpenPost media page"
-      style="width: 100%; border-radius: 16px; border: 1px solid var(--vp-c-divider);"
-    >
-  </div>
-</div>
 
 ## Install in a minute
 

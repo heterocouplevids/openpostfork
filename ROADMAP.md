@@ -1,61 +1,58 @@
 # OpenPost Roadmap
 
-> Status: May 2026 — Prioritized feature list and technical milestones
+> Status: June 2026 — post-v1 priorities.
 
-OpenPost is a lightweight, self-hosted social media scheduler. This roadmap outlines the planned evolution of the project as a linear, prioritized list.
-
----
-
-## ✅ Completed
-
-- **2FA (TOTP)**: Account-level two-factor authentication with time-based one-time passwords.
-- **Passkeys**: WebAuthn-based passwordless login support.
+OpenPost is a lightweight, self-hosted social media scheduler. The core product now includes the web app, CLI, API tokens, social sets, TOTP, passkeys, workspaces, media library, and provider publishing flows. The next phase should focus on reliability, provider correctness, and operator polish before larger integrations.
 
 ---
 
-## 🚀 Upcoming Features
+## Current Focus
 
-1.  **Per-Platform Media Overrides (Frontend)**  
-    Add UI to the "Customize per platform" view in the composer to allow selecting different media attachments for different social accounts. (Backend is already implemented).
+1. **Release hardening**
+   Keep Docker, binary, CLI, Android, and docs release paths reproducible. Release tags should run backend, frontend, CLI, and docs checks before artifacts are published.
 
-2.  **Enhanced Thread Management**  
-    Add backend and frontend support for atomic updates to threads that are already scheduled or have failed, allowing for easier mass-edits of multi-post chains.
+2. **Scheduler reliability**
+   Improve recovery for interrupted jobs, stale processing jobs, retry behavior, and activity-state reporting.
 
-3.  **API Key Management**  
-    Implement a scoped API key system (`api_keys` table + middleware) and a management UI in Settings to allow programmatic access to the OpenPost API.
+3. **Provider verification**
+   Re-test real-account publishing flows for text, images, threads, and video where support is claimed. Keep public docs conservative where provider APIs or review requirements are uncertain.
 
-4.  **Directus Integration**  
-    Enable two-way sync with Directus CMS, allowing published posts and media to be automatically archived or managed within a Directus collection.
-
-5.  **MCP Server**  
-    Implement an official Model Context Protocol (MCP) server for OpenPost. This will allow AI agents (Claude, Cursor, etc.) to interact directly with your instance to list accounts, schedule posts, and upload media.
-
-6.  **AI Writing Assistance (Genkit)**  
-    Integrate Google's Genkit for structured AI workflows, supporting Gemini and OpenAI for tone adjustment, rewrites, and content brainstorming directly in the composer.
-
-7.  **Analytics & Engagement Tracking**  
-    Implement a background worker to periodically poll platform APIs for engagement metrics (likes, reposts, clicks) and display them in a new Analytics dashboard.
-
-8.  **Active Session Management**  
-    Add a security view in Settings to list and revoke active JWT-based login sessions across different devices.
-
-9.  **Full Pagination for List Endpoints**  
-    Update the `Posts` and `Jobs` list endpoints to support full cursor or offset-based pagination (currently only supports simple limits).
-
-10. **Spanish Localization**  
-    Complete the translation files to provide full Spanish language
-    support alongside English and Portuguese. The `es.json` stub was
-    removed in v1.0.x; this item is blocked on a real translator.
+4. **Operator documentation**
+   Keep `.env.example`, Docker, reverse proxy, backup/restore, provider setup, and production checklist docs aligned with runtime behavior.
 
 ---
 
-## 🛠️ Technical Debt & Polish
+## Upcoming Features
 
-11. **Test Coverage Expansion**  
-    Increase backend test coverage to >80% for critical publishing and authentication paths.
+1. **Enhanced thread management**
+   Add safer atomic updates to scheduled or failed threads.
 
-12. **Background Worker Robustness**  
-    Improve error recovery and exponential backoff strategies in the custom SQLite-backed job worker.
+2. **Active session management**
+   Add a settings view to list and revoke active web login sessions.
 
-13. **UI/UX Refinement**  
-    Ongoing polish of the Svelte 5 composer and dashboard interactions to ensure a "native-feeling" experience.
+3. **Full pagination for list endpoints**
+   Add cursor or offset pagination for posts, jobs, and other large lists.
+
+4. **Analytics and engagement tracking**
+   Poll provider APIs for engagement metrics and display them in an analytics dashboard.
+
+5. **MCP server**
+   Add an official automation server for local tools and agents.
+
+6. **Writing assistance**
+   Add optional rewrite and content brainstorming workflows without making OpenPost depend on a hosted provider.
+
+7. **Directus integration**
+   Explore two-way sync with Directus for users who want a separate content archive.
+
+8. **Spanish localization**
+   Complete Spanish translations with a real translation pass. The old stub was removed in v1.0.x.
+
+---
+
+## Technical Debt and Polish
+
+- Expand backend test coverage around publishing, authentication, provider adapters, and queue recovery.
+- Add browser-level smoke tests for first-run setup, workspace creation, draft creation, scheduling, and activity status.
+- Improve mobile and Android app polish after the web flow is stable.
+- Keep the composer fast, readable, and conservative about provider-specific limitations.
