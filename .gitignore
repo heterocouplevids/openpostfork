@@ -79,3 +79,14 @@ devenv.lock
 TODO.md
 
 cli/openpost
+
+# Marketing site build output
+marketing-site/dist/
+marketing-site/node_modules/
+marketing-site/package-lock.json
+marketing-site/pnpm-lock.yaml
+marketing-site/yarn.lock
+marketing-site/bun.lock
+
+# Astro generated
+marketing-site/.astro/

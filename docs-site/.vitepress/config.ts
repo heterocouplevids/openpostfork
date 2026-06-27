@@ -127,6 +127,7 @@ export default defineConfig({
 	themeConfig: {
 		logo: '/assets/brand/icon.svg',
 		nav: [
+			{ text: 'Home', link: 'https://openpost.social' },
 			{ text: 'Guide', link: '/guide/quickstart' },
 			{ text: 'Installation', link: '/installation/docker-compose' },
 			{ text: 'CLI', link: '/cli/' },

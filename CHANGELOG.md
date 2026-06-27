@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
+- Enabled registrations on hosted instance.
+- Updated all doc links from op.rgo.pt to docs.openpost.social.
+- Added marketing-site/ — minimal Astro landing page at openpost.social.
+- Moved docs and marketing site deployment from VPS/GitHub Pages to Cloudflare Pages.
+
 ## [1.0.16] - 2026-06-23
 
 ### Fixed

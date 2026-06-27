@@ -1,0 +1,88 @@
+---
+const appUrl = 'https://app.openpost.social';
+const docsUrl = 'https://docs.openpost.social';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenPost</title>
+    <meta name="description" content="Self-hosted social media scheduling. Schedule posts to X, Mastodon, Bluesky, Threads, and LinkedIn." />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #0a0a0a;
+        color: #e0e0e0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2rem;
+        padding: 2rem;
+        text-align: center;
+      }
+      .logo { width: 320px; max-width: 80vw; }
+      .tagline {
+        font-size: 1.2rem;
+        color: #888;
+        max-width: 500px;
+        line-height: 1.6;
+      }
+      .links { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+      .links a {
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 1rem;
+        transition: all 0.2s;
+      }
+      .btn-primary {
+        background: #3b82f6;
+        color: #fff;
+      }
+      .btn-primary:hover { background: #2563eb; }
+      .btn-secondary {
+        background: #1a1a2e;
+        color: #a0a0c0;
+        border: 1px solid #2a2a3e;
+      }
+      .btn-secondary:hover { border-color: #3b82f6; color: #fff; }
+      .footer {
+        margin-top: 4rem;
+        font-size: 0.85rem;
+        color: #555;
+      }
+      .footer a { color: #777; text-decoration: none; }
+      .footer a:hover { color: #3b82f6; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/logo.svg" alt="OpenPost" class="logo" />
+      <p class="tagline">
+        Self-hosted social media scheduling.<br />
+        Post to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server.
+      </p>
+      <div class="links">
+        <a href={appUrl} class="btn-primary">Go to App</a>
+        <a href={docsUrl} class="btn-secondary">Documentation</a>
+      </div>
+      <div class="footer">
+        <a href="https://github.com/rodrgds/openpost">GitHub</a> &middot;
+        Open source under MIT license &middot;
+        <a href={appUrl}>app.openpost.social</a>
+      </div>
+    </main>
+  </body>
+</html>

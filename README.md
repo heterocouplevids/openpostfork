@@ -59,9 +59,9 @@
 
 <p align="center">
   <br/>
-  <a href="https://op.rgo.pt/"><strong>Documentation</strong></a>
+  <a href="https://docs.openpost.social/"><strong>Documentation</strong></a>
   ·
-  <a href="https://op.rgo.pt/guide/quickstart"><strong>Quickstart</strong></a>
+  <a href="https://docs.openpost.social/guide/quickstart"><strong>Quickstart</strong></a>
   ·
   <a href="https://github.com/rodrgds/openpost/releases"><strong>Releases</strong></a>
 </p>
@@ -141,14 +141,14 @@ Set fresh values for `OPENPOST_JWT_SECRET` and `OPENPOST_ENCRYPTION_KEY` before 
 
 ## Documentation
 
-- [Landing and docs site](https://op.rgo.pt/)
-- [Quickstart](https://op.rgo.pt/guide/quickstart)
-- [Installation](https://op.rgo.pt/installation/docker-compose)
-- [Android app](https://op.rgo.pt/installation/android)
-- [Configuration](https://op.rgo.pt/configuration/environment-variables)
-- [Providers](https://op.rgo.pt/providers/overview)
-- [Operations](https://op.rgo.pt/operations/troubleshooting)
-- [Development](https://op.rgo.pt/development/setup)
+- [Landing and docs site](https://docs.openpost.social/)
+- [Quickstart](https://docs.openpost.social/guide/quickstart)
+- [Installation](https://docs.openpost.social/installation/docker-compose)
+- [Android app](https://docs.openpost.social/installation/android)
+- [Configuration](https://docs.openpost.social/configuration/environment-variables)
+- [Providers](https://docs.openpost.social/providers/overview)
+- [Operations](https://docs.openpost.social/operations/troubleshooting)
+- [Development](https://docs.openpost.social/development/setup)
 
 ## Contributing
 
