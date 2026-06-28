@@ -427,17 +427,71 @@ func convertLocalScheduleToUTC(_ *time.Location, localDayOfWeek, localHour, loca
 	return localDayOfWeek, localHour, localMinute
 }
 
-//nolint:gocyclo
-func findNextAvailableSlotTime(
+type scheduleCandidate struct {
+	schedule models.PostingSchedule
+	when     time.Time
+}
+
+func isSlotOccupied(scheduledPosts []models.Post, slotTime time.Time) bool {
+	for _, post := range scheduledPosts {
+		if sameMinute(post.ScheduledAt, slotTime) {
+			return true
+		}
+	}
+	return false
+}
+
+func findNextConfiguredScheduleSlotTime(
 	now time.Time,
 	loc *time.Location,
 	schedules []models.PostingSchedule,
 	scheduledPosts []models.Post,
-	draftGapMinutes int,
 ) (*models.PostingSchedule, time.Time) {
+	if len(schedules) == 0 {
+		return nil, time.Time{}
+	}
+
 	localizedSlots := make([]localizedScheduleSlot, 0, len(schedules))
 	for _, schedule := range schedules {
 		localizedSlots = append(localizedSlots, localizeScheduleSlot(now, loc, schedule))
+	}
+
+	for dayOffset := 0; dayOffset < 30; dayOffset++ {
+		dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, dayOffset)
+
+		candidates := make([]scheduleCandidate, 0)
+
+		for _, slot := range localizedSlots {
+			if slot.LocalWeekday != int(dayStart.Weekday()) {
+				continue
+			}
+			slotTime := time.Date(dayStart.Year(), dayStart.Month(), dayStart.Day(), slot.LocalHour, slot.LocalMinute, 0, 0, loc)
+			if !slotTime.After(now) {
+				continue
+			}
+			if isSlotOccupied(scheduledPosts, slotTime) {
+				continue
+			}
+			candidates = append(candidates, scheduleCandidate{schedule: slot.Schedule, when: slotTime})
+		}
+
+		sort.Slice(candidates, func(i, j int) bool { return candidates[i].when.Before(candidates[j].when) })
+		if len(candidates) > 0 {
+			return &candidates[0].schedule, candidates[0].when
+		}
+	}
+
+	return nil, time.Time{}
+}
+
+func findNextOverflowPostingTime(
+	now time.Time,
+	loc *time.Location,
+	scheduledPosts []models.Post,
+	gapMinutes int,
+) time.Time {
+	if gapMinutes <= 0 || len(scheduledPosts) == 0 {
+		return time.Time{}
 	}
 
 	for dayOffset := 0; dayOffset < 30; dayOffset++ {
@@ -451,53 +505,19 @@ func findNextAvailableSlotTime(
 				dayPosts = append(dayPosts, localScheduledAt)
 			}
 		}
-		sort.Slice(dayPosts, func(i, j int) bool { return dayPosts[i].Before(dayPosts[j]) })
-
-		dayCandidates := make([]struct {
-			schedule models.PostingSchedule
-			when     time.Time
-		}, 0)
-
-		for _, slot := range localizedSlots {
-			if slot.LocalWeekday != int(dayStart.Weekday()) {
-				continue
-			}
-			slotTime := time.Date(dayStart.Year(), dayStart.Month(), dayStart.Day(), slot.LocalHour, slot.LocalMinute, 0, 0, loc)
-			if !slotTime.After(now) {
-				continue
-			}
-
-			occupied := false
-			for _, scheduledAt := range dayPosts {
-				if sameMinute(scheduledAt, slotTime) {
-					occupied = true
-					break
-				}
-			}
-			if !occupied {
-				dayCandidates = append(dayCandidates, struct {
-					schedule models.PostingSchedule
-					when     time.Time
-				}{schedule: slot.Schedule, when: slotTime})
-			}
-		}
-
-		sort.Slice(dayCandidates, func(i, j int) bool { return dayCandidates[i].when.Before(dayCandidates[j].when) })
-		if len(dayCandidates) > 0 {
-			return &dayCandidates[0].schedule, dayCandidates[0].when
-		}
-
-		if draftGapMinutes <= 0 || len(dayPosts) == 0 {
+		if len(dayPosts) == 0 {
 			continue
 		}
 
-		fallbackTime := dayPosts[len(dayPosts)-1].Add(time.Duration(draftGapMinutes) * time.Minute)
+		sort.Slice(dayPosts, func(i, j int) bool { return dayPosts[i].Before(dayPosts[j]) })
+
+		fallbackTime := dayPosts[len(dayPosts)-1].Add(time.Duration(gapMinutes) * time.Minute)
 		if fallbackTime.After(now) && fallbackTime.Before(dayEnd) {
-			return nil, fallbackTime
+			return fallbackTime
 		}
 	}
 
-	return nil, time.Time{}
+	return time.Time{}
 }
 
 func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
@@ -686,7 +706,7 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch scheduled posts")
 		}
 
-		nextSlot, nextSlotTime := findNextAvailableSlotTime(now, loc, schedules, scheduledPosts, workspace.DraftGapMinutes)
+		nextSlot, nextSlotTime := findNextConfiguredScheduleSlotTime(now, loc, schedules, scheduledPosts)
 
 		if nextSlotTime.IsZero() {
 			return &NextAvailableSlotOutput{Body: struct {

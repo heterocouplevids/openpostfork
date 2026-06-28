@@ -1353,7 +1353,12 @@
 		suggestingSlot = true;
 		try {
 			const { data, error: err } = await (client as any).GET('/posting-schedules/next-slot', {
-				params: { query: { workspace_id: selectedWorkspaceId } }
+				params: {
+					query: {
+						workspace_id: selectedWorkspaceId,
+						...(selectedSetId ? { set_id: selectedSetId } : {})
+					}
+				}
 			});
 			if (err) throw err;
 			if (data?.slot_time) {
@@ -2142,7 +2147,7 @@
 														</div>
 													{/snippet}
 												</Tooltip.Trigger>
-												<Tooltip.Content class="w-48">
+												<Tooltip.Content>
 													<div class="space-y-1">
 														<p class="text-xs font-medium text-muted-foreground">
 															Character limits
