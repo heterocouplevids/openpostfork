@@ -22,11 +22,6 @@
 	import UsersIcon from 'lucide-svelte/icons/users';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 
-	interface MastodonServer {
-		name: string;
-		instance_url: string;
-	}
-
 	interface SetAccount {
 		social_account_id: string;
 		platform: string;
@@ -43,6 +38,15 @@
 		accounts: SetAccount[];
 	}
 
+	interface ProviderInfo {
+		platform: string;
+		display_name: string;
+		auth_mode: string;
+		configured: boolean;
+		name?: string;
+		instance_url?: string;
+	}
+
 	let workspaces = $state<Workspace[] | null>(null);
 	let selectedWorkspaceId = $state('');
 	let loading = $state(true);
@@ -54,11 +58,20 @@
 	let sets = $state<SocialMediaSet[]>([]);
 	let setsLoading = $state(false);
 
-	let mastodonServers = $state<MastodonServer[]>([]);
+	let providerEntries = $state.raw<ProviderInfo[]>([]);
+	let providersLoading = $state(false);
 	let selectedWorkspaceName = $derived(
 		workspaces?.find((workspace) => workspace.id === selectedWorkspaceId)?.name ||
 			'Select workspace'
 	);
+
+	const fallbackProviderEntries: ProviderInfo[] = [
+		{ platform: 'bluesky', display_name: 'Bluesky', auth_mode: 'app_password', configured: true },
+		{ platform: 'x', display_name: 'X (Twitter)', auth_mode: 'oauth', configured: false },
+		{ platform: 'mastodon', display_name: 'Mastodon', auth_mode: 'oauth_oob', configured: false },
+		{ platform: 'threads', display_name: 'Threads', auth_mode: 'oauth', configured: false },
+		{ platform: 'linkedin', display_name: 'LinkedIn', auth_mode: 'oauth', configured: false }
+	];
 
 	let blueskyModalOpen = $state(false);
 	let blueskyHandle = $state('');
@@ -151,13 +164,16 @@
 		}
 	}
 
-	async function loadMastodonServers() {
+	async function loadProviders() {
+		providersLoading = true;
 		try {
-			const { data } = await client.GET('/accounts/mastodon/servers', {});
-			mastodonServers = (data ?? []) as unknown as MastodonServer[];
+			const { data } = await (client as any).GET('/accounts/providers');
+			providerEntries = (data ?? []) as ProviderInfo[];
 		} catch (e) {
-			console.error('Failed to load Mastodon servers:', e);
-			mastodonServers = [];
+			console.error('Failed to load account providers:', e);
+			providerEntries = fallbackProviderEntries;
+		} finally {
+			providersLoading = false;
 		}
 	}
 
@@ -307,7 +323,7 @@
 						await loadAccounts();
 						await loadSets();
 					}
-					await loadMastodonServers();
+					await loadProviders();
 				} catch (e) {
 					console.error('Failed to load workspaces:', e);
 				} finally {
@@ -446,6 +462,58 @@
 			if (data?.url) window.location.href = data.url;
 		} catch (e) {
 			error = (e as Error).message;
+		}
+	}
+
+	function providerKey(provider: ProviderInfo): string {
+		if (provider.platform === 'mastodon') {
+			return provider.instance_url || provider.name || provider.platform;
+		}
+		return provider.platform;
+	}
+
+	function providerTitle(provider: ProviderInfo): string {
+		if (provider.platform === 'mastodon' && provider.name) return provider.name;
+		return provider.display_name || getPlatformName(provider.platform);
+	}
+
+	function providerDescription(provider: ProviderInfo): string {
+		if (!provider.configured) return 'Not configured';
+		if (provider.platform === 'mastodon' && provider.instance_url) {
+			return provider.instance_url.replace('https://', '');
+		}
+		switch (provider.platform) {
+			case 'x':
+				return 'Post tweets';
+			case 'threads':
+				return 'Post to Threads';
+			case 'bluesky':
+				return 'Post to Bluesky';
+			case 'linkedin':
+				return 'Post to LinkedIn';
+			default:
+				return 'Connect account';
+		}
+	}
+
+	function connectProvider(provider: ProviderInfo) {
+		if (!provider.configured) return;
+		switch (provider.platform) {
+			case 'x':
+				connectTwitter();
+				break;
+			case 'mastodon':
+				connectMastodon(provider.name || provider.instance_url || '');
+				break;
+			case 'threads':
+				connectThreads();
+				break;
+			case 'bluesky':
+				connectBluesky();
+				break;
+			case 'linkedin':
+				connectLinkedIn();
+				break;
 		}
 	}
 
@@ -740,99 +808,54 @@
 			<h2 class="mb-4 text-lg font-semibold">Connect a Platform</h2>
 
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-				<!-- X / Twitter -->
-				<div
-					class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
-				>
-					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-black">
-						<PlatformIcon platform="x" class="h-4 w-4 text-white" />
-					</div>
-					<div class="min-w-0 flex-1">
-						<h3 class="text-sm font-medium">X (Twitter)</h3>
-						<p class="text-sm text-muted-foreground">Post tweets</p>
-					</div>
-					<Button onclick={connectTwitter} size="sm">Connect</Button>
-				</div>
-
-				<!-- Mastodon -->
-				{#if mastodonServers.length > 0}
-					{#each mastodonServers as server (server.name)}
+				{#if providersLoading}
+					<Skeleton class="h-20 rounded-lg" />
+					<Skeleton class="h-20 rounded-lg" />
+					<Skeleton class="h-20 rounded-lg" />
+					<Skeleton class="h-20 rounded-lg" />
+				{:else}
+					{#each providerEntries as provider (providerKey(provider))}
 						<div
-							class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
+							data-testid={`provider-card-${provider.platform}`}
+							class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm {provider.configured
+								? ''
+								: 'opacity-60'}"
 						>
-							<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-								<PlatformIcon platform="mastodon" class="h-4 w-4 text-white" />
+							<div
+								class="flex h-10 w-10 items-center justify-center rounded-full {getPlatformColor(
+									provider.platform
+								)}"
+							>
+								<PlatformIcon platform={provider.platform} class="h-4 w-4 text-white" />
 							</div>
 							<div class="min-w-0 flex-1">
-								<h3 class="text-sm font-medium">{server.name}</h3>
+								<h3 class="text-sm font-medium">{providerTitle(provider)}</h3>
 								<p class="truncate text-sm text-muted-foreground">
-									{server.instance_url.replace('https://', '')}
+									{providerDescription(provider)}
 								</p>
 							</div>
-							<div class="flex gap-1.5">
+							{#if provider.platform === 'mastodon' && provider.configured}
+								<div class="flex gap-1.5">
+									<Button
+										href="/accounts/mastodon/callback"
+										variant="outline"
+										size="sm"
+										class="text-xs">Code</Button
+									>
+									<Button onclick={() => connectProvider(provider)} size="sm">Connect</Button>
+								</div>
+							{:else}
 								<Button
-									href="/accounts/mastodon/callback"
-									variant="outline"
+									onclick={() => connectProvider(provider)}
 									size="sm"
-									class="text-xs">Code</Button
+									disabled={!provider.configured}
 								>
-								<Button onclick={() => connectMastodon(server.name)} size="sm">Connect</Button>
-							</div>
+									{provider.configured ? 'Connect' : 'Unavailable'}
+								</Button>
+							{/if}
 						</div>
 					{/each}
-				{:else}
-					<div class="group flex items-center gap-3 rounded-lg border bg-card p-4 opacity-60">
-						<div class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-							<PlatformIcon platform="mastodon" class="h-4 w-4 text-white" />
-						</div>
-						<div class="min-w-0 flex-1">
-							<h3 class="text-sm font-medium">Mastodon</h3>
-							<p class="text-sm text-muted-foreground">Not configured</p>
-						</div>
-					</div>
 				{/if}
-
-				<!-- Threads -->
-				<div
-					class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
-				>
-					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
-						<PlatformIcon platform="threads" class="h-4 w-4 text-white" />
-					</div>
-					<div class="min-w-0 flex-1">
-						<h3 class="text-sm font-medium">Threads</h3>
-						<p class="text-sm text-muted-foreground">Post to Threads</p>
-					</div>
-					<Button onclick={connectThreads} size="sm">Connect</Button>
-				</div>
-
-				<!-- Bluesky -->
-				<div
-					class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
-				>
-					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-sky-500">
-						<PlatformIcon platform="bluesky" class="h-4 w-4 text-white" />
-					</div>
-					<div class="min-w-0 flex-1">
-						<h3 class="text-sm font-medium">Bluesky</h3>
-						<p class="text-sm text-muted-foreground">Post to Bluesky</p>
-					</div>
-					<Button onclick={connectBluesky} size="sm">Connect</Button>
-				</div>
-
-				<!-- LinkedIn -->
-				<div
-					class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm"
-				>
-					<div class="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600">
-						<PlatformIcon platform="linkedin" class="h-4 w-4 text-white" />
-					</div>
-					<div class="min-w-0 flex-1">
-						<h3 class="text-sm font-medium">LinkedIn</h3>
-						<p class="text-sm text-muted-foreground">Post to LinkedIn</p>
-					</div>
-					<Button onclick={connectLinkedIn} size="sm">Connect</Button>
-				</div>
 			</div>
 		</div>
 	</PageContainer>

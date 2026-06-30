@@ -36,6 +36,7 @@ All notable changes to this project are documented in this file.
 - Added dedicated `mcp:full` API-token creation in settings and enforced MCP-compatible token scopes on `/mcp` while preserving existing CLI proxy tokens.
 - Added a structured provider app registry that normalizes legacy provider env vars and optional `OPENPOST_PROVIDER_APPS` JSON before building platform adapters.
 - Added an authenticated account-provider discovery endpoint so clients can distinguish configured provider apps from unavailable providers.
+- Added provider-discovery rendering on the Accounts page, including unavailable states for provider apps that still need operator configuration.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
