@@ -29,6 +29,7 @@ import (
 	"github.com/openpost/backend/internal/services/billing"
 	cliauth "github.com/openpost/backend/internal/services/cli_auth"
 	"github.com/openpost/backend/internal/services/crypto"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/mfa"
@@ -67,6 +68,10 @@ func main() {
 	authService := auth.NewService(cfg.JWTSecret)
 	apiTokenService := apitokens.NewService(db)
 	billingService := billing.NewService(db, cfg.PolarWebhookSecret)
+	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
+	if cfg.Edition == config.EditionCloud {
+		entitlementService = entitlements.NewSubscriptionService(db, entitlementService)
+	}
 	authenticator := apimiddleware.NewCompositeService(authService, apiTokenService)
 	cliAuthService := cliauth.NewService(db, apiTokenService)
 	mediaSigner := mediasigner.New(cfg.EncryptionKey)
@@ -162,6 +167,7 @@ func main() {
 	}
 	publishSvc.SetStorage(storage)
 	mediaHandler := handlers.NewMediaHandler(db, storage, authService, authenticator, mediaSigner)
+	mediaHandler.SetEntitlement(entitlementService)
 
 	worker := queue.NewWorker(db, "worker-1", 1*time.Second, publishSvc, tokenManager, storage)
 
@@ -214,13 +220,13 @@ func main() {
 	mcpHandler := handlers.NewMCPHandler(db, authenticator)
 	mcpHandler.RegisterRoutes(e)
 
-	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator)
+	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator, entitlementService)
 	workspaceHandler.CreateWorkspace(api)
 	workspaceHandler.ListWorkspaces(api)
 	workspaceHandler.GetWorkspaceSettings(api)
 	workspaceHandler.UpdateWorkspaceSettings(api)
 
-	postHandler := handlers.NewPostHandler(db, authenticator)
+	postHandler := handlers.NewPostHandler(db, authenticator, entitlementService)
 	postHandler.CreatePost(api)
 	postHandler.CreateThread(api)
 	postHandler.ListPosts(api)
@@ -260,6 +266,7 @@ func main() {
 	jobHandler.RegisterRoutes(api)
 
 	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authenticator, cfg.DisableLinkedInThreadReplies, cfg.FrontendURL)
+	oauthHandler.SetEntitlement(entitlementService)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
 	oauthHandler.Callback(api)

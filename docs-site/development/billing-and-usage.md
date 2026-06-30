@@ -9,6 +9,7 @@ OpenPost Cloud billing is built around local entitlement snapshots and durable u
 - `billing_subscriptions`: local Polar subscription snapshots keyed by workspace.
 - `billing_webhook_events`: webhook event ledger for idempotent Polar processing.
 - `POST /api/v1/billing/polar/webhook`: verifies Standard Webhooks signatures and upserts local subscription state.
+- Cloud mode reads `billing_subscriptions.entitlement_snapshot` for workspace-scoped quota checks.
 - Workspace creation checks `LimitWorkspaces` before inserting a new workspace.
 - Provider connection flows check `social_accounts` before inserting a new active social account.
 - Media uploads check `media_bytes_uploaded_monthly` and `media_bytes_stored`; successful new uploads increment monthly uploaded-byte usage.
@@ -42,4 +43,4 @@ Set these only on hosted/cloud deployments:
 - `OPENPOST_POLAR_CHECKOUT_SUCCESS_URL`
 - `OPENPOST_POLAR_CUSTOMER_PORTAL_URL`
 
-Polar checkout should pass `workspace_id` and `plan_id` in subscription metadata. API handlers should consume local snapshots only; they should not call Polar on quota checks.
+Polar checkout should pass `workspace_id`, `plan_id`, and a `limits` object in subscription metadata. API handlers consume local snapshots only; they do not call Polar on quota checks.

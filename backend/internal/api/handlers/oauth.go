@@ -18,6 +18,7 @@ import (
 	"github.com/openpost/backend/internal/platform"
 	account_saver "github.com/openpost/backend/internal/services/account_saver"
 	"github.com/openpost/backend/internal/services/crypto"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/oauthstate"
 	"github.com/uptrace/bun"
 )
@@ -69,6 +70,12 @@ func NewOAuthHandler(
 		accountSaver:                 account_saver.NewAccountSaver(db, encryptor),
 		oauthStates:                  oauthstate.NewStore(db),
 		frontendURL:                  strings.TrimRight(frontendURL, "/"),
+	}
+}
+
+func (h *OAuthHandler) SetEntitlement(entitlement entitlements.Service) {
+	if h.accountSaver != nil {
+		h.accountSaver.SetEntitlement(entitlement)
 	}
 }
 
