@@ -158,7 +158,8 @@
 	let mcpActivityLoading = $state(true);
 	let mcpActivityError = $state('');
 	let apiTokenBusy = $state(false);
-	let apiTokenName = $state('OpenPost CLI');
+	let apiTokenName = $state('OpenPost MCP');
+	let apiTokenScope = $state('mcp:full');
 	let createdAPIToken = $state('');
 	let billingBusyPlan = $state('');
 	let billingPortalBusy = $state(false);
@@ -201,6 +202,21 @@
 
 	const authState = $derived($auth);
 	const passkeyCount = $derived(securityStatus?.passkeys.length ?? 0);
+	const apiTokenScopeOptions = [
+		{
+			value: 'mcp:full',
+			label: 'MCP / ChatGPT App',
+			description: 'For ChatGPT, Claude, and other MCP clients.'
+		},
+		{
+			value: 'cli:full',
+			label: 'CLI / automation',
+			description: 'For OpenPost CLI, CI, cron, and scripts.'
+		}
+	];
+	const selectedAPITokenScope = $derived(
+		apiTokenScopeOptions.find((option) => option.value === apiTokenScope) ?? apiTokenScopeOptions[0]
+	);
 	const billingPlans = [
 		{
 			id: 'starter',
@@ -295,13 +311,14 @@
 		apiTokenBusy = true;
 		securityError = '';
 		createdAPIToken = '';
+		const fallbackName = apiTokenScope === 'mcp:full' ? 'OpenPost MCP' : 'OpenPost CLI';
 		try {
 			const { data, error: err } = await (client as any).POST('/api-tokens', {
-				body: { name: apiTokenName.trim() || 'OpenPost CLI', scope: 'cli:full' }
+				body: { name: apiTokenName.trim() || fallbackName, scope: apiTokenScope }
 			});
 			if (err || !data) throw new Error(err?.detail || 'Failed to create API token');
 			createdAPIToken = data.token;
-			apiTokenName = 'OpenPost CLI';
+			apiTokenName = fallbackName;
 			await loadAPITokens();
 		} catch (e) {
 			securityError = (e as Error).message;
@@ -1213,18 +1230,40 @@
 				CLI Devices & API Tokens
 			</h2>
 			<p class="mb-4 text-sm text-muted-foreground">
-				The CLI signs in through device authorization and receives a revocable API token. Manual
-				tokens can also be created here for CI, cron, and other automation.
+				Create dedicated tokens for ChatGPT, Claude, the MCP server, the OpenPost CLI, CI, cron, and
+				other automation. Revoke any token here without changing your password.
 			</p>
 
-			<div class="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+			<div class="mb-4 grid gap-3 lg:grid-cols-[1fr_280px_auto]">
 				<div class="space-y-2">
 					<Label for="api-token-name">New token name</Label>
 					<Input
 						id="api-token-name"
 						bind:value={apiTokenName}
-						placeholder="MacBook CLI, GitHub CI"
+						placeholder="ChatGPT App, MacBook CLI, GitHub CI"
 					/>
+				</div>
+				<div class="space-y-2">
+					<Label for="api-token-scope">Token scope</Label>
+					<Select.Root
+						type="single"
+						value={apiTokenScope}
+						onValueChange={(value) => value && (apiTokenScope = value)}
+					>
+						<Select.Trigger id="api-token-scope" data-testid="api-token-scope" class="w-full">
+							{selectedAPITokenScope.label}
+						</Select.Trigger>
+						<Select.Content>
+							{#each apiTokenScopeOptions as option (option.value)}
+								<Select.Item value={option.value}>
+									<div class="flex flex-col gap-0.5 text-left">
+										<span>{option.label}</span>
+										<span class="text-xs text-muted-foreground">{option.description}</span>
+									</div>
+								</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
 				</div>
 				<div class="flex items-end">
 					<Button onclick={createAPIToken} disabled={apiTokenBusy}>

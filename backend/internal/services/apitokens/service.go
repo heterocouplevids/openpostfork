@@ -19,7 +19,9 @@ import (
 
 const (
 	TokenPrefix       = "op_cli"
-	DefaultScope      = "cli:full"
+	ScopeCLI          = "cli:full"
+	ScopeMCP          = "mcp:full"
+	DefaultScope      = ScopeCLI
 	DefaultExpiration = 90 * 24 * time.Hour
 	secretBytes       = 32
 	hashHexLength     = 64
@@ -29,6 +31,7 @@ const (
 var (
 	ErrInvalidToken = errors.New("invalid api token")
 	ErrExpiredToken = errors.New("expired api token")
+	ErrInvalidScope = errors.New("invalid api token scope")
 	ErrRevokedToken = errors.New("revoked api token")
 )
 
@@ -52,8 +55,9 @@ func NewService(db *bun.DB) *Service {
 }
 
 func (s *Service) GenerateToken(ctx context.Context, userID, name, scope string, expiresAt *time.Time) (*GeneratedToken, error) {
-	if scope == "" {
-		scope = DefaultScope
+	scope, err := NormalizeScope(scope)
+	if err != nil {
+		return nil, err
 	}
 	if name == "" {
 		name = "CLI token"
@@ -89,6 +93,19 @@ func (s *Service) GenerateToken(ctx context.Context, userID, name, scope string,
 	}
 
 	return &GeneratedToken{Token: rawToken, Model: model}, nil
+}
+
+func NormalizeScope(scope string) (string, error) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return DefaultScope, nil
+	}
+	switch scope {
+	case ScopeCLI, ScopeMCP:
+		return scope, nil
+	default:
+		return "", ErrInvalidScope
+	}
 }
 
 func HashToken(secret string) (string, string) {

@@ -77,6 +77,22 @@ func TestGenerateTokenSupportsNeverExpires(t *testing.T) {
 	require.True(t, generated.Model.ExpiresAt.IsZero())
 }
 
+func TestGenerateTokenValidatesScope(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := newServiceTestDB(t)
+	seedServiceUser(ctx, t, db, "user-1", "user@example.com")
+
+	service := NewService(db)
+	mcp, err := service.GenerateToken(ctx, "user-1", "ChatGPT App", ScopeMCP, nil)
+	require.NoError(t, err)
+	require.Equal(t, ScopeMCP, mcp.Model.Scope)
+
+	_, err = service.GenerateToken(ctx, "user-1", "Bad", "media:read", nil)
+	require.ErrorIs(t, err, ErrInvalidScope)
+}
+
 func TestValidateTokenReturnsPrincipalAndTouchesLastUsed(t *testing.T) {
 	t.Parallel()
 

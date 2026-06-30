@@ -54,8 +54,9 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 ## Current scope
 
 - Uses the same Bearer authentication path as the CLI and API tokens.
+- Dedicated `mcp:full` tokens can be created in Settings for ChatGPT, Claude, and other MCP clients. Existing `cli:full` tokens also remain accepted by `/mcp` so `openpost-mcp` profiles continue to work.
 - Publishes MCP protected-resource metadata and returns `WWW-Authenticate` plus `_meta["mcp/www_authenticate"]` challenges for unauthenticated MCP requests.
-- Advertises the `mcp:full` OAuth scope in every MCP tool descriptor. A dedicated OAuth authorization-server flow for ChatGPT account linking is still planned.
+- Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. A dedicated OAuth authorization-server flow for ChatGPT account linking is still planned.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
 - Rejects media URL fetches that resolve to private, loopback, link-local, multicast, or otherwise local addresses.

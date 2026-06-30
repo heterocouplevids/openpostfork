@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/mediastore"
@@ -129,6 +131,16 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+type mcpScopeAuthenticator map[string]middleware.Principal
+
+func (a mcpScopeAuthenticator) AuthenticateBearer(_ context.Context, token string) (*middleware.Principal, error) {
+	principal, ok := a[token]
+	if !ok {
+		return nil, errors.New("invalid token")
+	}
+	return &principal, nil
+}
+
 func TestMCPRejectsMissingAuthorization(t *testing.T) {
 	t.Parallel()
 
@@ -163,6 +175,35 @@ func TestMCPProtectedResourceMetadata(t *testing.T) {
 	require.Equal(t, []any{"https://app.openpost.test"}, out["authorization_servers"])
 	require.Equal(t, []any{"mcp:full"}, out["scopes_supported"])
 	require.Equal(t, []any{"header"}, out["bearer_methods_supported"])
+}
+
+func TestMCPAuthenticatesSupportedTokenScopes(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	srv.handler.auth = mcpScopeAuthenticator{
+		"web-token":   {UserID: "user-1", Email: "user@example.com"},
+		"mcp-token":   {UserID: "user-1", Email: "user@example.com", Scope: "mcp:full"},
+		"cli-token":   {UserID: "user-1", Email: "user@example.com", Scope: "cli:full"},
+		"media-token": {UserID: "user-1", Email: "user@example.com", Scope: "media:read"},
+	}
+
+	for _, token := range []string{"web-token", "mcp-token", "cli-token"} {
+		resp := srv.request(t, token, map[string]any{
+			"jsonrpc": "2.0",
+			"id":      token,
+			"method":  "tools/list",
+		})
+		require.Equal(t, http.StatusOK, resp.Code, token)
+	}
+
+	resp := srv.request(t, "media-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "bad-scope",
+		"method":  "tools/list",
+	})
+	require.Equal(t, http.StatusUnauthorized, resp.Code)
+	require.Contains(t, resp.Header().Get("WWW-Authenticate"), `scope="mcp:full"`)
 }
 
 func TestMCPToolsList(t *testing.T) {

@@ -40,7 +40,7 @@ type ListAPITokensOutput struct {
 type CreateAPITokenInput struct {
 	Body struct {
 		Name      string     `json:"name" doc:"User-visible token name"`
-		Scope     string     `json:"scope,omitempty" doc:"Token scope. Defaults to cli:full."`
+		Scope     string     `json:"scope,omitempty" doc:"Token scope. Supported values: cli:full, mcp:full. Defaults to cli:full."`
 		ExpiresAt *time.Time `json:"expires_at,omitempty" doc:"Explicit expiry. Null means never expires."`
 	}
 }
@@ -96,6 +96,9 @@ func (h *APITokenHandler) RegisterRoutes(api huma.API) {
 			input.Body.ExpiresAt,
 		)
 		if err != nil {
+			if errors.Is(err, apitokens.ErrInvalidScope) {
+				return nil, huma.Error400BadRequest("invalid api token scope")
+			}
 			return nil, huma.Error500InternalServerError("failed to create api token")
 		}
 

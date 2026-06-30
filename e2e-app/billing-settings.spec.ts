@@ -78,3 +78,36 @@ test('settings shows recent MCP activity for an authenticated user', async ({ pa
 	await expect(page.getByTestId('mcp-activity-list')).toContainText('list_workspaces');
 	await expect(page.getByTestId('mcp-activity-list')).toContainText('success');
 });
+
+test('settings creates MCP-scoped API tokens', async ({ page, request }) => {
+	const unique = Date.now().toString(36);
+	const email = `mcp-token-${unique}@example.com`;
+	const password = 'password-1234';
+
+	const register = await request.post('/api/v1/auth/register', {
+		data: { email, password }
+	});
+	expect(register.ok()).toBeTruthy();
+	const auth = await register.json();
+	expect(auth.token).toBeTruthy();
+
+	const workspace = await request.post('/api/v1/workspaces', {
+		headers: { Authorization: `Bearer ${auth.token}` },
+		data: { name: 'MCP Token E2E' }
+	});
+	expect(workspace.ok()).toBeTruthy();
+
+	await page.addInitScript((token) => {
+		window.localStorage.setItem('token', token);
+	}, auth.token);
+	await page.goto('/settings');
+
+	await expect(page.getByTestId('api-token-scope')).toContainText('MCP / ChatGPT App');
+	await page.locator('#api-token-name').fill('ChatGPT App E2E');
+	await page.getByRole('button', { name: 'Create Token' }).click();
+
+	await expect(page.getByText('Copy this token now')).toBeVisible();
+	await expect(page.getByText(/op_cli_[a-f0-9]{8}_/)).toBeVisible();
+	await expect(page.getByText('ChatGPT App E2E')).toBeVisible();
+	await expect(page.getByText(/mcp:full/)).toBeVisible();
+});

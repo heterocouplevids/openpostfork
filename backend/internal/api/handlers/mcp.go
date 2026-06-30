@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/apitokens"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/usage"
@@ -33,7 +34,7 @@ const (
 	mcpToolCancelPost   = "cancel_post"
 	mcpToolSuggestSlot  = "suggest_next_slot"
 	mcpToolUploadURL    = "upload_media_from_url"
-	mcpScopeFull        = "mcp:full"
+	mcpScopeFull        = apitokens.ScopeMCP
 	maxRemoteMediaBytes = 50 * 1024 * 1024
 )
 
@@ -197,7 +198,23 @@ func (h *MCPHandler) authenticate(r *http.Request) (*middleware.Principal, error
 	if !ok || strings.TrimSpace(token) == "" {
 		return nil, fmt.Errorf("missing bearer token")
 	}
-	return h.auth.AuthenticateBearer(r.Context(), token)
+	principal, err := h.auth.AuthenticateBearer(r.Context(), token)
+	if err != nil {
+		return nil, err
+	}
+	if !mcpScopeAllowed(principal.Scope) {
+		return nil, fmt.Errorf("api token scope %q cannot access mcp", principal.Scope)
+	}
+	return principal, nil
+}
+
+func mcpScopeAllowed(scope string) bool {
+	switch strings.TrimSpace(scope) {
+	case "", apitokens.ScopeCLI, apitokens.ScopeMCP:
+		return true
+	default:
+		return false
+	}
 }
 
 func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Principal, req mcpRequest) (any, *mcpError) {

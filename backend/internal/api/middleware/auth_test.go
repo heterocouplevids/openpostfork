@@ -2,12 +2,20 @@ package middleware
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/apitokens"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/sqlitedialect"
 )
 
 // fakeAuthenticator stands in for the real composite authenticator.
@@ -93,5 +101,53 @@ func TestBearerMiddleware_InvalidToken_Returns401(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 for rejected token, got %d (body=%q)", rec.Code, rec.Body.String())
+	}
+}
+
+type rejectingAuthenticator struct{}
+
+func (rejectingAuthenticator) AuthenticateBearer(_ context.Context, _ string) (*Principal, error) {
+	return nil, errors.New("invalid jwt")
+}
+
+func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
+	ctx := context.Background()
+	sqldb, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=private", strings.ReplaceAll(t.Name(), "/", "_")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqldb.SetMaxOpenConns(1)
+	db := bun.NewDB(sqldb, sqlitedialect.New())
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	for _, model := range []interface{}{(*models.User)(nil), (*models.APIToken)(nil)} {
+		if _, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.NewInsert().Model(&models.User{
+		ID:           "user-1",
+		Email:        "user@example.com",
+		PasswordHash: "hash",
+	}).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	tokenService := apitokens.NewService(db)
+	generated, err := tokenService.GenerateToken(ctx, "user-1", "ChatGPT", apitokens.ScopeMCP, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	composite := &CompositeService{jwt: rejectingAuthenticator{}, apiTokens: tokenService}
+
+	principal, err := composite.AuthenticateBearer(ctx, generated.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if principal.Scope != apitokens.ScopeMCP {
+		t.Fatalf("expected scope %q, got %q", apitokens.ScopeMCP, principal.Scope)
 	}
 }
