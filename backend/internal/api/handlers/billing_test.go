@@ -82,6 +82,27 @@ func newBillingHandlerTestServer(t *testing.T, secret string, now time.Time) *bi
 func newBillingAPITestServer(t *testing.T) *billingTestServer {
 	t.Helper()
 
+	client := &billingHTTPClient{t: t}
+	return newBillingAPITestServerWithPolarConfig(t, client, billing.PolarConfig{
+		AccessToken: "polar-token",
+		APIBaseURL:  "https://api.polar.test",
+		SuccessURL:  "https://app.openpost.test/settings/billing?checkout_id={CHECKOUT_ID}",
+		ReturnURL:   "https://app.openpost.test/settings/billing",
+		Plans: map[string]billing.PlanConfig{
+			"creator": {
+				ProductID: "product-creator",
+				Limits: map[entitlements.LimitKey]int64{
+					entitlements.LimitScheduledPostsMonthly: 500,
+					entitlements.LimitSocialAccounts:        6,
+				},
+			},
+		},
+	})
+}
+
+func newBillingAPITestServerWithPolarConfig(t *testing.T, client *billingHTTPClient, cfg billing.PolarConfig) *billingTestServer {
+	t.Helper()
+
 	db := createHandlerTestDB(
 		t,
 		(*models.User)(nil),
@@ -106,22 +127,7 @@ func newBillingAPITestServer(t *testing.T) *billingTestServer {
 	}).Exec(ctx)
 	require.NoError(t, err)
 
-	client := &billingHTTPClient{t: t}
-	service := billing.NewService(db, "", billing.PolarConfig{
-		AccessToken: "polar-token",
-		APIBaseURL:  "https://api.polar.test",
-		SuccessURL:  "https://app.openpost.test/settings/billing?checkout_id={CHECKOUT_ID}",
-		ReturnURL:   "https://app.openpost.test/settings/billing",
-		Plans: map[string]billing.PlanConfig{
-			"creator": {
-				ProductID: "product-creator",
-				Limits: map[entitlements.LimitKey]int64{
-					entitlements.LimitScheduledPostsMonthly: 500,
-					entitlements.LimitSocialAccounts:        6,
-				},
-			},
-		},
-	})
+	service := billing.NewService(db, "", cfg)
 	service.SetHTTPClientForTest(client)
 
 	e := echo.New()
@@ -245,6 +251,26 @@ func TestCreateBillingCheckoutRoute(t *testing.T) {
 	metadata := req.Body["metadata"].(map[string]any)
 	require.Equal(t, "creator", metadata["plan_id"])
 	require.Equal(t, "ws-1", metadata["workspace_id"])
+}
+
+func TestCreateBillingCheckoutRouteReturns503WhenPolarIsNotConfigured(t *testing.T) {
+	t.Parallel()
+
+	srv := newBillingAPITestServerWithPolarConfig(t, &billingHTTPClient{t: t}, billing.PolarConfig{
+		APIBaseURL: "https://api.polar.test",
+		Plans: map[string]billing.PlanConfig{
+			"creator": {ProductID: "product-creator"},
+		},
+	})
+
+	resp := srv.postJSON(t, "/api/v1/billing/checkout", map[string]any{
+		"workspace_id": "ws-1",
+		"plan_id":      "creator",
+	})
+
+	require.Equal(t, http.StatusServiceUnavailable, resp.Code, resp.Body.String())
+	require.Contains(t, resp.Body.String(), "OPENPOST_POLAR_ACCESS_TOKEN")
+	require.Empty(t, srv.client.requests)
 }
 
 func TestGetBillingStatusRouteWithoutSubscription(t *testing.T) {

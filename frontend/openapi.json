@@ -4871,6 +4871,16 @@
 							}
 						},
 						"description": "Internal Server Error"
+					},
+					"503": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Service Unavailable"
 					}
 				},
 				"summary": "Create billing checkout",
@@ -4940,6 +4950,16 @@
 							}
 						},
 						"description": "Internal Server Error"
+					},
+					"503": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Service Unavailable"
 					}
 				},
 				"summary": "Create billing portal session",

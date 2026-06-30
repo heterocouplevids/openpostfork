@@ -204,6 +204,47 @@ func TestCreateCheckoutRejectsUnconfiguredPlan(t *testing.T) {
 	require.ErrorContains(t, err, "unknown billing plan")
 }
 
+func TestCreateCheckoutMissingPolarAccessTokenIsConfigurationError(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(nil, "", PolarConfig{
+		Plans: map[string]PlanConfig{
+			"creator": {ProductID: "product-creator"},
+		},
+	})
+
+	_, err := service.CreateCheckout(context.Background(), CreateCheckoutInput{
+		WorkspaceID:   "ws-1",
+		CustomerEmail: "user@example.com",
+		PlanID:        "creator",
+	})
+
+	require.Error(t, err)
+	require.True(t, IsConfigurationError(err))
+	require.ErrorContains(t, err, "OPENPOST_POLAR_ACCESS_TOKEN")
+}
+
+func TestCreateCheckoutMissingPlanProductIsConfigurationError(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(nil, "", PolarConfig{
+		AccessToken: "polar-token",
+		Plans: map[string]PlanConfig{
+			"creator": {},
+		},
+	})
+
+	_, err := service.CreateCheckout(context.Background(), CreateCheckoutInput{
+		WorkspaceID:   "ws-1",
+		CustomerEmail: "user@example.com",
+		PlanID:        "creator",
+	})
+
+	require.Error(t, err)
+	require.True(t, IsConfigurationError(err))
+	require.ErrorContains(t, err, "OPENPOST_POLAR_CREATOR_PRODUCT_ID")
+}
+
 func TestCreateCustomerPortalSessionPostsPolarCustomerSession(t *testing.T) {
 	t.Parallel()
 

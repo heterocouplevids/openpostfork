@@ -50,4 +50,6 @@ Set these only on hosted/cloud deployments:
 
 `OPENPOST_POLAR_RETURN_URL` is the OpenPost app URL Polar should return users to after hosted checkout or customer portal flows, usually the billing settings page. `OPENPOST_POLAR_CUSTOMER_PORTAL_URL` is still accepted as a legacy alias.
 
+Checkout and customer portal endpoints return `503` when Polar is missing required server-side configuration such as `OPENPOST_POLAR_ACCESS_TOKEN` or a plan product ID. User input errors, such as an unknown plan ID, remain `400`.
+
 Checkout metadata uses primitive `limit_<metric>` keys, for example `limit_scheduled_posts_monthly`, because Polar metadata values are primitive values. The webhook processor rebuilds those keys into the local entitlement snapshot. API handlers consume local snapshots only; they do not call Polar on quota checks.

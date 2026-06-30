@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +22,16 @@ import (
 )
 
 const ProviderPolar = "polar"
+
+var errConfiguration = errors.New("billing provider is not configured")
+
+func IsConfigurationError(err error) bool {
+	return errors.Is(err, errConfiguration)
+}
+
+func configurationError(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", errConfiguration, fmt.Sprintf(format, args...))
+}
 
 type Service struct {
 	db            *bun.DB
@@ -196,9 +207,22 @@ func (s *Service) planFor(planID string) (PlanConfig, error) {
 		return PlanConfig{}, fmt.Errorf("unknown billing plan %q", planID)
 	}
 	if strings.TrimSpace(plan.ProductID) == "" {
-		return PlanConfig{}, fmt.Errorf("billing plan %q is not configured", planID)
+		return PlanConfig{}, configurationError("%s is required for billing plan %q", polarProductEnvVar(planID), planID)
 	}
 	return plan, nil
+}
+
+func polarProductEnvVar(planID string) string {
+	switch planID {
+	case "starter":
+		return "OPENPOST_POLAR_STARTER_PRODUCT_ID"
+	case "creator":
+		return "OPENPOST_POLAR_CREATOR_PRODUCT_ID"
+	case "pro":
+		return "OPENPOST_POLAR_PRO_PRODUCT_ID"
+	default:
+		return "OPENPOST_POLAR_" + strings.ToUpper(strings.ReplaceAll(planID, "-", "_")) + "_PRODUCT_ID"
+	}
 }
 
 func checkoutMetadata(workspaceID, userID, planID string, limits map[entitlements.LimitKey]int64) map[string]any {
@@ -217,7 +241,7 @@ func checkoutMetadata(workspaceID, userID, planID string, limits map[entitlement
 
 func (s *Service) postPolar(ctx context.Context, path string, payload any, out any) error {
 	if strings.TrimSpace(s.polar.AccessToken) == "" {
-		return fmt.Errorf("polar access token is not configured")
+		return configurationError("OPENPOST_POLAR_ACCESS_TOKEN is required")
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

@@ -72,7 +72,7 @@ func (h *BillingHandler) RegisterAPIRoutes(api huma.API) {
 		Summary:     "Create billing checkout",
 		Tags:        []string{"Billing"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-		Errors:      []int{400, 403},
+		Errors:      []int{400, 403, 503},
 	}, h.createCheckout)
 
 	huma.Register(api, huma.Operation{
@@ -82,7 +82,7 @@ func (h *BillingHandler) RegisterAPIRoutes(api huma.API) {
 		Summary:     "Create billing portal session",
 		Tags:        []string{"Billing"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-		Errors:      []int{400, 403},
+		Errors:      []int{400, 403, 503},
 	}, h.createPortalSession)
 }
 
@@ -216,7 +216,7 @@ func (h *BillingHandler) createCheckout(ctx context.Context, input *CreateBillin
 		PlanID:        input.Body.PlanID,
 	})
 	if err != nil {
-		return nil, huma.Error400BadRequest(err.Error())
+		return nil, billingAPIError(err)
 	}
 	return &BillingURLOutput{Body: BillingURLResponse{ID: result.ID, URL: result.URL}}, nil
 }
@@ -238,9 +238,16 @@ func (h *BillingHandler) createPortalSession(ctx context.Context, input *CreateB
 
 	result, err := h.billing.CreateCustomerPortalSession(ctx, input.Body.WorkspaceID)
 	if err != nil {
-		return nil, huma.Error400BadRequest(err.Error())
+		return nil, billingAPIError(err)
 	}
 	return &BillingURLOutput{Body: BillingURLResponse{ID: result.ID, URL: result.URL}}, nil
+}
+
+func billingAPIError(err error) error {
+	if billing.IsConfigurationError(err) {
+		return huma.NewError(http.StatusServiceUnavailable, err.Error())
+	}
+	return huma.Error400BadRequest(err.Error())
 }
 
 func (h *BillingHandler) ensureReady() error {
