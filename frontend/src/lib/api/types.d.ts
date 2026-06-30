@@ -380,6 +380,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/billing/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get billing status */
+        get: operations["get-billing-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/billing/portal": {
         parameters: {
             query?: never;
@@ -1083,6 +1100,36 @@ export interface components {
             id?: string;
             /** @description Redirect URL */
             url: string;
+        };
+        BillingStatusResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/BillingStatusResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the subscription cancels at period end */
+            cancel_at_period_end: boolean;
+            /** @description Current billing period end */
+            current_period_end?: string;
+            /** @description Entitlement limits from the local subscription snapshot */
+            limits: {
+                [key: string]: number;
+            };
+            /** @description UTC month start for the usage counters */
+            period_start: string;
+            /** @description Plan ID */
+            plan_id?: string;
+            /** @description Billing provider */
+            provider?: string;
+            /** @description Subscription status */
+            status: string;
+            /** @description Current-month usage counters */
+            usage: {
+                [key: string]: number;
+            };
+            /** @description Workspace ID */
+            workspace_id: string;
         };
         BlueskyLoginInputBody: {
             /**
@@ -3625,6 +3672,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillingURLResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-billing-status": {
+        parameters: {
+            query?: {
+                /** @description Workspace ID */
+                workspace_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingStatusResponse"];
                 };
             };
             /** @description Bad Request */

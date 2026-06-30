@@ -87,6 +87,8 @@ func newBillingAPITestServer(t *testing.T) *billingTestServer {
 		(*models.User)(nil),
 		(*models.Workspace)(nil),
 		(*models.WorkspaceMember)(nil),
+		(*models.BillingSubscription)(nil),
+		(*models.UsageCounter)(nil),
 	)
 	ctx := context.Background()
 	_, err := db.NewInsert().Model(&models.User{
@@ -148,6 +150,16 @@ func (s *billingTestServer) postJSON(t *testing.T, path string, body any) *httpt
 	require.NoError(t, json.NewEncoder(&payload).Encode(body))
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, &payload)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer web-token")
+	rec := httptest.NewRecorder()
+	s.echo.ServeHTTP(rec, req)
+	return rec
+}
+
+func (s *billingTestServer) getJSON(t *testing.T, path string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
 	req.Header.Set("Authorization", "Bearer web-token")
 	rec := httptest.NewRecorder()
 	s.echo.ServeHTTP(rec, req)
@@ -233,6 +245,63 @@ func TestCreateBillingCheckoutRoute(t *testing.T) {
 	metadata := req.Body["metadata"].(map[string]any)
 	require.Equal(t, "creator", metadata["plan_id"])
 	require.Equal(t, "ws-1", metadata["workspace_id"])
+}
+
+func TestGetBillingStatusRouteWithoutSubscription(t *testing.T) {
+	t.Parallel()
+
+	srv := newBillingAPITestServer(t)
+
+	resp := srv.getJSON(t, "/api/v1/billing/status?workspace_id=ws-1")
+
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	require.Equal(t, "ws-1", out["workspace_id"])
+	require.Equal(t, "none", out["status"])
+	require.Equal(t, map[string]any{}, out["limits"])
+	require.Equal(t, map[string]any{}, out["usage"])
+	require.NotEmpty(t, out["period_start"])
+}
+
+func TestGetBillingStatusRouteWithSubscriptionAndUsage(t *testing.T) {
+	t.Parallel()
+
+	srv := newBillingAPITestServer(t)
+	ctx := context.Background()
+	_, err := srv.db.NewInsert().Model(&models.BillingSubscription{
+		WorkspaceID:            "ws-1",
+		Provider:               "polar",
+		ProviderCustomerID:     "cus-1",
+		ProviderSubscriptionID: "sub-1",
+		Status:                 "active",
+		PlanID:                 "creator",
+		EntitlementSnapshot:    `{"limits":{"scheduled_posts_monthly":500,"social_accounts":6}}`,
+		CurrentPeriodEnd:       time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC),
+	}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.UsageCounter{
+		WorkspaceID: "ws-1",
+		Metric:      string(entitlements.LimitScheduledPostsMonthly),
+		PeriodStart: time.Date(time.Now().UTC().Year(), time.Now().UTC().Month(), 1, 0, 0, 0, 0, time.UTC),
+		Value:       42,
+	}).Exec(ctx)
+	require.NoError(t, err)
+
+	resp := srv.getJSON(t, "/api/v1/billing/status?workspace_id=ws-1")
+
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	require.Equal(t, "polar", out["provider"])
+	require.Equal(t, "active", out["status"])
+	require.Equal(t, "creator", out["plan_id"])
+	require.Equal(t, "2026-07-30T12:00:00Z", out["current_period_end"])
+	limits := out["limits"].(map[string]any)
+	require.Equal(t, float64(500), limits["scheduled_posts_monthly"])
+	require.Equal(t, float64(6), limits["social_accounts"])
+	usage := out["usage"].(map[string]any)
+	require.Equal(t, float64(42), usage["scheduled_posts_monthly"])
 }
 
 func TestCreateBillingPortalRoute(t *testing.T) {

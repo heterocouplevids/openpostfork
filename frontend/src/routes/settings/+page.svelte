@@ -159,6 +159,8 @@
 	let billingBusyPlan = $state('');
 	let billingPortalBusy = $state(false);
 	let billingError = $state('');
+	let billingStatusLoading = $state(false);
+	let billingStatus = $state<BillingStatus | null>(null);
 
 	interface APITokenSummary {
 		id: string;
@@ -169,6 +171,18 @@
 		last_used_at?: string | null;
 		revoked_at?: string | null;
 		created_at: string;
+	}
+
+	interface BillingStatus {
+		workspace_id: string;
+		provider?: string;
+		status: string;
+		plan_id?: string;
+		current_period_end?: string;
+		cancel_at_period_end: boolean;
+		limits: Record<string, number>;
+		usage: Record<string, number>;
+		period_start: string;
 	}
 
 	const authState = $derived($auth);
@@ -197,6 +211,26 @@
 			limits: ['10 workspaces', '15 social accounts', '2,500 scheduled posts/month', '25 GB media']
 		}
 	];
+	const billingMetricLabels: Record<string, string> = {
+		scheduled_posts_monthly: 'Scheduled posts',
+		published_posts_monthly: 'Published posts',
+		media_bytes_uploaded_monthly: 'Uploaded media',
+		provider_write_calls_monthly: 'Provider publish calls'
+	};
+	const currentBillingPlan = $derived(
+		billingPlans.find((plan) => plan.id === billingStatus?.plan_id) ?? null
+	);
+	const monthlyBillingUsageRows = $derived.by(() => {
+		if (!billingStatus) return [];
+		return Object.entries(billingStatus.limits)
+			.filter(([metric]) => metric.endsWith('_monthly'))
+			.map(([metric, limit]) => ({
+				metric,
+				label: billingMetricLabels[metric] ?? metric.replaceAll('_', ' '),
+				current: billingStatus?.usage[metric] ?? 0,
+				limit
+			}));
+	});
 
 	async function loadSecurityStatus() {
 		loadingSecurity = true;
@@ -261,6 +295,25 @@
 			securityError = (e as Error).message;
 		} finally {
 			apiTokenBusy = false;
+		}
+	}
+
+	async function loadBillingStatus() {
+		const workspaceID = workspaceCtx.currentWorkspace?.id;
+		if (!workspaceID) return;
+		billingStatusLoading = true;
+		billingError = '';
+		try {
+			const { data, error: err } = await client.GET('/billing/status', {
+				params: { query: { workspace_id: workspaceID } }
+			});
+			if (err || !data) throw new Error(err?.detail || 'Failed to load billing status');
+			billingStatus = data as BillingStatus;
+		} catch (e) {
+			billingStatus = null;
+			billingError = (e as Error).message;
+		} finally {
+			billingStatusLoading = false;
 		}
 	}
 
@@ -704,8 +757,26 @@
 		});
 	}
 
+	function formatBillingValue(metric: string, value: number): string {
+		if (metric.includes('bytes')) {
+			return formatBytes(value);
+		}
+		return new Intl.NumberFormat(getLocaleTag()).format(value);
+	}
+
+	function formatBytes(value: number): string {
+		if (value >= 1_000_000_000) {
+			return `${(value / 1_000_000_000).toFixed(value % 1_000_000_000 === 0 ? 0 : 1)} GB`;
+		}
+		if (value >= 1_000_000) {
+			return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)} MB`;
+		}
+		return `${new Intl.NumberFormat(getLocaleTag()).format(value)} B`;
+	}
+
 	$effect(() => {
 		if (workspaceCtx.currentWorkspace) {
+			loadBillingStatus();
 			loadSchedules();
 		}
 	});
@@ -798,6 +869,72 @@
 					Customer Portal
 				</Button>
 			</div>
+
+			{#if billingStatusLoading}
+				<div class="mb-4 grid gap-3 lg:grid-cols-2">
+					<Skeleton class="h-24 rounded-lg" />
+					<Skeleton class="h-24 rounded-lg" />
+				</div>
+			{:else if billingStatus}
+				<div class="mb-4 grid gap-3 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+					<div class="rounded-lg border bg-muted/20 p-4">
+						<p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+							Current plan
+						</p>
+						<div class="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
+							<p class="text-2xl font-semibold">
+								{currentBillingPlan?.name ?? (billingStatus.plan_id || 'No active plan')}
+							</p>
+							<p class="pb-1 text-sm text-muted-foreground capitalize">{billingStatus.status}</p>
+						</div>
+						{#if billingStatus.current_period_end}
+							<p class="mt-2 text-sm text-muted-foreground">
+								Period ends {new Date(billingStatus.current_period_end).toLocaleDateString()}
+								{#if billingStatus.cancel_at_period_end}
+									· cancels after this period
+								{/if}
+							</p>
+						{:else}
+							<p class="mt-2 text-sm text-muted-foreground">
+								Start checkout to activate hosted billing for this workspace.
+							</p>
+						{/if}
+					</div>
+
+					<div class="rounded-lg border bg-muted/20 p-4">
+						<p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+							Usage this month
+						</p>
+						{#if monthlyBillingUsageRows.length}
+							<div class="mt-3 grid gap-3 sm:grid-cols-2">
+								{#each monthlyBillingUsageRows as row (row.metric)}
+									<div>
+										<div class="mb-1 flex items-center justify-between gap-2 text-sm">
+											<span>{row.label}</span>
+											<span class="text-muted-foreground">
+												{formatBillingValue(row.metric, row.current)} / {formatBillingValue(
+													row.metric,
+													row.limit
+												)}
+											</span>
+										</div>
+										<div class="h-2 overflow-hidden rounded-full bg-muted">
+											<div
+												class="h-full rounded-full bg-primary"
+												style:width={`${Math.min(100, Math.round((row.current / Math.max(row.limit, 1)) * 100))}%`}
+											></div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{:else}
+							<p class="mt-2 text-sm text-muted-foreground">
+								Usage counters appear here after an active subscription snapshot is received.
+							</p>
+						{/if}
+					</div>
+				</div>
+			{/if}
 
 			<div class="grid gap-3 lg:grid-cols-3">
 				{#each billingPlans as plan (plan.id)}

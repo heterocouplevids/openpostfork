@@ -290,6 +290,71 @@
 				"required": ["url"],
 				"type": "object"
 			},
+			"BillingStatusResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/BillingStatusResponse.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"cancel_at_period_end": {
+						"description": "Whether the subscription cancels at period end",
+						"type": "boolean"
+					},
+					"current_period_end": {
+						"description": "Current billing period end",
+						"type": "string"
+					},
+					"limits": {
+						"additionalProperties": {
+							"format": "int64",
+							"type": "integer"
+						},
+						"description": "Entitlement limits from the local subscription snapshot",
+						"type": "object"
+					},
+					"period_start": {
+						"description": "UTC month start for the usage counters",
+						"type": "string"
+					},
+					"plan_id": {
+						"description": "Plan ID",
+						"type": "string"
+					},
+					"provider": {
+						"description": "Billing provider",
+						"type": "string"
+					},
+					"status": {
+						"description": "Subscription status",
+						"type": "string"
+					},
+					"usage": {
+						"additionalProperties": {
+							"format": "int64",
+							"type": "integer"
+						},
+						"description": "Current-month usage counters",
+						"type": "object"
+					},
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					}
+				},
+				"required": [
+					"workspace_id",
+					"status",
+					"cancel_at_period_end",
+					"limits",
+					"usage",
+					"period_start"
+				],
+				"type": "object"
+			},
 			"BlueskyLoginInputBody": {
 				"additionalProperties": false,
 				"properties": {
@@ -4263,6 +4328,77 @@
 					}
 				},
 				"summary": "Create billing checkout",
+				"tags": ["Billing"]
+			}
+		},
+		"/billing/status": {
+			"get": {
+				"operationId": "get-billing-status",
+				"parameters": [
+					{
+						"description": "Workspace ID",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"schema": {
+							"description": "Workspace ID",
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/BillingStatusResponse"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Get billing status",
 				"tags": ["Billing"]
 			}
 		},

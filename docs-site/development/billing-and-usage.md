@@ -8,6 +8,7 @@ OpenPost Cloud billing is built around local entitlement snapshots and durable u
 - `usage_counters`: monthly durable counters keyed by workspace, metric, and UTC month.
 - `billing_subscriptions`: local Polar subscription snapshots keyed by workspace.
 - `billing_webhook_events`: webhook event ledger for idempotent Polar processing.
+- `GET /api/v1/billing/status`: returns the local subscription snapshot and current-month usage counters for a workspace.
 - `POST /api/v1/billing/checkout`: creates a Polar checkout for the requested plan and workspace.
 - `POST /api/v1/billing/portal`: creates a Polar customer portal session for the workspace.
 - `POST /api/v1/billing/polar/webhook`: verifies Standard Webhooks signatures and upserts local subscription state.
