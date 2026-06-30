@@ -38,6 +38,7 @@ Thumbs.db
 
 # Node/Frontend
 node_modules/
+.turbo/
 frontend/.svelte-kit/
 frontend/build/
 frontend/.vite/
@@ -87,9 +88,10 @@ marketing-site/package-lock.json
 marketing-site/pnpm-lock.yaml
 marketing-site/yarn.lock
 marketing-site/bun.lock
-
-# Astro generated
-marketing-site/.astro/
+marketing-site/.svelte-kit/
+marketing-site/.vite/
+marketing-site/public/assets/
+marketing-site/static/assets/
 
 # Wrangler
 .wrangler/

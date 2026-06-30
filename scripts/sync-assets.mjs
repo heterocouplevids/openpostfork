@@ -11,6 +11,7 @@ const frontendRoot = path.join(root, "frontend");
 const targets = [
   path.join(frontendRoot, "static", "assets"),
   path.join(root, "docs-site", "public", "assets"),
+  path.join(root, "marketing-site", "static", "assets"),
 ];
 
 const brandIconSource = path.join(source, "brand", "icon.svg");

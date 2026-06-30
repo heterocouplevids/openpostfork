@@ -1,16 +1,18 @@
 # Build stage for frontend
-FROM oven/bun:1 AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
-# Copy the entire project to get correct relative paths for svelte.config.js
-COPY frontend/package.json frontend/bun.lock* ./frontend/
-RUN cd frontend && bun install --frozen-lockfile
+# Copy workspace manifests first for dependency caching.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY frontend/package.json ./frontend/
+RUN pnpm install --frozen-lockfile --filter @openpost/web...
 
 COPY frontend/ ./frontend/
 COPY assets/ ./assets/
 COPY scripts/ ./scripts/
-RUN cd frontend && bun run build
+RUN mkdir -p backend/cmd/openpost/public && pnpm --filter @openpost/web build
 
 # Build stage for backend
 FROM golang:1.26-alpine AS backend-builder

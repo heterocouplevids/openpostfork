@@ -7,43 +7,43 @@
 let
   eslint-wrapper = pkgs.writeShellApplication {
     name = "eslint-wrapper";
-    runtimeInputs = [ pkgs.bun ];
+    runtimeInputs = [ pkgs.nodejs_22 pkgs.pnpm ];
     text = ''
       # Cap V8 heap at 1GB to keep the runner's OOM in check on
       # small-memory hosts (3–4GB). The default Node heap is ~1.7GB
       # and svelte-check / vite / paraglide will reliably OOM it.
       export NODE_OPTIONS="--max-old-space-size=1024"
       cd "${config.git.root}/frontend"
-      bun install --frozen-lockfile
-      bun run lint
+      pnpm install --frozen-lockfile
+      pnpm --filter @openpost/web lint
     '';
   };
   svelte-check-wrapper = pkgs.writeShellApplication {
     name = "svelte-check-wrapper";
-    runtimeInputs = [ pkgs.bun ];
+    runtimeInputs = [ pkgs.nodejs_22 pkgs.pnpm ];
     text = ''
       # Cap V8 heap at 1GB to keep the runner's OOM in check on
       # small-memory hosts (3–4GB). The default Node heap is ~1.7GB
       # and svelte-check / vite / paraglide will reliably OOM it.
       export NODE_OPTIONS="--max-old-space-size=1024"
       cd "${config.git.root}/frontend"
-      bun install --frozen-lockfile
-      bun run check
+      pnpm install --frozen-lockfile
+      pnpm --filter @openpost/web check
     '';
   };
   vitest-wrapper = pkgs.writeShellApplication {
     name = "vitest-wrapper";
-    runtimeInputs = [ pkgs.bun ];
+    runtimeInputs = [ pkgs.nodejs_22 pkgs.pnpm ];
     text = ''
       # Cap V8 heap at 1GB to keep the runner's OOM in check on
       # small-memory hosts (3–4GB). The default Node heap is ~1.7GB
       # and svelte-check / vite / paraglide will reliably OOM it.
       export NODE_OPTIONS="--max-old-space-size=1024"
       cd "${config.git.root}/frontend"
-      bun install --frozen-lockfile
+      pnpm install --frozen-lockfile
       # Run tests only if test files exist, otherwise skip silently
       if find src -name "*.test.ts" -o -name "*.spec.ts" 2>/dev/null | grep -q .; then
-        bun run test
+        pnpm --filter @openpost/web test
       else
         echo "No test files found, skipping tests..."
         exit 0
@@ -52,31 +52,31 @@ let
   };
   frontend-build-wrapper = pkgs.writeShellApplication {
     name = "frontend-build-wrapper";
-    runtimeInputs = [ pkgs.bun ];
+    runtimeInputs = [ pkgs.nodejs_22 pkgs.pnpm ];
     text = ''
       # Cap V8 heap at 1GB to keep the runner's OOM in check on
       # small-memory hosts (3–4GB). The default Node heap is ~1.7GB
       # and vite / paraglide will reliably OOM it.
       export NODE_OPTIONS="--max-old-space-size=1024"
       cd "${config.git.root}/frontend"
-      bun install --frozen-lockfile
-      bun run build
+      pnpm install --frozen-lockfile
+      pnpm --filter @openpost/web build
       mkdir -p "${config.git.root}/backend/cmd/openpost/public"
       touch "${config.git.root}/backend/cmd/openpost/public/.gitkeep"
     '';
   };
 in
 {
-  # Bun language support
+  # JavaScript workspace support
   languages.javascript = {
     enable = true;
-    bun.enable = true;
+    pnpm.enable = true;
   };
 
   # Scripts for frontend development
   scripts = {
     frontend-dev.exec = ''
-      cd frontend && bun install && bun run dev
+      pnpm install && pnpm --filter @openpost/web dev
     '';
 
     frontend-build.exec = ''
@@ -96,7 +96,7 @@ in
     '';
 
     frontend-format.exec = ''
-      cd frontend && bun run format
+      pnpm --filter @openpost/web format
     '';
   };
 
@@ -122,7 +122,7 @@ in
     vitest = {
       enable = true;
       entry = "${lib.getExe vitest-wrapper}";
-      files = "^(frontend/(src|messages|static|assets)/|frontend/(package\\.json|bun\\.lock|vite\\.config\\.ts|svelte\\.config\\.js|vitest\\.config\\.[jt]s|tsconfig\\.json)|assets/|scripts/sync-assets\\.mjs)";
+      files = "^(frontend/(src|messages|static|assets)/|frontend/(package\\.json|vite\\.config\\.ts|svelte\\.config\\.js|vitest\\.config\\.[jt]s|tsconfig\\.json)|package\\.json|pnpm-lock\\.yaml|pnpm-workspace\\.yaml|turbo\\.json|assets/|scripts/sync-assets\\.mjs)";
       pass_filenames = false;
     };
 
@@ -131,7 +131,7 @@ in
     frontend-build = {
       enable = true;
       entry = "${lib.getExe frontend-build-wrapper}";
-      files = "^(frontend/(src|messages|static|assets)/|frontend/(package\\.json|bun\\.lock|vite\\.config\\.ts|svelte\\.config\\.js)|assets/|scripts/sync-assets\\.mjs)";
+      files = "^(frontend/(src|messages|static|assets)/|frontend/(package\\.json|vite\\.config\\.ts|svelte\\.config\\.js)|package\\.json|pnpm-lock\\.yaml|pnpm-workspace\\.yaml|turbo\\.json|assets/|scripts/sync-assets\\.mjs)";
       pass_filenames = false;
     };
   };

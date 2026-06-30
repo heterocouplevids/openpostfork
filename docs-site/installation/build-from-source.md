@@ -6,15 +6,15 @@ This path is useful for contributors and advanced operators.
 
 ```bash
 git clone https://github.com/rodrgds/openpost.git
-cd openpost/frontend
-bun install
-bun run build
+cd openpost
+pnpm install
+pnpm --filter @openpost/web build
 ```
 
 ## Build the backend
 
 ```bash
-cd ../backend
+cd backend
 cp .env.example .env
 go build -o ../openpost ./cmd/openpost
 cd ..

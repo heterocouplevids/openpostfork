@@ -6,12 +6,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added a production-readiness implementation plan covering OpenPost Cloud, Postgres/S3 drivers, Polar billing, provider readiness, the publication model, MCP/ChatGPT app work, marketing/SEO, and verification.
+- Rebuilt `marketing-site/` as a SvelteKit landing page for OpenPost Cloud with an agentic scheduler position, demo slot, pricing direction, platform grid, FAQ, and lower-page open-core trust section.
+
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
 - Enabled registrations on hosted instance.
 - Updated all doc links from op.rgo.pt to docs.openpost.social.
 - Added marketing-site/ — minimal Astro landing page at openpost.social.
 - Moved docs and marketing site deployment from VPS/GitHub Pages to Cloudflare Pages.
+- Moved the JavaScript workspace to pnpm workspaces with Turborepo orchestration across the web app, docs site, and marketing site.
 
 ## [1.0.16] - 2026-06-23
 

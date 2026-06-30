@@ -44,7 +44,7 @@ denv_lint() {
       cd backend && gofmt -l . | { read -r line && [ -n "$line" ] && { echo "$line"; exit 1; } || true; }
       cd backend && golangci-lint run ./...
       cd cli && golangci-lint run ./...
-      cd frontend && bun run lint
+      pnpm --filter @openpost/web lint
     )
   fi
 }

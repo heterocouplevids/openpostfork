@@ -10,9 +10,8 @@ cd openpost
 ## Frontend
 
 ```bash
-cd frontend
-bun install
-bun run dev
+pnpm install
+pnpm --filter @openpost/web dev
 ```
 
 Frontend dev server: `http://localhost:5173`
@@ -32,10 +31,8 @@ Backend server: `http://localhost:8080`
 From the repo root:
 
 ```bash
-bun run sync:assets
-cd docs-site
-bun install
-bun run docs:dev
+pnpm run sync:assets
+pnpm --filter @openpost/docs docs:dev
 ```
 
 Docs site: `http://localhost:4174`

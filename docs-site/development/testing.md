@@ -10,8 +10,7 @@ go test ./...
 ## Frontend
 
 ```bash
-cd frontend
-bun test
-bun run lint
-bun run check
+pnpm --filter @openpost/web test
+pnpm --filter @openpost/web lint
+pnpm --filter @openpost/web check
 ```

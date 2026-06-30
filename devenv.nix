@@ -26,13 +26,13 @@
   # Scripts available in the shell
   scripts = {
     app.exec = ''
-      # Start frontend dev server directly — exec replaces the subshell with bun,
-      # so $! is bun's PID directly (no wrapper shell process in between).
-      (cd frontend && bun install && exec bun run dev) &
+      # Start frontend dev server directly — exec replaces the subshell with pnpm,
+      # so $! is pnpm's PID directly (no wrapper shell process in between).
+      (pnpm install && exec pnpm --filter @openpost/web dev) &
       FRONTEND_PID=$!
 
       cleanup() {
-        # SIGKILL bun/vite directly. No wrapper shell, no process groups, no wait.
+        # SIGKILL pnpm/vite directly. No wrapper shell, no process groups, no wait.
         kill -9 $FRONTEND_PID 2>/dev/null || true
       }
       trap cleanup EXIT
@@ -41,16 +41,15 @@
     '';
 
     docs.exec = ''
-      cd docs-site
-      bun install
-      bun run docs:dev
+      pnpm install
+      pnpm --filter @openpost/docs docs:dev
     '';
 
     dev.exec = ''
-      (cd frontend && bun install && exec bun run dev) &
+      (pnpm install && exec pnpm --filter @openpost/web dev) &
       FRONTEND_PID=$!
 
-      (cd docs-site && bun install && exec bun run docs:dev) &
+      (pnpm install && exec pnpm --filter @openpost/docs docs:dev) &
       DOCS_PID=$!
 
       cleanup() {
@@ -67,9 +66,8 @@
     '';
 
     docs-build.exec = ''
-      cd docs-site
-      bun install
-      bun run docs:build
+      pnpm install
+      pnpm --filter @openpost/docs docs:build
     '';
 
     test-all.exec = ''
@@ -93,8 +91,7 @@
     '';
 
     install.exec = ''
-      (cd frontend && bun install)
-      (cd docs-site && bun install)
+      pnpm install
       (cd backend && go mod download)
     '';
 
@@ -118,7 +115,7 @@
     echo "  OpenPost Development Environment"
     echo "  --------------------------------"
     echo "  Go:     $(go version 2>/dev/null || echo 'not installed')"
-    echo "  Bun:    $(bun --version 2>/dev/null || echo 'not installed')"
+    echo "  pnpm:   $(pnpm --version 2>/dev/null || echo 'not installed')"
     echo ""
     echo "  Commands:"
     echo "    app          - Start frontend and backend dev servers"
@@ -161,7 +158,7 @@
   # Test that key tools are available
   enterTest = ''
     go version
-    bun --version
+    pnpm --version
     git --version
   '';
 }

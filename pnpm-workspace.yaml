@@ -1,0 +1,12 @@
+packages:
+  - "frontend"
+  - "docs-site"
+  - "marketing-site"
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - vue-demi
+allowBuilds:
+  esbuild: true
+  sharp: true
+  vue-demi: true

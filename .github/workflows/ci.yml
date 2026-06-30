@@ -43,6 +43,11 @@ jobs:
               - 'devenv.lock'
             frontend:
               - 'frontend/**'
+              - 'marketing-site/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
               - 'devenv.nix'
               - 'devenv.yaml'
               - 'devenv.lock'
@@ -70,7 +75,7 @@ jobs:
         id: nix-cache-restore
         uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'pnpm-lock.yaml') }}
           restore-prefixes-first-match: |
             nix-${{ runner.os }}-devenv-
 
@@ -86,7 +91,7 @@ jobs:
         if: steps.nix-cache-restore.outputs.hit-primary-key != 'true'
         uses: nix-community/cache-nix-action/save@v7
         with:
-          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'pnpm-lock.yaml') }}
           gc-max-store-size-linux: 3G
 
   lint:
@@ -109,7 +114,7 @@ jobs:
       - name: Restore shared Nix store
         uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'pnpm-lock.yaml') }}
           restore-prefixes-first-match: |
             nix-${{ runner.os }}-devenv-
 
@@ -133,16 +138,19 @@ jobs:
           restore-keys: |
             golangci-lint-${{ runner.os }}-
 
-      - name: Set up Bun cache
+      - name: Set up pnpm cache
         if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.ci == 'true'
         uses: actions/cache@v4
         with:
           path: |
-            ~/.bun/install/cache
+            ~/.local/share/pnpm/store
+            node_modules
             frontend/node_modules
-          key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+            marketing-site/node_modules
+            docs-site/node_modules
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            bun-${{ runner.os }}-
+            pnpm-${{ runner.os }}-
 
       - name: Run relevant lint suite
         shell: devenv shell bash -- -e {0}
@@ -181,7 +189,7 @@ jobs:
       - name: Restore shared Nix store
         uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'pnpm-lock.yaml') }}
           restore-prefixes-first-match: |
             nix-${{ runner.os }}-devenv-
 
@@ -229,7 +237,7 @@ jobs:
       - name: Restore shared Nix store
         uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'pnpm-lock.yaml') }}
           restore-prefixes-first-match: |
             nix-${{ runner.os }}-devenv-
 
@@ -271,7 +279,7 @@ jobs:
       - name: Restore shared Nix store
         uses: nix-community/cache-nix-action/restore@v7
         with:
-          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'frontend/bun.lock') }}
+          primary-key: nix-${{ runner.os }}-devenv-${{ hashFiles('devenv.nix', 'devenv.yaml', 'devenv.lock', 'backend/devenv.nix', 'backend/go.sum', 'frontend/devenv.nix', 'pnpm-lock.yaml') }}
           restore-prefixes-first-match: |
             nix-${{ runner.os }}-devenv-
 
@@ -279,23 +287,27 @@ jobs:
         shell: bash
         run: nix profile add nixpkgs#devenv
 
-      - name: Set up Bun cache
+      - name: Set up pnpm cache
         uses: actions/cache@v4
         with:
           path: |
-            ~/.bun/install/cache
+            ~/.local/share/pnpm/store
+            node_modules
             frontend/node_modules
-          key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+            marketing-site/node_modules
+            docs-site/node_modules
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            bun-${{ runner.os }}-
+            pnpm-${{ runner.os }}-
 
       - name: Run frontend tests and build
         shell: devenv shell bash -- -e {0}
         run: |
-          cd frontend
-          bun install --frozen-lockfile
-          bun run test
-          bun run build
+          pnpm install --frozen-lockfile
+          pnpm --filter @openpost/web test
+          pnpm --filter @openpost/web build
+          pnpm --filter @openpost/site check
+          pnpm --filter @openpost/site build
 
   cli:
     name: CLI

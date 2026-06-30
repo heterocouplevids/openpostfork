@@ -55,8 +55,7 @@ function toAuthenticationOptions(options: any): CredentialRequestOptions {
 
 function serializeCredential(credential: PublicKeyCredential) {
 	const response = credential.response as
-		| AuthenticatorAttestationResponse
-		| AuthenticatorAssertionResponse;
+		AuthenticatorAttestationResponse | AuthenticatorAssertionResponse;
 
 	return {
 		id: credential.id,

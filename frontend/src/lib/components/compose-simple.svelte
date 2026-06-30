@@ -1595,7 +1595,7 @@
 				</Button>
 
 				<div
-					class="flex max-w-[min(62vw,30rem)] items-center gap-1 overflow-x-auto overflow-y-hidden py-1 pr-2 pl-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:max-w-[min(58vw,34rem)] lg:max-w-[40rem] lg:pr-3 [&::-webkit-scrollbar]:hidden"
+					class="flex max-w-[min(62vw,30rem)] [scrollbar-width:none] items-center gap-1 overflow-x-auto overflow-y-hidden py-1 pr-2 pl-1 [-ms-overflow-style:none] sm:max-w-[min(58vw,34rem)] lg:max-w-[40rem] lg:pr-3 [&::-webkit-scrollbar]:hidden"
 				>
 					<Tooltip.Root>
 						<Tooltip.Trigger>
