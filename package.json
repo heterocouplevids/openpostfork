@@ -12,6 +12,7 @@
     "test": "turbo run test",
     "test:e2e": "playwright test",
     "test:e2e:app": "playwright test --config playwright.app.config.ts",
+    "test:e2e:docs": "playwright test --config playwright.docs.config.ts",
     "lint": "turbo run lint",
     "docs:dev": "pnpm run sync:assets && pnpm run sync:docs-external && pnpm --filter @openpost/docs docs:dev",
     "docs:build": "pnpm run sync:assets && pnpm run sync:docs-external && pnpm --filter @openpost/docs docs:build",

@@ -73,6 +73,7 @@ All notable changes to this project are documented in this file.
 - Added `openpost instance health` for unauthenticated CLI liveness and readiness checks against the active instance.
 - Added production-operator checklist coverage for self-hosted storage, cloud Postgres/S3/Polar readiness, provider launch gates, backup restores, and CLI readiness probes.
 - Added stricter Apps SDK metadata coverage for the MCP scheduler widget, including standard `_meta.ui` CSP keys, legacy ChatGPT aliases, and model-only render-tool visibility.
+- Added Playwright docs E2E coverage that verifies the user-facing, self-hosting, and developer docs entry points stay distinct and reachable.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
