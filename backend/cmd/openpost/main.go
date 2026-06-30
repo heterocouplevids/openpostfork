@@ -94,6 +94,7 @@ func main() {
 	}
 	tokenManager := tokenmanager.NewTokenManager(db, tokenEncryptor)
 	publishSvc := publisher.NewService(db, tokenManager)
+	publishSvc.SetEntitlement(entitlementService)
 	publishSvc.SetDisableLinkedInThreadReplies(cfg.DisableLinkedInThreadReplies)
 	publishSvc.SetMediaSigner(mediaSigner)
 	if cfg.MediaURL != "" && !strings.HasPrefix(cfg.MediaURL, "/") {

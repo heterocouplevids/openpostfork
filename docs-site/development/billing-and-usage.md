@@ -17,7 +17,7 @@ OpenPost Cloud billing is built around local entitlement snapshots and durable u
 - Provider connection flows check `social_accounts` before inserting a new active social account.
 - Media uploads check `media_bytes_uploaded_monthly` and `media_bytes_stored`; successful new uploads increment monthly uploaded-byte usage.
 - Scheduled single posts and threads check `scheduled_posts_monthly` before inserting posts or jobs; successful scheduled creates increment monthly scheduled-post usage.
-- The publishing worker records successful published posts and provider publish write calls into monthly usage counters.
+- The publishing worker checks `published_posts_monthly` and `provider_write_calls_monthly` before publishing, then records successful published posts and provider publish write calls into monthly usage counters.
 
 ## Monthly metrics
 
@@ -34,7 +34,6 @@ Initial metrics match the production-readiness plan:
 
 ## Next enforcement points
 
-- Publishing worker enforcement for `published_posts_monthly` and `provider_write_calls_monthly`
 - Team invitations: `team_members`
 
 ## Polar configuration

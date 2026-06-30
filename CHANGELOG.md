@@ -24,6 +24,7 @@ All notable changes to this project are documented in this file.
 - Added a subscription-backed entitlement service for cloud-mode workspace quotas using local Polar subscription snapshots.
 - Added authenticated Polar checkout and customer portal API endpoints for OpenPost Cloud billing.
 - Added a workspace billing status API and settings UI summary for current plans and monthly usage.
+- Added publishing-worker quota enforcement for monthly published posts and provider write calls.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

@@ -32,6 +32,7 @@ type Service struct {
 	mediaSigner                  *mediasigner.Signer
 	storage                      mediastore.BlobStorage
 	usage                        *usage.Service
+	quota                        entitlements.Service
 }
 
 func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
@@ -40,6 +41,7 @@ func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
 		tm:        tm,
 		providers: make(map[string]platform.Adapter),
 		usage:     usage.NewService(db),
+		quota:     entitlements.NewSelfHostedService(),
 	}
 }
 
@@ -62,6 +64,12 @@ func (s *Service) SetStorage(storage mediastore.BlobStorage) {
 func (s *Service) SetUsage(usageService *usage.Service) {
 	if usageService != nil {
 		s.usage = usageService
+	}
+}
+
+func (s *Service) SetEntitlement(entitlement entitlements.Service) {
+	if entitlement != nil {
+		s.quota = entitlement
 	}
 }
 
@@ -157,6 +165,11 @@ func (s *Service) publishSinglePost(ctx context.Context, post *models.Post) erro
 		s.finalizePost(ctx, post)
 		return nil
 	}
+	if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitPublishedPostsMonthly, 1); err != nil {
+		s.markDestinationsFailed(ctx, dests, err)
+		s.finalizePost(ctx, post)
+		return err
+	}
 
 	var firstError error
 	for _, dest := range dests {
@@ -190,6 +203,7 @@ func (s *Service) publishThread(ctx context.Context, posts []*models.Post) error
 	log.Printf("[Publisher] Publishing thread with %d posts", len(posts))
 
 	successfulAccounts := make(map[string]bool)
+	var firstError error
 
 	for i, post := range posts {
 		log.Printf("[Publisher] Publishing thread post %d/%d: %s", i+1, len(posts), post.ID)
@@ -219,6 +233,18 @@ func (s *Service) publishThread(ctx context.Context, posts []*models.Post) error
 				}
 			}
 			dests = filteredDests
+		}
+
+		if len(dests) > 0 {
+			if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitPublishedPostsMonthly, 1); err != nil {
+				if firstError == nil {
+					firstError = err
+				}
+				s.markDestinationsFailed(ctx, dests, err)
+				s.finalizePost(ctx, post)
+				successfulAccounts = make(map[string]bool)
+				continue
+			}
 		}
 
 		var successfulInThisPost []string
@@ -262,7 +288,7 @@ func (s *Service) publishThread(ctx context.Context, posts []*models.Post) error
 		s.finalizePost(ctx, post)
 	}
 
-	return nil
+	return firstError
 }
 
 func (s *Service) finalizePost(ctx context.Context, post *models.Post) {
@@ -402,6 +428,9 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		}
 	}
 
+	if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitProviderWriteCallsMonthly, 1); err != nil {
+		return err
+	}
 	s.recordProviderWriteCall(ctx, post.WorkspaceID)
 	externalID, err := provider.Publish(ctx, token, account.AccountID, req)
 	if err != nil {
@@ -410,6 +439,9 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 			refreshedToken, refreshErr := s.tm.ForceRefreshAccessToken(ctx, account.ID)
 			if refreshErr != nil {
 				return fmt.Errorf("%s token refresh failed after expiry: %w", account.Platform, refreshErr)
+			}
+			if quotaErr := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitProviderWriteCallsMonthly, 1); quotaErr != nil {
+				return quotaErr
 			}
 			s.recordProviderWriteCall(ctx, post.WorkspaceID)
 			externalID, err = provider.Publish(ctx, refreshedToken, account.AccountID, req)
@@ -430,6 +462,44 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		}
 	}
 
+	return nil
+}
+
+func (s *Service) markDestinationsFailed(ctx context.Context, dests []models.PostDestination, cause error) {
+	for _, dest := range dests {
+		if _, dbErr := s.db.NewUpdate().Model(&dest).
+			Set("status = ?", "failed").
+			Set("error_message = ?", cause.Error()).
+			Where("id = ?", dest.ID).
+			Exec(ctx); dbErr != nil {
+			log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+		}
+	}
+}
+
+func (s *Service) checkMonthlyQuota(ctx context.Context, workspaceID string, limit entitlements.LimitKey, amount int64) error {
+	if s.quota == nil || s.usage == nil || workspaceID == "" {
+		return nil
+	}
+	current, err := s.usage.CurrentMonthly(ctx, workspaceID, limit, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("loading usage for %s: %w", limit, err)
+	}
+	decision, err := s.quota.Check(ctx, entitlements.Request{
+		WorkspaceID: workspaceID,
+		Limit:       limit,
+		Current:     current,
+		Amount:      amount,
+	})
+	if err != nil {
+		return fmt.Errorf("checking quota for %s: %w", limit, err)
+	}
+	if !decision.Allowed {
+		if decision.Reason != "" {
+			return fmt.Errorf("quota exceeded: %s", decision.Reason)
+		}
+		return fmt.Errorf("quota exceeded: %s", limit)
+	}
 	return nil
 }
 

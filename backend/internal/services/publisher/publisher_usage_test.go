@@ -112,6 +112,10 @@ func (s *publisherUsageTestServer) publishPost(t *testing.T, postID string) erro
 	return s.service.HandlePublishJob(context.Background(), string(payload))
 }
 
+func (s *publisherUsageTestServer) setQuota(snapshot entitlements.PlanSnapshot) {
+	s.service.SetEntitlement(entitlements.NewStaticService(snapshot))
+}
+
 func TestPublisherRecordsPublishedPostAndProviderWriteUsage(t *testing.T) {
 	t.Parallel()
 
@@ -133,6 +137,59 @@ func TestPublisherRecordsPublishedPostAndProviderWriteUsage(t *testing.T) {
 	var post models.Post
 	require.NoError(t, srv.db.NewSelect().Model(&post).Where("id = ?", "post-1").Scan(context.Background()))
 	require.Equal(t, models.PostStatusPublished, post.Status)
+}
+
+func TestPublisherRejectsWhenPublishedPostQuotaExceeded(t *testing.T) {
+	t.Parallel()
+
+	adapter := &fakePublisherAdapter{externalID: "external-1"}
+	srv := newPublisherUsageTestServer(t, adapter)
+	srv.setQuota(entitlements.PlanSnapshot{
+		Limits: map[entitlements.LimitKey]int64{
+			entitlements.LimitPublishedPostsMonthly: 0,
+		},
+	})
+	srv.seedPost(t, "post-quota")
+
+	err := srv.publishPost(t, "post-quota")
+
+	require.ErrorContains(t, err, "published_posts_monthly limit exceeded")
+	require.Equal(t, 0, adapter.publishCalls)
+	published, err := srv.usage.CurrentMonthly(context.Background(), "ws-1", entitlements.LimitPublishedPostsMonthly, time.Now().UTC())
+	require.NoError(t, err)
+	require.Equal(t, int64(0), published)
+	writes, err := srv.usage.CurrentMonthly(context.Background(), "ws-1", entitlements.LimitProviderWriteCallsMonthly, time.Now().UTC())
+	require.NoError(t, err)
+	require.Equal(t, int64(0), writes)
+
+	var post models.Post
+	require.NoError(t, srv.db.NewSelect().Model(&post).Where("id = ?", "post-quota").Scan(context.Background()))
+	require.Equal(t, models.PostStatusFailed, post.Status)
+}
+
+func TestPublisherRejectsWhenProviderWriteQuotaExceeded(t *testing.T) {
+	t.Parallel()
+
+	adapter := &fakePublisherAdapter{externalID: "external-1"}
+	srv := newPublisherUsageTestServer(t, adapter)
+	srv.setQuota(entitlements.PlanSnapshot{
+		Limits: map[entitlements.LimitKey]int64{
+			entitlements.LimitProviderWriteCallsMonthly: 0,
+		},
+	})
+	srv.seedPost(t, "post-write-quota")
+
+	err := srv.publishPost(t, "post-write-quota")
+
+	require.ErrorContains(t, err, "provider_write_calls_monthly limit exceeded")
+	require.Equal(t, 0, adapter.publishCalls)
+	writes, err := srv.usage.CurrentMonthly(context.Background(), "ws-1", entitlements.LimitProviderWriteCallsMonthly, time.Now().UTC())
+	require.NoError(t, err)
+	require.Equal(t, int64(0), writes)
+
+	var post models.Post
+	require.NoError(t, srv.db.NewSelect().Model(&post).Where("id = ?", "post-write-quota").Scan(context.Background()))
+	require.Equal(t, models.PostStatusFailed, post.Status)
 }
 
 func TestPublisherRecordsProviderWriteUsageOnPublishFailure(t *testing.T) {
