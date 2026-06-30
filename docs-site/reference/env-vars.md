@@ -14,6 +14,7 @@ This is the low-level quick reference version of the configuration docs.
 | `OPENPOST_ENCRYPTION_KEY` | OAuth token encryption secret |
 | `OPENPOST_MEDIA_PATH` | Local media directory |
 | `OPENPOST_MEDIA_URL` | Public media base URL |
+| `OPENPOST_PROVIDER_APPS` | Structured provider app registry JSON |
 | `X_CLIENT_ID` | X client ID |
 | `X_CLIENT_SECRET` | X client secret |
 | `X_REDIRECT_URI` | X callback override |

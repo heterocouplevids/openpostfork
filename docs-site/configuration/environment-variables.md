@@ -33,6 +33,7 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 
 | Variable | Required | Default | Description |
 |---|---:|---|---|
+| `OPENPOST_PROVIDER_APPS` | No | empty | Structured JSON provider app registry. Entries override the matching legacy env provider when both are set. |
 | `X_CLIENT_ID` | Yes for X | empty | X OAuth client ID. Leave empty to disable X. |
 | `X_CLIENT_SECRET` | Yes for X | empty | X OAuth client secret. |
 | `X_REDIRECT_URI` | No | derived from `OPENPOST_APP_URL` | X OAuth callback URL override. |
@@ -64,6 +65,7 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 ## Notes
 
 - The preferred names above are what new deployments should use.
+- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. It currently supports `x`, `mastodon`, `linkedin`, and `threads`; Bluesky is enabled separately through app-password login.
 - Backward-compatible aliases still work for existing installs: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.
 - The root `.env.example` is the best copy-paste starting point.
 - Set explicit public URLs in production even when defaults exist.

@@ -34,6 +34,7 @@ All notable changes to this project are documented in this file.
 - Added an authenticated MCP activity API and settings panel so users can inspect recent assistant/CLI tool calls, failures, durations, and workspace scope.
 - Added Apps SDK-facing MCP protected-resource metadata, OAuth scope descriptors, and bearer challenges for ChatGPT/App client account-linking readiness.
 - Added dedicated `mcp:full` API-token creation in settings and enforced MCP-compatible token scopes on `/mcp` while preserving existing CLI proxy tokens.
+- Added a structured provider app registry that normalizes legacy provider env vars and optional `OPENPOST_PROVIDER_APPS` JSON before building platform adapters.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

@@ -44,7 +44,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 ### 3. Provider Readiness
 
-- Add a provider app registry for cloud and self-hosted credentials.
+- Add a provider app registry for cloud and self-hosted credentials. Startup now builds adapters from a normalized registry populated by legacy env vars plus optional `OPENPOST_PROVIDER_APPS` JSON.
 - Replace fixed Mastodon env-only config with dynamic instance registration for cloud.
 - Add SSRF protection for federated/custom-host provider flows.
 - Add production OAuth app checklists for X, LinkedIn, Threads, Facebook, Instagram, YouTube, TikTok, Mastodon, and Bluesky.

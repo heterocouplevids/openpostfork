@@ -102,55 +102,14 @@ func main() {
 	}
 
 	platform.RegisterAllMediaValidators()
-	providers := make(map[string]platform.Adapter)
-
-	if cfg.TwitterClientID != "" {
-		xAdapter := platform.NewXAdapter(
-			cfg.TwitterClientID,
-			cfg.TwitterClientSecret,
-			cfg.TwitterRedirectURI,
-		)
-		providers["x"] = xAdapter
-		log.Println("Registered X/Twitter adapter")
+	providers, providerEntries, err := platform.BuildAdapterRegistry(cfg.ProviderApps, platform.RegistryOptions{
+		DisableLinkedInThreadReplies: cfg.DisableLinkedInThreadReplies,
+	})
+	if err != nil {
+		log.Fatalf("failed to build provider app registry: %v", err)
 	}
-
-	for _, server := range cfg.MastodonServers {
-		mastodonAdapter := platform.NewMastodonAdapter(
-			server.ClientID,
-			server.ClientSecret,
-			cfg.MastodonRedirectURI,
-			server.InstanceURL,
-		)
-		providers["mastodon:"+server.InstanceURL] = mastodonAdapter
-		if server.Name != "" {
-			providers["mastodon:"+server.Name] = mastodonAdapter
-		}
-		log.Printf("Registered Mastodon adapter: %s (%s)", server.Name, server.InstanceURL)
-	}
-
-	blueskyAdapter := platform.NewBlueskyAdapter("")
-	providers["bluesky"] = blueskyAdapter
-	log.Println("Registered Bluesky adapter")
-
-	if cfg.LinkedInClientID != "" {
-		linkedinAdapter := platform.NewLinkedInAdapter(
-			cfg.LinkedInClientID,
-			cfg.LinkedInClientSecret,
-			cfg.LinkedInRedirectURI,
-			cfg.DisableLinkedInThreadReplies,
-		)
-		providers["linkedin"] = linkedinAdapter
-		log.Println("Registered LinkedIn adapter")
-	}
-
-	if cfg.ThreadsClientID != "" {
-		threadsAdapter := platform.NewThreadsAdapter(
-			cfg.ThreadsClientID,
-			cfg.ThreadsClientSecret,
-			cfg.ThreadsRedirectURI,
-		)
-		providers["threads"] = threadsAdapter
-		log.Println("Registered Threads adapter")
+	for _, entry := range providerEntries {
+		log.Printf("Registered provider adapter: %s", entry.Key)
 	}
 
 	for name, adapter := range providers {

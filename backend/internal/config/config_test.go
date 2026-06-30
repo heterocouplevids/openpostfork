@@ -80,6 +80,49 @@ func TestLoadPolarReturnURLLegacyAlias(t *testing.T) {
 	require.Equal(t, "https://app.openpost.social/settings/billing", cfg.PolarReturnURL)
 }
 
+func TestLoadBuildsProviderAppRegistryFromLegacyEnv(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("X_CLIENT_ID", "x-client")
+	t.Setenv("X_CLIENT_SECRET", "x-secret")
+	t.Setenv("LINKEDIN_CLIENT_ID", "linkedin-client")
+	t.Setenv("LINKEDIN_CLIENT_SECRET", "linkedin-secret")
+	t.Setenv("THREADS_CLIENT_ID", "threads-client")
+	t.Setenv("THREADS_CLIENT_SECRET", "threads-secret")
+	t.Setenv("MASTODON_SERVERS", `[{"name":"Personal","client_id":"masto-client","client_secret":"masto-secret","instance_url":"https://masto.pt/"}]`)
+
+	cfg := Load()
+
+	require.Len(t, cfg.ProviderApps, 5)
+	require.Equal(t, "bluesky", cfg.ProviderApps[0].Provider)
+	require.Equal(t, "x", cfg.ProviderApps[1].Provider)
+	require.Equal(t, "https://app.openpost.social/api/v1/accounts/x/callback", cfg.ProviderApps[1].RedirectURI)
+	require.Equal(t, "mastodon", cfg.ProviderApps[2].Provider)
+	require.Equal(t, "https://masto.pt", cfg.ProviderApps[2].InstanceURL)
+	require.Equal(t, "linkedin", cfg.ProviderApps[3].Provider)
+	require.Equal(t, "https://app.openpost.social/api/v1/accounts/linkedin/callback", cfg.ProviderApps[3].RedirectURI)
+	require.Equal(t, "threads", cfg.ProviderApps[4].Provider)
+	require.Equal(t, "https://app.openpost.social/api/v1/accounts/threads/callback", cfg.ProviderApps[4].RedirectURI)
+}
+
+func TestLoadMergesStructuredProviderApps(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("X_CLIENT_ID", "legacy-x-client")
+	t.Setenv("X_CLIENT_SECRET", "legacy-x-secret")
+	t.Setenv("OPENPOST_PROVIDER_APPS", `[
+		{"provider":"x","client_id":"cloud-x-client","client_secret":"cloud-x-secret"},
+		{"provider":"mastodon","name":"Community","client_id":"masto-client","client_secret":"masto-secret","instance_url":"https://community.example"}
+	]`)
+
+	cfg := Load()
+
+	require.Len(t, cfg.ProviderApps, 3)
+	require.Equal(t, "bluesky", cfg.ProviderApps[0].Provider)
+	require.Equal(t, "cloud-x-client", cfg.ProviderApps[1].ClientID)
+	require.Equal(t, "https://app.openpost.social/api/v1/accounts/x/callback", cfg.ProviderApps[1].RedirectURI)
+	require.Equal(t, "mastodon", cfg.ProviderApps[2].Provider)
+	require.Equal(t, "urn:ietf:wg:oauth:2.0:oob", cfg.ProviderApps[2].RedirectURI)
+}
+
 func TestLoadInvalidProductionPrimitiveEnumsFallback(t *testing.T) {
 	t.Setenv("OPENPOST_APP_URL", "https://openpost.example.com")
 	t.Setenv("OPENPOST_EDITION", "enterprise")

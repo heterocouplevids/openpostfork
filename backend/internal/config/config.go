@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/openpost/backend/internal/platform"
 )
 
 type MastodonServerConfig struct {
@@ -45,6 +47,8 @@ type Config struct {
 	ThreadsClientID     string
 	ThreadsClientSecret string
 	ThreadsRedirectURI  string
+
+	ProviderApps []platform.AppConfig
 
 	StorageDriver     string
 	MediaPath         string
@@ -156,6 +160,15 @@ func Load() *Config {
 			cfg.MastodonServers = servers
 		}
 	}
+	cfg.ProviderApps = providerAppsFromLegacyConfig(cfg)
+	if raw := os.Getenv("OPENPOST_PROVIDER_APPS"); raw != "" {
+		var apps []platform.AppConfig
+		if err := json.Unmarshal([]byte(raw), &apps); err != nil {
+			log.Printf("WARNING: failed to parse OPENPOST_PROVIDER_APPS JSON: %v", err)
+		} else {
+			cfg.ProviderApps = mergeProviderApps(cfg.ProviderApps, defaultProviderAppConfig(cfg, apps)...)
+		}
+	}
 
 	// Build CORS origins list
 	corsOrigins := []string{cfg.FrontendURL, "http://localhost:5173"}
@@ -174,6 +187,96 @@ func Load() *Config {
 	warnOnPlaceholderURL(cfg)
 
 	return cfg
+}
+
+func providerAppsFromLegacyConfig(cfg *Config) []platform.AppConfig {
+	apps := []platform.AppConfig{{Provider: "bluesky"}}
+	if cfg.TwitterClientID != "" {
+		apps = append(apps, platform.AppConfig{
+			Provider:     "x",
+			ClientID:     cfg.TwitterClientID,
+			ClientSecret: cfg.TwitterClientSecret,
+			RedirectURI:  cfg.TwitterRedirectURI,
+		})
+	}
+	for _, server := range cfg.MastodonServers {
+		apps = append(apps, platform.AppConfig{
+			Provider:     "mastodon",
+			Name:         server.Name,
+			ClientID:     server.ClientID,
+			ClientSecret: server.ClientSecret,
+			RedirectURI:  cfg.MastodonRedirectURI,
+			InstanceURL:  server.InstanceURL,
+		})
+	}
+	if cfg.LinkedInClientID != "" {
+		apps = append(apps, platform.AppConfig{
+			Provider:     "linkedin",
+			ClientID:     cfg.LinkedInClientID,
+			ClientSecret: cfg.LinkedInClientSecret,
+			RedirectURI:  cfg.LinkedInRedirectURI,
+		})
+	}
+	if cfg.ThreadsClientID != "" {
+		apps = append(apps, platform.AppConfig{
+			Provider:     "threads",
+			ClientID:     cfg.ThreadsClientID,
+			ClientSecret: cfg.ThreadsClientSecret,
+			RedirectURI:  cfg.ThreadsRedirectURI,
+		})
+	}
+	return defaultProviderAppConfig(cfg, apps)
+}
+
+func defaultProviderAppConfig(cfg *Config, apps []platform.AppConfig) []platform.AppConfig {
+	out := make([]platform.AppConfig, 0, len(apps))
+	for _, app := range apps {
+		app = platform.NormalizeAppConfig(app)
+		if app.RedirectURI == "" {
+			app.RedirectURI = providerRedirectURI(cfg, app.Provider)
+		}
+		out = append(out, app)
+	}
+	return out
+}
+
+func providerRedirectURI(cfg *Config, provider string) string {
+	redirects := map[string]string{
+		"x":        cfg.TwitterRedirectURI,
+		"mastodon": cfg.MastodonRedirectURI,
+		"linkedin": cfg.LinkedInRedirectURI,
+		"threads":  cfg.ThreadsRedirectURI,
+	}
+	return redirects[provider]
+}
+
+func mergeProviderApps(base []platform.AppConfig, overrides ...platform.AppConfig) []platform.AppConfig {
+	merged := append([]platform.AppConfig{}, base...)
+	indexByKey := make(map[string]int, len(merged))
+	for i, app := range merged {
+		indexByKey[providerAppMergeKey(app)] = i
+	}
+	for _, app := range overrides {
+		key := providerAppMergeKey(app)
+		if i, ok := indexByKey[key]; ok {
+			merged[i] = app
+			continue
+		}
+		indexByKey[key] = len(merged)
+		merged = append(merged, app)
+	}
+	return merged
+}
+
+func providerAppMergeKey(app platform.AppConfig) string {
+	app = platform.NormalizeAppConfig(app)
+	keys := map[string]string{
+		"mastodon": app.Provider + ":" + app.InstanceURL,
+	}
+	if key, ok := keys[app.Provider]; ok {
+		return key
+	}
+	return app.Provider
 }
 
 func (c *Config) DatabaseDSN() string {
