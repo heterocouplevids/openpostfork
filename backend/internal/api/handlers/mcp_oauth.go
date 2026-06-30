@@ -47,9 +47,16 @@ type CreateMCPOAuthAuthorizationOutput struct {
 }
 
 func (h *MCPOAuthHandler) RegisterRoutes(e *echo.Echo, api huma.API) {
+	h.RegisterEchoRoutes(e)
+	h.RegisterAPIRoutes(api)
+}
+
+func (h *MCPOAuthHandler) RegisterEchoRoutes(e *echo.Echo) {
 	e.GET("/.well-known/oauth-authorization-server", h.authorizationServerMetadata)
 	e.POST("/oauth/token", h.token)
+}
 
+func (h *MCPOAuthHandler) RegisterAPIRoutes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "create-mcp-oauth-authorization",
 		Method:      http.MethodPost,

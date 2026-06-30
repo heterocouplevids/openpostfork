@@ -6,38 +6,70 @@ const docsBase = process.env.OPENPOST_DOCS_BASE?.trim() || '/';
 
 const docsSidebar = [
 	{
-		text: 'Getting Started',
+		text: 'Start Here',
 		collapsed: false,
 		items: [
 			{ text: 'What is OpenPost?', link: '/guide/what-is-openpost' },
-			{ text: 'Why self-host?', link: '/guide/why-selfhost' },
 			{ text: 'Quickstart', link: '/guide/quickstart' },
 			{ text: 'Concepts', link: '/guide/concepts' },
 		],
 	},
 	{
-		text: 'Deployment',
+		text: 'Using The Web App',
 		collapsed: false,
 		items: [
+			{ text: 'Workspaces', link: '/usage/workspaces' },
+			{ text: 'Accounts', link: '/usage/accounts' },
+			{ text: 'Composing Posts', link: '/usage/composing-posts' },
+			{ text: 'Threads', link: '/usage/threads' },
+			{ text: 'Scheduling', link: '/usage/scheduling' },
+			{ text: 'Media Library', link: '/usage/media-library' },
+		],
+	},
+	{
+		text: 'Using The CLI',
+		collapsed: false,
+		items: [
+			{ text: 'Overview', link: '/cli/' },
+			{ text: 'Installation', link: '/cli/installation' },
+			{ text: 'Authentication', link: '/cli/authentication' },
+			{ text: 'Posting', link: '/cli/posting' },
+			{ text: 'Automation', link: '/cli/automation' },
+			{ text: 'Command Reference', link: '/reference/cli' },
+		],
+	},
+	{
+		text: 'Using MCP',
+		collapsed: false,
+		items: [{ text: 'Assistant Scheduling', link: '/mcp/' }],
+	},
+	{
+		text: 'Self-Hosting: Install',
+		collapsed: false,
+		items: [
+			{ text: 'Why Self-Host?', link: '/guide/why-selfhost' },
 			{ text: 'Docker Compose', link: '/installation/docker-compose' },
 			{ text: 'Single Binary', link: '/installation/binary' },
 			{ text: 'Nix Module', link: '/installation/nix-module' },
 			{ text: 'Reverse Proxy', link: '/installation/reverse-proxy' },
-			{ text: 'Android App', link: '/installation/android' },
+			{ text: 'Build From Source', link: '/installation/build-from-source' },
+			{ text: 'Docker Run', link: '/installation/docker-run' },
 		],
 	},
 	{
-		text: 'Configuration',
+		text: 'Self-Hosting: Configure',
 		collapsed: false,
 		items: [
+			{ text: 'Overview', link: '/configuration/overview' },
 			{ text: 'Environment Variables', link: '/configuration/environment-variables' },
 			{ text: 'Database', link: '/configuration/database' },
 			{ text: 'Media Storage', link: '/configuration/media-storage' },
 			{ text: 'CORS and URLs', link: '/configuration/cors-and-urls' },
+			{ text: 'Production Checklist', link: '/configuration/production-checklist' },
 		],
 	},
 	{
-		text: 'Providers',
+		text: 'Self-Hosting: Providers',
 		collapsed: false,
 		items: [
 			{ text: 'Overview', link: '/providers/overview' },
@@ -51,35 +83,20 @@ const docsSidebar = [
 		],
 	},
 	{
-		text: 'Using OpenPost',
-		collapsed: false,
-		items: [
-			{ text: 'Accounts', link: '/usage/accounts' },
-			{ text: 'Composing Posts', link: '/usage/composing-posts' },
-			{ text: 'Scheduling', link: '/usage/scheduling' },
-			{ text: 'Media Library', link: '/usage/media-library' },
-		],
-	},
-	{
-		text: 'CLI',
-		collapsed: false,
-		items: [
-			{ text: 'Overview', link: '/cli/' },
-			{ text: 'Installation', link: '/cli/installation' },
-			{ text: 'Authentication', link: '/cli/authentication' },
-			{ text: 'Posting', link: '/cli/posting' },
-			{ text: 'Automation', link: '/cli/automation' },
-			{ text: 'Command Reference', link: '/reference/cli' },
-		],
-	},
-	{
-		text: 'Operations',
+		text: 'Self-Hosting: Operate',
 		collapsed: false,
 		items: [
 			{ text: 'Backups', link: '/operations/backups' },
+			{ text: 'Health Checks', link: '/operations/health-checks' },
+			{ text: 'Logs', link: '/operations/logs' },
 			{ text: 'Upgrades', link: '/operations/upgrades' },
 			{ text: 'Troubleshooting', link: '/operations/troubleshooting' },
 		],
+	},
+	{
+		text: 'Apps',
+		collapsed: false,
+		items: [{ text: 'Android App', link: '/installation/android' }],
 	},
 	{
 		text: 'Reference',
@@ -96,7 +113,7 @@ const docsSidebar = [
 
 const developmentSidebar = [
 	{
-		text: 'Development',
+		text: 'Developer Docs',
 		collapsed: false,
 		items: [
 			{ text: 'Setup', link: '/development/setup' },
@@ -132,12 +149,12 @@ export default defineConfig({
 		logo: '/assets/brand/icon.svg',
 		nav: [
 			{ text: 'Home', link: 'https://openpost.social' },
-			{ text: 'Guide', link: '/guide/quickstart' },
-			{ text: 'Installation', link: '/installation/docker-compose' },
+			{ text: 'User Docs', link: '/guide/quickstart' },
 			{ text: 'CLI', link: '/cli/' },
+			{ text: 'MCP', link: '/mcp/' },
+			{ text: 'Self-Hosting', link: '/installation/docker-compose' },
 			{ text: 'Providers', link: '/providers/overview' },
-			{ text: 'Operations', link: '/operations/backups' },
-			{ text: 'Development', link: '/development/setup' },
+			{ text: 'Developer Docs', link: '/development/setup' },
 		],
 		socialLinks: [{ icon: 'github', link: 'https://github.com/rodrgds/openpost' }],
 		search: {

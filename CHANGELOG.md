@@ -55,6 +55,9 @@ All notable changes to this project are documented in this file.
 - Added an MCP Apps scheduler widget resource and `render_scheduler_widget` tool so ChatGPT-style clients can render OpenPost workspaces, accounts, media, providers, drafts, and queue data.
 - Added the first Publication model schema foundation with `publications`, `publication_assets`, and optional `posts.publication_id` links for the upcoming source-idea → rendition workflow.
 - Added MCP `list_publications` and `create_publication` tools so assistants can work from source ideas and assets before creating platform-specific drafts.
+- Added authenticated publication API endpoints for creating, listing, reading, and updating source publications with media attachments.
+- Added user-facing MCP docs and reorganized the docs navigation around user docs, self-hosting docs, and developer docs.
+- Added a backend OpenAPI generator command so docs builds regenerate the checked-in Huma spec from the same route registrar used by the server.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

@@ -7,6 +7,7 @@ const (
 	tagMCP              = "MCP"
 	tagPostingSchedules = "Posting Schedules"
 	tagPosts            = "Posts"
+	tagPublications     = "Publications"
 	tagPrompts          = "Prompts"
 	tagSets             = "Sets"
 	tagWorkspaces       = "Workspaces"

@@ -1,5 +1,7 @@
 # MCP And ChatGPT App
 
+This page is for MCP implementation and protocol details. For setup-oriented user docs, see [Assistant Scheduling With MCP](/mcp/).
+
 OpenPost exposes an authenticated MCP foundation at:
 
 ```txt

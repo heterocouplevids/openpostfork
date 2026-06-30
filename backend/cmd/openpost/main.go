@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	apiroutes "github.com/openpost/backend/internal/api"
 	"github.com/openpost/backend/internal/api/handlers"
 	apimiddleware "github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/config"
@@ -147,11 +148,9 @@ func main() {
 	humaConfig := huma.DefaultConfig("OpenPost API", "1.0.0")
 	api := humaecho.NewWithGroup(e, apiGroup, humaConfig)
 
-	mediaHandler.RegisterRoutes(api)
 	mediaHandler.RegisterLegacyRoutes(e)
 	billingHandler := handlers.NewBillingHandler(billingService, db, authenticator)
 	billingHandler.RegisterRoutes(e)
-	billingHandler.RegisterAPIRoutes(api)
 
 	e.GET("/openapi.json", func(c echo.Context) error {
 		spec := api.OpenAPI()
@@ -201,85 +200,31 @@ func main() {
 	mcpHandler.SetPublicURL(cfg.PublicURL)
 	mcpHandler.SetProviderCatalog(providers, mastodonAppService != nil)
 	mcpHandler.RegisterRoutes(e)
-	handlers.NewMCPActivityHandler(db, authenticator).RegisterRoutes(api)
-	handlers.NewMCPOAuthHandler(mcpOAuthService, authenticator, cfg.PublicURL).RegisterRoutes(e, api)
+	mcpOAuthHandler := handlers.NewMCPOAuthHandler(mcpOAuthService, authenticator, cfg.PublicURL)
+	mcpOAuthHandler.RegisterEchoRoutes(e)
 
-	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator, entitlementService)
-	workspaceHandler.CreateWorkspace(api)
-	workspaceHandler.ListWorkspaces(api)
-	workspaceHandler.GetWorkspaceSettings(api)
-	workspaceHandler.UpdateWorkspaceSettings(api)
-
-	postHandler := handlers.NewPostHandler(db, authenticator, entitlementService)
-	postHandler.CreatePost(api)
-	postHandler.CreateThread(api)
-	postHandler.ListPosts(api)
-	postHandler.GetPost(api)
-	postHandler.UpdatePost(api)
-	postHandler.DeletePost(api)
-	postHandler.GetScheduleOverview(api)
-	postHandler.UpsertVariants(api)
-	postHandler.GetVariants(api)
-	postHandler.DeleteVariants(api)
-
-	setHandler := handlers.NewSetHandler(db, authenticator)
-	setHandler.CreateSet(api)
-	setHandler.ListSets(api)
-	setHandler.GetSet(api)
-	setHandler.UpdateSet(api)
-	setHandler.DeleteSet(api)
-	setHandler.AddSetAccounts(api)
-	setHandler.RemoveSetAccount(api)
-
-	postingScheduleHandler := handlers.NewPostingScheduleHandler(db, authenticator)
-	postingScheduleHandler.ListSchedules(api)
-	postingScheduleHandler.CreateSchedule(api)
-	postingScheduleHandler.UpdateSchedule(api)
-	postingScheduleHandler.DeleteSchedule(api)
-	postingScheduleHandler.SuggestSchedule(api)
-	postingScheduleHandler.GetNextAvailableSlot(api)
-
-	promptHandler := handlers.NewPromptHandler(db, authenticator)
-	promptHandler.ListPrompts(api)
-	promptHandler.CreatePrompt(api)
-	promptHandler.DeletePrompt(api)
-	promptHandler.GetRandomPrompt(api)
-	promptHandler.GetCategories(api)
-
-	jobHandler := handlers.NewJobHandler(db, authenticator)
-	jobHandler.RegisterRoutes(api)
-
-	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authenticator, cfg.DisableLinkedInThreadReplies, cfg.FrontendURL)
-	oauthHandler.SetEntitlement(entitlementService)
-	oauthHandler.SetMastodonAppService(mastodonAppService)
-	oauthHandler.ListProviders(api)
-	oauthHandler.ListMastodonServers(api)
-	oauthHandler.GetAuthURL(api)
-	oauthHandler.Callback(api)
-	oauthHandler.ExchangeCode(api)
-	oauthHandler.BlueskyLogin(api)
-	oauthHandler.ListAccounts(api)
-	oauthHandler.UpdateAccount(api)
-	oauthHandler.DisconnectAccount(api)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "health-check",
-		Method:      http.MethodGet,
-		Path:        "/health",
-		Summary:     "Health check",
-		Tags:        []string{"System"},
-	}, func(_ context.Context, _ *struct{}) (*struct {
-		Body struct {
-			Status string `json:"status" doc:"Health status"`
-		}
-	}, error) {
-		resp := &struct {
-			Body struct {
-				Status string `json:"status" doc:"Health status"`
-			}
-		}{}
-		resp.Body.Status = "ok"
-		return resp, nil
+	apiroutes.RegisterHumaRoutes(api, apiroutes.RouteDeps{
+		DB:                           db,
+		AuthService:                  authService,
+		Authenticator:                authenticator,
+		APITokenService:              apiTokenService,
+		CLIAuthService:               cliAuthService,
+		MCPOAuthService:              mcpOAuthService,
+		BillingService:               billingService,
+		MediaStorage:                 storage,
+		MediaSigner:                  mediaSigner,
+		Entitlement:                  entitlementService,
+		TokenEncryptor:               tokenEncryptor,
+		MFAService:                   mfaService,
+		Providers:                    providers,
+		MastodonAppService:           mastodonAppService,
+		FrontendURL:                  cfg.FrontendURL,
+		PublicURL:                    cfg.PublicURL,
+		DisableRegistrations:         cfg.DisableRegistrations,
+		DisableLinkedInThreadReplies: cfg.DisableLinkedInThreadReplies,
+		MediaHandler:                 mediaHandler,
+		BillingHandler:               billingHandler,
+		MCPOAuthHandler:              mcpOAuthHandler,
 	})
 
 	RegisterSpaRoutes(e)

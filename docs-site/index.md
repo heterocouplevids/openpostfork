@@ -29,6 +29,8 @@ features:
     details: Keep separate brands, accounts, media, prompts, and schedules organized.
   - title: CLI
     details: Create posts, upload media, use social sets, and automate workflows from scripts or CI.
+  - title: MCP
+    details: Let assistants inspect workspaces, draft publications, adapt renditions, and schedule posts through authenticated tools.
   - title: Android app
     details: Install the release APK and connect it to your self-hosted instance.
 ---
@@ -68,7 +70,14 @@ volumes:
 New to OpenPost? Start with the [Quickstart](/guide/quickstart) guide.
 :::
 
+## Choose the right docs
+
+- **User-facing docs** cover the [web app](/usage/composing-posts), [CLI](/cli/), and [MCP assistant scheduling](/mcp/).
+- **Self-hosting docs** cover [installation](/installation/docker-compose), [configuration](/configuration/overview), [providers](/providers/overview), and [operations](/operations/backups).
+- **Developer docs** cover [architecture](/development/architecture), [API reference](/development/api-reference), [platform adapters](/development/platform-adapters), [testing](/development/testing), and the [production-readiness plan](/development/production-readiness).
+
 ## More ways to use OpenPost
 
 - Use the [CLI](/cli/) for terminal workflows, cron jobs, and CI automation.
+- Connect an assistant through [MCP](/mcp/) for agentic drafting, rendition, and scheduling workflows.
 - Install the [Android app](/installation/android) from the APK shipped with each GitHub release.
