@@ -49,6 +49,7 @@ All notable changes to this project are documented in this file.
 - Added direct browser-to-S3 media upload sessions with pending media reservations, presigned PUT targets, completion finalization, dedupe, and quota accounting.
 - Wired web media uploads through direct S3 upload sessions with automatic multipart fallback for local/self-hosted storage.
 - Added provider launch-status metadata to account-provider discovery, including planned Instagram, Facebook, YouTube, and TikTok entries for web, CLI, MCP, and ChatGPT App clients.
+- Added MCP `list_provider_catalog` so assistant clients can inspect available, unconfigured, and planned social providers before choosing destinations.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

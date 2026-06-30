@@ -306,19 +306,6 @@ func (h *OAuthHandler) isDynamicMastodonConfigured() bool {
 	return h.mastodonApps != nil
 }
 
-func (h *OAuthHandler) dynamicMastodonInfo() ProviderInfo {
-	return ProviderInfo{
-		Platform:     mastodonProvider,
-		DisplayName:  "Mastodon",
-		AuthMode:     "oauth_oob",
-		Configured:   true,
-		Status:       providerStatusAvailable,
-		Description:  "Connect any public Mastodon instance.",
-		Capabilities: coreProviderCapabilities,
-		Name:         "Custom instance",
-	}
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -342,25 +329,29 @@ func (h *OAuthHandler) ListProviders(api huma.API) {
 }
 
 func (h *OAuthHandler) providerAvailability() []ProviderInfo {
-	providers := make([]ProviderInfo, 0, len(providerCatalog))
-	for _, item := range providerCatalog {
-		if item.Platform == mastodonProvider {
-			mastodonProviders := h.mastodonProviderAvailability()
-			providers = append(providers, mastodonProviders...)
-			continue
-		}
-		item = h.providerInfoWithStatus(item)
-		providers = append(providers, item)
-	}
-	return providers
+	return providerAvailability(h.providers, h.isDynamicMastodonConfigured())
 }
 
-func (h *OAuthHandler) providerInfoWithStatus(item ProviderInfo) ProviderInfo {
+func providerAvailability(providers map[string]platform.Adapter, dynamicMastodonConfigured bool) []ProviderInfo {
+	infos := make([]ProviderInfo, 0, len(providerCatalog))
+	for _, item := range providerCatalog {
+		if item.Platform == mastodonProvider {
+			mastodonProviders := mastodonProviderAvailability(providers, dynamicMastodonConfigured)
+			infos = append(infos, mastodonProviders...)
+			continue
+		}
+		item = providerInfoWithStatus(providers, item)
+		infos = append(infos, item)
+	}
+	return infos
+}
+
+func providerInfoWithStatus(providers map[string]platform.Adapter, item ProviderInfo) ProviderInfo {
 	if item.Status == providerStatusPlanned {
 		item.Configured = false
 		return item
 	}
-	item.Configured = h.providers[item.Platform] != nil
+	item.Configured = providers[item.Platform] != nil
 	if item.Configured {
 		item.Status = providerStatusAvailable
 	} else {
@@ -369,11 +360,11 @@ func (h *OAuthHandler) providerInfoWithStatus(item ProviderInfo) ProviderInfo {
 	return item
 }
 
-func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
-	servers := h.configuredMastodonServers()
+func mastodonProviderAvailability(providers map[string]platform.Adapter, dynamicMastodonConfigured bool) []ProviderInfo {
+	servers := configuredMastodonServers(providers)
 	if len(servers) == 0 {
-		if h.isDynamicMastodonConfigured() {
-			return []ProviderInfo{h.dynamicMastodonInfo()}
+		if dynamicMastodonConfigured {
+			return []ProviderInfo{dynamicMastodonInfo()}
 		}
 		return []ProviderInfo{{
 			Platform:    mastodonProvider,
@@ -385,12 +376,12 @@ func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
 		}}
 	}
 
-	providers := make([]ProviderInfo, 0, len(servers)+1)
-	if h.isDynamicMastodonConfigured() {
-		providers = append(providers, h.dynamicMastodonInfo())
+	infos := make([]ProviderInfo, 0, len(servers)+1)
+	if dynamicMastodonConfigured {
+		infos = append(infos, dynamicMastodonInfo())
 	}
 	for _, server := range servers {
-		providers = append(providers, ProviderInfo{
+		infos = append(infos, ProviderInfo{
 			Platform:     mastodonProvider,
 			DisplayName:  "Mastodon",
 			AuthMode:     "oauth_oob",
@@ -402,13 +393,30 @@ func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
 			InstanceURL:  server.InstanceURL,
 		})
 	}
-	return providers
+	return infos
+}
+
+func dynamicMastodonInfo() ProviderInfo {
+	return ProviderInfo{
+		Platform:     mastodonProvider,
+		DisplayName:  "Mastodon",
+		AuthMode:     "oauth_oob",
+		Configured:   true,
+		Status:       providerStatusAvailable,
+		Description:  "Connect any public Mastodon instance.",
+		Capabilities: coreProviderCapabilities,
+		Name:         "Custom instance",
+	}
 }
 
 func (h *OAuthHandler) configuredMastodonServers() []MastodonServerInfo {
+	return configuredMastodonServers(h.providers)
+}
+
+func configuredMastodonServers(providers map[string]platform.Adapter) []MastodonServerInfo {
 	var servers []MastodonServerInfo
 	seen := make(map[string]struct{})
-	for key, adapter := range h.providers {
+	for key, adapter := range providers {
 		if !strings.HasPrefix(key, "mastodon:") {
 			continue
 		}

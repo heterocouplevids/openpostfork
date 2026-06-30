@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/apitokens"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/mediastore"
@@ -27,6 +28,7 @@ import (
 const (
 	mcpProtocolVersion   = "2025-06-18"
 	mcpToolWorkspaces    = "list_workspaces"
+	mcpToolProviders     = "list_provider_catalog"
 	mcpToolAccounts      = "list_accounts"
 	mcpToolCreateDraft   = "create_draft"
 	mcpToolListDrafts    = "list_drafts"
@@ -55,6 +57,8 @@ type MCPHandler struct {
 	mediaURLHTTP      *http.Client
 	mediaURLValidator func(context.Context, *url.URL) error
 	publicURL         string
+	providers         map[string]platform.Adapter
+	dynamicMastodon   bool
 }
 
 func NewMCPHandler(db *bun.DB, authenticator middleware.Authenticator, entitlement ...entitlements.Service) *MCPHandler {
@@ -90,6 +94,11 @@ func (h *MCPHandler) SetMediaURLValidator(validator func(context.Context, *url.U
 
 func (h *MCPHandler) SetPublicURL(publicURL string) {
 	h.publicURL = strings.TrimRight(publicURL, "/")
+}
+
+func (h *MCPHandler) SetProviderCatalog(providers map[string]platform.Adapter, dynamicMastodon bool) {
+	h.providers = providers
+	h.dynamicMastodon = dynamicMastodon
 }
 
 func (h *MCPHandler) RegisterRoutes(e *echo.Echo) {
@@ -243,6 +252,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 	case "tools/list":
 		return map[string]any{"tools": []map[string]any{
 			mcpListWorkspacesTool(),
+			mcpListProviderCatalogTool(),
 			mcpListAccountsTool(),
 			mcpCreateDraftTool(),
 			mcpListDraftsTool(),
@@ -351,9 +361,10 @@ Source idea:
 
 Workflow:
 1. If workspace_id is missing, call list_workspaces and ask which workspace to use.
-2. Call list_accounts for the selected workspace and pick destination accounts matching these platform hints: %s.
-3. Create one concise draft with create_draft. Do not schedule it until the user approves timing and destinations.
-4. Explain what you created and suggest the next scheduling step.
+2. Call list_provider_catalog to understand which requested platforms are available, need server configuration, or are still planned.
+3. Call list_accounts for the selected workspace and pick destination accounts matching these platform hints: %s.
+4. Create one concise draft with create_draft. Do not schedule it until the user approves timing and destinations.
+5. Explain what you created and suggest the next scheduling step.
 
 workspace_id: %s
 `, promptArg(args, "idea", "(missing idea)"), promptArg(args, "platforms", "any connected platforms"), promptArg(args, "workspace_id", "(choose with list_workspaces)")))
@@ -406,6 +417,19 @@ func mcpListWorkspacesTool() map[string]any {
 		"name":        mcpToolWorkspaces,
 		"title":       "List workspaces",
 		"description": "List OpenPost workspaces available to the authenticated user.",
+		"inputSchema": map[string]any{
+			"type":                 "object",
+			"properties":           map[string]any{},
+			"additionalProperties": false,
+		},
+	}, true, false)
+}
+
+func mcpListProviderCatalogTool() map[string]any {
+	return mcpToolDescriptor(map[string]any{
+		"name":        mcpToolProviders,
+		"title":       "List provider catalog",
+		"description": "List OpenPost provider launch status so assistants know which platforms are connectable, unconfigured, or planned.",
 		"inputSchema": map[string]any{
 			"type":                 "object",
 			"properties":           map[string]any{},
@@ -808,6 +832,8 @@ func mcpToolInvocationStatus(toolName string) mcpToolStatus {
 	switch toolName {
 	case mcpToolWorkspaces:
 		return mcpToolStatus{Invoking: "Loading workspaces", Invoked: "Workspaces loaded"}
+	case mcpToolProviders:
+		return mcpToolStatus{Invoking: "Loading providers", Invoked: "Providers loaded"}
 	case mcpToolAccounts:
 		return mcpToolStatus{Invoking: "Loading accounts", Invoked: "Accounts loaded"}
 	case mcpToolCreateDraft:
@@ -843,6 +869,10 @@ func mcpToolOutputSchema(toolName string) map[string]any {
 		return mcpStructuredOutputSchema(map[string]any{
 			"workspaces": mcpArraySchema(mcpOpenObjectSchema()),
 		}, "workspaces")
+	case mcpToolProviders:
+		return mcpStructuredOutputSchema(map[string]any{
+			"providers": mcpArraySchema(mcpOpenObjectSchema()),
+		}, "providers")
 	case mcpToolAccounts:
 		return mcpStructuredOutputSchema(map[string]any{
 			"accounts": mcpArraySchema(mcpOpenObjectSchema()),
@@ -917,8 +947,8 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 		rpcErr *mcpError
 	)
 	switch params.Name {
-	case mcpToolWorkspaces:
-		result, rpcErr = h.listWorkspaces(ctx, principal.UserID)
+	case mcpToolWorkspaces, mcpToolProviders:
+		result, rpcErr = h.callReadOnlyGlobalTool(ctx, principal.UserID, params.Name)
 	case mcpToolAccounts:
 		result, rpcErr = h.listAccounts(ctx, principal.UserID, params.Arguments)
 	case mcpToolCreateDraft:
@@ -948,6 +978,17 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 	}
 	h.recordToolCall(ctx, principal, params.Name, workspaceIDFromMCPArguments(params.Arguments), time.Since(start), rpcErr)
 	return result, rpcErr
+}
+
+func (h *MCPHandler) callReadOnlyGlobalTool(ctx context.Context, userID, toolName string) (any, *mcpError) {
+	switch toolName {
+	case mcpToolWorkspaces:
+		return h.listWorkspaces(ctx, userID)
+	case mcpToolProviders:
+		return h.listProviderCatalog(), nil
+	default:
+		return nil, &mcpError{Code: -32602, Message: "unknown tool"}
+	}
 }
 
 func decodeMCPArguments(args map[string]any, dest any) error {
@@ -1057,6 +1098,46 @@ func (h *MCPHandler) listWorkspaces(ctx context.Context, userID string) (any, *m
 			"workspaces": workspaces,
 		},
 	}, nil
+}
+
+func (h *MCPHandler) listProviderCatalog() any {
+	providers := providerAvailability(h.providers, h.dynamicMastodon)
+	available := make([]string, 0)
+	needsConfiguration := make([]string, 0)
+	planned := make([]string, 0)
+	for _, provider := range providers {
+		switch provider.Status {
+		case providerStatusAvailable:
+			available = append(available, provider.DisplayName)
+		case providerStatusNeedsConfiguration:
+			needsConfiguration = append(needsConfiguration, provider.DisplayName)
+		case providerStatusPlanned:
+			planned = append(planned, provider.DisplayName)
+		}
+	}
+	parts := []string{}
+	if len(available) > 0 {
+		parts = append(parts, "available: "+strings.Join(available, ", "))
+	}
+	if len(needsConfiguration) > 0 {
+		parts = append(parts, "needs configuration: "+strings.Join(needsConfiguration, ", "))
+	}
+	if len(planned) > 0 {
+		parts = append(parts, "planned: "+strings.Join(planned, ", "))
+	}
+	text := "Provider catalog is empty."
+	if len(parts) > 0 {
+		text = "Provider catalog: " + strings.Join(parts, "; ")
+	}
+	return map[string]any{
+		"content": []mcpContent{{
+			Type: "text",
+			Text: text,
+		}},
+		"structuredContent": map[string]any{
+			"providers": providers,
+		},
+	}
 }
 
 type mcpAccount struct {

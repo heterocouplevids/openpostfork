@@ -191,9 +191,15 @@ func main() {
 	cliAuthHandler := handlers.NewCLIAuthHandler(cliAuthService, authenticator, cfg.PublicURL)
 	cliAuthHandler.RegisterRoutes(api)
 
+	mastodonAppService := mastodonapps.NewService(db, tokenEncryptor, mastodonapps.Options{
+		RedirectURI: cfg.MastodonRedirectURI,
+		Website:     cfg.PublicURL,
+	})
+
 	mcpHandler := handlers.NewMCPHandler(db, authenticator, entitlementService)
 	mcpHandler.SetMediaStorage(storage)
 	mcpHandler.SetPublicURL(cfg.PublicURL)
+	mcpHandler.SetProviderCatalog(providers, mastodonAppService != nil)
 	mcpHandler.RegisterRoutes(e)
 	handlers.NewMCPActivityHandler(db, authenticator).RegisterRoutes(api)
 	handlers.NewMCPOAuthHandler(mcpOAuthService, authenticator, cfg.PublicURL).RegisterRoutes(e, api)
@@ -245,10 +251,7 @@ func main() {
 
 	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authenticator, cfg.DisableLinkedInThreadReplies, cfg.FrontendURL)
 	oauthHandler.SetEntitlement(entitlementService)
-	oauthHandler.SetMastodonAppService(mastodonapps.NewService(db, tokenEncryptor, mastodonapps.Options{
-		RedirectURI: cfg.MastodonRedirectURI,
-		Website:     cfg.PublicURL,
-	}))
+	oauthHandler.SetMastodonAppService(mastodonAppService)
 	oauthHandler.ListProviders(api)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)

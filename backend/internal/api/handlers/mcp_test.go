@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/stretchr/testify/require"
@@ -243,23 +244,25 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 13)
+	require.Len(t, tools, 14)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
-	require.Equal(t, "list_accounts", tools[1].(map[string]any)["name"])
-	require.Equal(t, "create_draft", tools[2].(map[string]any)["name"])
-	require.Equal(t, "list_drafts", tools[3].(map[string]any)["name"])
-	require.Equal(t, "update_draft", tools[4].(map[string]any)["name"])
-	require.Equal(t, "set_post_renditions", tools[5].(map[string]any)["name"])
-	require.Equal(t, "schedule_post", tools[6].(map[string]any)["name"])
-	require.Equal(t, "schedule_draft", tools[7].(map[string]any)["name"])
-	require.Equal(t, "get_post_status", tools[8].(map[string]any)["name"])
-	require.Equal(t, "list_scheduled_posts", tools[9].(map[string]any)["name"])
-	require.Equal(t, "cancel_post", tools[10].(map[string]any)["name"])
-	require.Equal(t, "suggest_next_slot", tools[11].(map[string]any)["name"])
-	require.Equal(t, "upload_media_from_url", tools[12].(map[string]any)["name"])
+	require.Equal(t, "list_provider_catalog", tools[1].(map[string]any)["name"])
+	require.Equal(t, "list_accounts", tools[2].(map[string]any)["name"])
+	require.Equal(t, "create_draft", tools[3].(map[string]any)["name"])
+	require.Equal(t, "list_drafts", tools[4].(map[string]any)["name"])
+	require.Equal(t, "update_draft", tools[5].(map[string]any)["name"])
+	require.Equal(t, "set_post_renditions", tools[6].(map[string]any)["name"])
+	require.Equal(t, "schedule_post", tools[7].(map[string]any)["name"])
+	require.Equal(t, "schedule_draft", tools[8].(map[string]any)["name"])
+	require.Equal(t, "get_post_status", tools[9].(map[string]any)["name"])
+	require.Equal(t, "list_scheduled_posts", tools[10].(map[string]any)["name"])
+	require.Equal(t, "cancel_post", tools[11].(map[string]any)["name"])
+	require.Equal(t, "suggest_next_slot", tools[12].(map[string]any)["name"])
+	require.Equal(t, "upload_media_from_url", tools[13].(map[string]any)["name"])
 
 	requiredOutputKeys := map[string][]any{
 		mcpToolWorkspaces:    {"workspaces"},
+		mcpToolProviders:     {"providers"},
 		mcpToolAccounts:      {"accounts"},
 		mcpToolCreateDraft:   {"post"},
 		mcpToolListDrafts:    {"posts"},
@@ -408,6 +411,51 @@ func TestMCPCallListWorkspaces(t *testing.T) {
 	require.Len(t, workspaces, 2)
 	require.Equal(t, "ws-1", workspaces[0].(map[string]any)["id"])
 	require.Equal(t, "admin", workspaces[0].(map[string]any)["role"])
+}
+
+func TestMCPCallListProviderCatalog(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	srv.handler.SetProviderCatalog(map[string]platform.Adapter{
+		"bluesky": providerAvailabilityAdapter{},
+		"x":       providerAvailabilityAdapter{},
+	}, true)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-providers",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "list_provider_catalog",
+			"arguments": map[string]any{},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	content := result["content"].([]any)
+	text := content[0].(map[string]any)["text"].(string)
+	require.Contains(t, text, "available: Bluesky, X (Twitter), Mastodon")
+	require.Contains(t, text, "needs configuration: LinkedIn, Threads")
+	require.Contains(t, text, "planned: Instagram, Facebook, YouTube, TikTok")
+
+	structured := result["structuredContent"].(map[string]any)
+	providers := structured["providers"].([]any)
+	require.Len(t, providers, 9)
+	byPlatform := map[string]map[string]any{}
+	for _, item := range providers {
+		provider := item.(map[string]any)
+		byPlatform[provider["platform"].(string)] = provider
+	}
+	require.Equal(t, "available", byPlatform["bluesky"]["status"])
+	require.Equal(t, true, byPlatform["bluesky"]["configured"])
+	require.Equal(t, "needs_configuration", byPlatform["linkedin"]["status"])
+	require.Equal(t, false, byPlatform["linkedin"]["configured"])
+	require.Equal(t, "planned", byPlatform["instagram"]["status"])
+	require.Equal(t, false, byPlatform["instagram"]["configured"])
+	require.Contains(t, byPlatform["youtube"]["capabilities"].([]any), "MCP workflows")
 }
 
 func TestMCPCallListAccounts(t *testing.T) {

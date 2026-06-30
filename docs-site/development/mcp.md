@@ -53,6 +53,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 ## Current tools
 
 - `list_workspaces`: returns the workspaces available to the authenticated user.
+- `list_provider_catalog`: returns provider launch status so assistants know which platforms are available, need server configuration, or are still planned.
 - `list_accounts`: returns active social accounts for a workspace.
 - `create_draft`: creates a draft post in a workspace, optionally assigned to destination accounts.
 - `list_drafts`: returns editable draft posts for a workspace so an assistant can inspect existing work before creating more drafts.
@@ -92,3 +93,4 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Records MCP tool calls in `mcp_tool_calls` with user, workspace, tool name, success/error status, error message, duration, and timestamp, and exposes recent calls in settings.
 - Records API-token client ID, name, scope, and token prefix for MCP tool calls when a request uses a dedicated CLI/MCP token, so Settings can attribute activity to ChatGPT, Claude, CI, or another configured client.
 - Returns structured content so assistants can inspect workspace, account, post, destination, media, and suggested slot IDs without parsing prose.
+- Returns provider catalog structured content so assistants can avoid trying to connect or schedule to planned providers before adapters exist.
