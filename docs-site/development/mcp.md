@@ -31,6 +31,13 @@ read-only `render_scheduler_widget` tool points at that resource through
 `_meta.ui.resourceUri` and `_meta["openai/outputTemplate"]`, then passes
 structured OpenPost data into the widget for rendering.
 
+OpenPost emits the standard MCP Apps keys under `_meta.ui` and keeps legacy
+ChatGPT aliases mirrored under `_meta["openai/..."]`. For example, widget CSP
+uses camelCase `connectDomains` and `resourceDomains` under `_meta.ui.csp`,
+while `_meta["openai/widgetCSP"]` keeps the snake_case alias expected by older
+ChatGPT clients. The render tool is model-visible only; the current widget does
+not call tools directly.
+
 For ChatGPT Apps and other OAuth-aware MCP clients, OpenPost also publishes
 protected-resource and authorization-server metadata:
 

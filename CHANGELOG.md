@@ -72,6 +72,7 @@ All notable changes to this project are documented in this file.
 - Added a database-backed `/api/v1/ready` endpoint for deployment readiness checks while keeping `/api/v1/health` as a liveness probe.
 - Added `openpost instance health` for unauthenticated CLI liveness and readiness checks against the active instance.
 - Added production-operator checklist coverage for self-hosted storage, cloud Postgres/S3/Polar readiness, provider launch gates, backup restores, and CLI readiness probes.
+- Added stricter Apps SDK metadata coverage for the MCP scheduler widget, including standard `_meta.ui` CSP keys, legacy ChatGPT aliases, and model-only render-tool visibility.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

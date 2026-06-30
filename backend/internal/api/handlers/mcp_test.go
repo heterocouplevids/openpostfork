@@ -366,7 +366,9 @@ func TestMCPToolsList(t *testing.T) {
 		if toolName == mcpToolRenderWidget {
 			ui := meta["ui"].(map[string]any)
 			require.Equal(t, mcpAppWidgetURI, ui["resourceUri"])
+			require.ElementsMatch(t, []any{"model"}, ui["visibility"])
 			require.Equal(t, mcpAppWidgetURI, meta["openai/outputTemplate"])
+			require.Equal(t, false, meta["openai/widgetAccessible"])
 		}
 		outputSchema := descriptor["outputSchema"].(map[string]any)
 		require.Equal(t, "object", outputSchema["type"])
@@ -444,7 +446,18 @@ func TestMCPResourcesListAndRead(t *testing.T) {
 	require.NotEmpty(t, meta["openai/widgetDescription"])
 	ui := meta["ui"].(map[string]any)
 	require.Equal(t, true, ui["prefersBorder"])
+	standardCSP := ui["csp"].(map[string]any)
+	require.Contains(t, standardCSP, "connectDomains")
+	require.Contains(t, standardCSP, "resourceDomains")
+	require.NotContains(t, standardCSP, "connect_domains")
+	require.NotContains(t, standardCSP, "resource_domains")
+	legacyCSP := meta["openai/widgetCSP"].(map[string]any)
+	require.Contains(t, legacyCSP, "connect_domains")
+	require.Contains(t, legacyCSP, "resource_domains")
+	require.NotContains(t, legacyCSP, "connectDomains")
+	require.NotContains(t, legacyCSP, "resourceDomains")
 	require.Equal(t, "https://app.openpost.test", meta["openai/widgetDomain"])
+	require.Equal(t, "https://app.openpost.test", ui["domain"])
 }
 
 func TestMCPResourcesReadRejectsUnknownResource(t *testing.T) {

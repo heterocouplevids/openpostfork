@@ -426,26 +426,32 @@ func (h *MCPHandler) readMCPResource(raw json.RawMessage) (any, *mcpError) {
 }
 
 func (h *MCPHandler) mcpAppWidgetResourceMeta() map[string]any {
-	csp := map[string]any{
-		"connect_domains":  []string{},
-		"resource_domains": []string{},
-		"connectDomains":   []string{},
-		"resourceDomains":  []string{},
+	standardCSP, legacyCSP := mcpAppWidgetCSP()
+	ui := map[string]any{
+		"prefersBorder": true,
+		"csp":           standardCSP,
 	}
 	meta := map[string]any{
-		"ui": map[string]any{
-			"prefersBorder": true,
-			"csp":           csp,
-		},
+		"ui":                         ui,
 		"openai/widgetDescription":   "OpenPost scheduler view for workspaces, accounts, media, drafts, scheduled posts, provider status, and post details.",
 		"openai/widgetPrefersBorder": true,
-		"openai/widgetCSP":           csp,
+		"openai/widgetCSP":           legacyCSP,
 	}
 	if domain := mcpWidgetDomain(h.publicURL); domain != "" {
 		meta["openai/widgetDomain"] = domain
-		meta["ui"].(map[string]any)["domain"] = domain
+		ui["domain"] = domain
 	}
 	return meta
+}
+
+func mcpAppWidgetCSP() (map[string]any, map[string]any) {
+	return map[string]any{
+			"connectDomains":  []string{},
+			"resourceDomains": []string{},
+		}, map[string]any{
+			"connect_domains":  []string{},
+			"resource_domains": []string{},
+		}
 }
 
 func mcpWidgetDomain(publicURL string) string {
@@ -1244,7 +1250,7 @@ func mcpToolDescriptor(tool map[string]any, readOnly, openWorld bool) map[string
 	if mcpToolUsesAppWidget(toolName) {
 		meta["ui"] = map[string]any{
 			"resourceUri": mcpAppWidgetURI,
-			"visibility":  []string{"model", "app"},
+			"visibility":  []string{"model"},
 		}
 		meta["openai/outputTemplate"] = mcpAppWidgetURI
 		meta["openai/widgetAccessible"] = false
