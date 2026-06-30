@@ -23,6 +23,8 @@
 	import SmartphoneIcon from 'lucide-svelte/icons/smartphone';
 	import KeyRoundIcon from 'lucide-svelte/icons/key-round';
 	import TerminalIcon from 'lucide-svelte/icons/terminal';
+	import CreditCardIcon from 'lucide-svelte/icons/credit-card';
+	import ExternalLinkIcon from 'lucide-svelte/icons/external-link';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
 	import { getLocaleTag } from '$lib/i18n';
@@ -154,6 +156,9 @@
 	let apiTokenBusy = $state(false);
 	let apiTokenName = $state('OpenPost CLI');
 	let createdAPIToken = $state('');
+	let billingBusyPlan = $state('');
+	let billingPortalBusy = $state(false);
+	let billingError = $state('');
 
 	interface APITokenSummary {
 		id: string;
@@ -168,6 +173,30 @@
 
 	const authState = $derived($auth);
 	const passkeyCount = $derived(securityStatus?.passkeys.length ?? 0);
+	const billingPlans = [
+		{
+			id: 'starter',
+			name: 'Starter',
+			price: '$6',
+			description: 'Small projects that need managed posting without extra workspace overhead.',
+			limits: ['1 workspace', '3 social accounts', '100 scheduled posts/month', '1 GB media']
+		},
+		{
+			id: 'creator',
+			name: 'Creator',
+			price: '$12',
+			description: 'Mainstream platform scheduling for active creators and operator-led brands.',
+			limits: ['3 workspaces', '6 social accounts', '500 scheduled posts/month', '5 GB media'],
+			featured: true
+		},
+		{
+			id: 'pro',
+			name: 'Pro',
+			price: '$24',
+			description: 'Higher limits for teams, heavier media use, and larger publishing operations.',
+			limits: ['10 workspaces', '15 social accounts', '2,500 scheduled posts/month', '25 GB media']
+		}
+	];
 
 	async function loadSecurityStatus() {
 		loadingSecurity = true;
@@ -232,6 +261,42 @@
 			securityError = (e as Error).message;
 		} finally {
 			apiTokenBusy = false;
+		}
+	}
+
+	async function startCheckout(planID: string) {
+		const workspaceID = workspaceCtx.currentWorkspace?.id;
+		if (!workspaceID) return;
+		billingBusyPlan = planID;
+		billingError = '';
+		try {
+			const { data, error: err } = await client.POST('/billing/checkout', {
+				body: { workspace_id: workspaceID, plan_id: planID }
+			});
+			if (err || !data?.url) throw new Error(err?.detail || 'Failed to create checkout');
+			window.location.assign(data.url);
+		} catch (e) {
+			billingError = (e as Error).message;
+		} finally {
+			billingBusyPlan = '';
+		}
+	}
+
+	async function openBillingPortal() {
+		const workspaceID = workspaceCtx.currentWorkspace?.id;
+		if (!workspaceID) return;
+		billingPortalBusy = true;
+		billingError = '';
+		try {
+			const { data, error: err } = await client.POST('/billing/portal', {
+				body: { workspace_id: workspaceID }
+			});
+			if (err || !data?.url) throw new Error(err?.detail || 'Failed to open billing portal');
+			window.location.assign(data.url);
+		} catch (e) {
+			billingError = (e as Error).message;
+		} finally {
+			billingPortalBusy = false;
 		}
 	}
 
@@ -711,6 +776,71 @@
 					<Button variant="outline" onclick={() => goto('/accounts')}>Open Accounts</Button>
 				</div>
 			</div>
+		</section>
+
+		<section class="rounded-lg border p-6">
+			<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div>
+					<h2 class="flex items-center gap-2 text-lg font-semibold">
+						<CreditCardIcon class="h-5 w-5 text-muted-foreground" />
+						Billing
+					</h2>
+					<p class="mt-2 text-sm text-muted-foreground">
+						Manage the OpenPost Cloud plan for this workspace.
+					</p>
+				</div>
+				<Button variant="outline" onclick={openBillingPortal} disabled={billingPortalBusy}>
+					{#if billingPortalBusy}
+						<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+					{:else}
+						<ExternalLinkIcon class="mr-2 h-4 w-4" />
+					{/if}
+					Customer Portal
+				</Button>
+			</div>
+
+			<div class="grid gap-3 lg:grid-cols-3">
+				{#each billingPlans as plan (plan.id)}
+					<article
+						class={`rounded-lg border p-4 ${plan.featured ? 'border-primary bg-primary/5 shadow-sm' : 'bg-background'}`}
+					>
+						<div class="mb-3 flex items-start justify-between gap-3">
+							<div>
+								<h3 class="font-semibold">{plan.name}</h3>
+								<p class="text-sm text-muted-foreground">{plan.description}</p>
+							</div>
+							<div class="text-right">
+								<div class="text-xl font-semibold">{plan.price}</div>
+								<div class="text-xs text-muted-foreground">/mo</div>
+							</div>
+						</div>
+						<ul class="mb-4 space-y-1 text-sm text-muted-foreground">
+							{#each plan.limits as limit (limit)}
+								<li>{limit}</li>
+							{/each}
+						</ul>
+						<Button
+							class="w-full"
+							variant={plan.featured ? 'default' : 'outline'}
+							onclick={() => startCheckout(plan.id)}
+							disabled={Boolean(billingBusyPlan)}
+						>
+							{#if billingBusyPlan === plan.id}
+								<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+							{/if}
+							Start Checkout
+						</Button>
+					</article>
+				{/each}
+			</div>
+
+			{#if billingError}
+				<div
+					class="mt-4 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+				>
+					{billingError}
+				</div>
+			{/if}
 		</section>
 
 		<section class="rounded-lg border p-6">
