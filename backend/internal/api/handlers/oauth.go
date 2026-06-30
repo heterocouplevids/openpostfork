@@ -84,6 +84,19 @@ type MastodonServerInfo struct {
 	InstanceURL string `json:"instance_url" doc:"Mastodon instance URL"`
 }
 
+type ProviderInfo struct {
+	Platform    string `json:"platform" doc:"Provider key"`
+	DisplayName string `json:"display_name" doc:"Human-readable provider name"`
+	AuthMode    string `json:"auth_mode" doc:"Connection method: oauth, app_password, or oauth_oob"`
+	Configured  bool   `json:"configured" doc:"Whether this provider can currently be connected"`
+	Name        string `json:"name,omitempty" doc:"Provider app or server display name"`
+	InstanceURL string `json:"instance_url,omitempty" doc:"Federated server URL, when applicable"`
+}
+
+type ListProvidersOutput struct {
+	Body []ProviderInfo
+}
+
 type ListMastodonServersOutput struct {
 	Body []MastodonServerInfo
 }
@@ -151,6 +164,14 @@ type UpdateAccountOutput struct {
 
 var accountSlugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
+var providerCatalog = []ProviderInfo{
+	{Platform: "bluesky", DisplayName: "Bluesky", AuthMode: "app_password"},
+	{Platform: "x", DisplayName: "X (Twitter)", AuthMode: "oauth"},
+	{Platform: mastodonProvider, DisplayName: "Mastodon", AuthMode: "oauth_oob"},
+	{Platform: "linkedin", DisplayName: "LinkedIn", AuthMode: "oauth"},
+	{Platform: "threads", DisplayName: "Threads", AuthMode: "oauth"},
+}
+
 func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapter, error) {
 	if platform == mastodonProvider {
 		if serverName == "" {
@@ -171,6 +192,85 @@ func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapte
 	return adapter, nil
 }
 
+func (h *OAuthHandler) ListProviders(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-account-providers",
+		Method:      http.MethodGet,
+		Path:        "/accounts/providers",
+		Summary:     "List configured account providers",
+		Tags:        []string{tagAccounts},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+	}, func(_ context.Context, _ *struct{}) (*ListProvidersOutput, error) {
+		return &ListProvidersOutput{Body: h.providerAvailability()}, nil
+	})
+}
+
+func (h *OAuthHandler) providerAvailability() []ProviderInfo {
+	providers := make([]ProviderInfo, 0, len(providerCatalog))
+	for _, item := range providerCatalog {
+		if item.Platform == mastodonProvider {
+			mastodonProviders := h.mastodonProviderAvailability()
+			providers = append(providers, mastodonProviders...)
+			continue
+		}
+		item.Configured = h.providers[item.Platform] != nil
+		providers = append(providers, item)
+	}
+	return providers
+}
+
+func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
+	servers := h.configuredMastodonServers()
+	if len(servers) == 0 {
+		return []ProviderInfo{{
+			Platform:    mastodonProvider,
+			DisplayName: "Mastodon",
+			AuthMode:    "oauth_oob",
+			Configured:  false,
+		}}
+	}
+
+	providers := make([]ProviderInfo, 0, len(servers))
+	for _, server := range servers {
+		providers = append(providers, ProviderInfo{
+			Platform:    mastodonProvider,
+			DisplayName: "Mastodon",
+			AuthMode:    "oauth_oob",
+			Configured:  true,
+			Name:        server.Name,
+			InstanceURL: server.InstanceURL,
+		})
+	}
+	return providers
+}
+
+func (h *OAuthHandler) configuredMastodonServers() []MastodonServerInfo {
+	var servers []MastodonServerInfo
+	seen := make(map[string]struct{})
+	for key, adapter := range h.providers {
+		if !strings.HasPrefix(key, "mastodon:") {
+			continue
+		}
+		instanceURL := mastodonInstanceURL(adapter)
+		if instanceURL == "" {
+			continue
+		}
+		name := strings.TrimPrefix(key, "mastodon:")
+		if name == instanceURL {
+			continue
+		}
+		if _, ok := seen[instanceURL]; ok {
+			continue
+		}
+		seen[instanceURL] = struct{}{}
+		servers = append(servers, MastodonServerInfo{
+			Name:        name,
+			InstanceURL: instanceURL,
+		})
+	}
+	return servers
+}
+
 func (h *OAuthHandler) ListMastodonServers(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-mastodon-servers",
@@ -180,30 +280,7 @@ func (h *OAuthHandler) ListMastodonServers(api huma.API) {
 		Tags:        []string{tagAccounts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(_ context.Context, _ *struct{}) (*ListMastodonServersOutput, error) {
-		var servers []MastodonServerInfo
-		seen := make(map[string]struct{})
-		for key, adapter := range h.providers {
-			if !strings.HasPrefix(key, "mastodon:") {
-				continue
-			}
-			instanceURL := mastodonInstanceURL(adapter)
-			if instanceURL == "" {
-				continue
-			}
-			name := strings.TrimPrefix(key, "mastodon:")
-			if name == instanceURL {
-				continue
-			}
-			if _, ok := seen[instanceURL]; ok {
-				continue
-			}
-			seen[instanceURL] = struct{}{}
-			servers = append(servers, MastodonServerInfo{
-				Name:        name,
-				InstanceURL: instanceURL,
-			})
-		}
-		return &ListMastodonServersOutput{Body: servers}, nil
+		return &ListMastodonServersOutput{Body: h.configuredMastodonServers()}, nil
 	})
 }
 

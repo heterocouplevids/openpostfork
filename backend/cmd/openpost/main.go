@@ -241,6 +241,7 @@ func main() {
 
 	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authenticator, cfg.DisableLinkedInThreadReplies, cfg.FrontendURL)
 	oauthHandler.SetEntitlement(entitlementService)
+	oauthHandler.ListProviders(api)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)
 	oauthHandler.Callback(api)
