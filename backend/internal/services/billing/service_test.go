@@ -6,17 +6,58 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 )
+
+type fakePolarHTTPClient struct {
+	t        *testing.T
+	requests []polarHTTPRequest
+	response string
+	status   int
+}
+
+type polarHTTPRequest struct {
+	Method string
+	Path   string
+	Auth   string
+	Body   map[string]any
+}
+
+func (f *fakePolarHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	f.t.Helper()
+
+	var body map[string]any
+	require.NoError(f.t, json.NewDecoder(req.Body).Decode(&body))
+	f.requests = append(f.requests, polarHTTPRequest{
+		Method: req.Method,
+		Path:   req.URL.Path,
+		Auth:   req.Header.Get("Authorization"),
+		Body:   body,
+	})
+	status := f.status
+	if status == 0 {
+		status = http.StatusCreated
+	}
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(strings.NewReader(f.response)),
+		Header:     make(http.Header),
+	}, nil
+}
 
 func newBillingTestDB(t *testing.T) *bun.DB {
 	t.Helper()
@@ -76,7 +117,7 @@ func TestProcessPolarWebhookUpsertsSubscription(t *testing.T) {
 			"metadata": {
 				"workspace_id": "ws-1",
 				"plan_id": "creator",
-				"limits": {"scheduled_posts_monthly": 500}
+				"limit_scheduled_posts_monthly": 500
 			}
 		}
 	}`)
@@ -98,6 +139,96 @@ func TestProcessPolarWebhookUpsertsSubscription(t *testing.T) {
 	require.Equal(t, "creator", sub.PlanID)
 	require.Contains(t, sub.EntitlementSnapshot, "scheduled_posts_monthly")
 	require.Equal(t, time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC), sub.CurrentPeriodEnd)
+}
+
+func TestCreateCheckoutPostsPolarCheckoutSession(t *testing.T) {
+	t.Parallel()
+
+	client := &fakePolarHTTPClient{
+		t:        t,
+		response: `{"id":"checkout-1","url":"https://checkout.polar.sh/session"}`,
+	}
+	service := NewService(nil, "", PolarConfig{
+		AccessToken: "polar-token",
+		APIBaseURL:  "https://api.polar.test",
+		SuccessURL:  "https://app.openpost.test/settings/billing?checkout_id={CHECKOUT_ID}",
+		ReturnURL:   "https://app.openpost.test/settings/billing",
+		Plans: map[string]PlanConfig{
+			"creator": {
+				ProductID: "product-creator",
+				Limits: map[entitlements.LimitKey]int64{
+					entitlements.LimitScheduledPostsMonthly: 500,
+					entitlements.LimitSocialAccounts:        6,
+				},
+			},
+		},
+	})
+	service.SetHTTPClientForTest(client)
+
+	result, err := service.CreateCheckout(context.Background(), CreateCheckoutInput{
+		WorkspaceID:   "ws-1",
+		UserID:        "user-1",
+		CustomerEmail: "user@example.com",
+		PlanID:        "creator",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "checkout-1", result.ID)
+	require.Equal(t, "https://checkout.polar.sh/session", result.URL)
+	require.Len(t, client.requests, 1)
+	req := client.requests[0]
+	require.Equal(t, http.MethodPost, req.Method)
+	require.Equal(t, "/v1/checkouts/", req.Path)
+	require.Equal(t, "Bearer polar-token", req.Auth)
+	require.Equal(t, []any{"product-creator"}, req.Body["products"])
+	require.Equal(t, "ws-1", req.Body["external_customer_id"])
+	require.Equal(t, "user@example.com", req.Body["customer_email"])
+	metadata := req.Body["metadata"].(map[string]any)
+	require.Equal(t, "ws-1", metadata["workspace_id"])
+	require.Equal(t, "creator", metadata["plan_id"])
+	require.Equal(t, float64(500), metadata["limit_scheduled_posts_monthly"])
+	require.Equal(t, float64(6), metadata["limit_social_accounts"])
+}
+
+func TestCreateCheckoutRejectsUnconfiguredPlan(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(nil, "", PolarConfig{AccessToken: "polar-token", Plans: map[string]PlanConfig{}})
+
+	_, err := service.CreateCheckout(context.Background(), CreateCheckoutInput{
+		WorkspaceID:   "ws-1",
+		CustomerEmail: "user@example.com",
+		PlanID:        "creator",
+	})
+
+	require.ErrorContains(t, err, "unknown billing plan")
+}
+
+func TestCreateCustomerPortalSessionPostsPolarCustomerSession(t *testing.T) {
+	t.Parallel()
+
+	client := &fakePolarHTTPClient{
+		t:        t,
+		response: `{"id":"session-1","customer_portal_url":"https://polar.sh/customer/session"}`,
+	}
+	service := NewService(nil, "", PolarConfig{
+		AccessToken: "polar-token",
+		APIBaseURL:  "https://api.polar.test",
+		ReturnURL:   "https://app.openpost.test/settings/billing",
+	})
+	service.SetHTTPClientForTest(client)
+
+	result, err := service.CreateCustomerPortalSession(context.Background(), "ws-1")
+
+	require.NoError(t, err)
+	require.Equal(t, "session-1", result.ID)
+	require.Equal(t, "https://polar.sh/customer/session", result.URL)
+	require.Len(t, client.requests, 1)
+	req := client.requests[0]
+	require.Equal(t, http.MethodPost, req.Method)
+	require.Equal(t, "/v1/customer-sessions/", req.Path)
+	require.Equal(t, "ws-1", req.Body["external_customer_id"])
+	require.Equal(t, "https://app.openpost.test/settings/billing", req.Body["return_url"])
 }
 
 func TestProcessPolarWebhookDeduplicatesEvents(t *testing.T) {

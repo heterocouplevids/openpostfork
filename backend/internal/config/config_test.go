@@ -55,14 +55,29 @@ func TestLoadPolarPrimitives(t *testing.T) {
 	t.Setenv("OPENPOST_POLAR_ACCESS_TOKEN", "polar-token")
 	t.Setenv("OPENPOST_POLAR_WEBHOOK_SECRET", "whsec_secret")
 	t.Setenv("OPENPOST_POLAR_CHECKOUT_SUCCESS_URL", "https://app.openpost.social/settings/billing/")
-	t.Setenv("OPENPOST_POLAR_CUSTOMER_PORTAL_URL", "https://polar.sh/openpost/portal/")
+	t.Setenv("OPENPOST_POLAR_RETURN_URL", "https://app.openpost.social/settings/billing/")
+	t.Setenv("OPENPOST_POLAR_STARTER_PRODUCT_ID", "starter-product")
+	t.Setenv("OPENPOST_POLAR_CREATOR_PRODUCT_ID", "creator-product")
+	t.Setenv("OPENPOST_POLAR_PRO_PRODUCT_ID", "pro-product")
 
 	cfg := Load()
 
 	require.Equal(t, "polar-token", cfg.PolarAccessToken)
 	require.Equal(t, "whsec_secret", cfg.PolarWebhookSecret)
 	require.Equal(t, "https://app.openpost.social/settings/billing", cfg.PolarCheckoutURL)
-	require.Equal(t, "https://polar.sh/openpost/portal", cfg.PolarCustomerPortal)
+	require.Equal(t, "https://app.openpost.social/settings/billing", cfg.PolarReturnURL)
+	require.Equal(t, "starter-product", cfg.PolarStarterProductID)
+	require.Equal(t, "creator-product", cfg.PolarCreatorProductID)
+	require.Equal(t, "pro-product", cfg.PolarProProductID)
+}
+
+func TestLoadPolarReturnURLLegacyAlias(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("OPENPOST_POLAR_CUSTOMER_PORTAL_URL", "https://app.openpost.social/settings/billing/")
+
+	cfg := Load()
+
+	require.Equal(t, "https://app.openpost.social/settings/billing", cfg.PolarReturnURL)
 }
 
 func TestLoadInvalidProductionPrimitiveEnumsFallback(t *testing.T) {

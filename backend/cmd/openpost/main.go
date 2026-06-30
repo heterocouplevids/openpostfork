@@ -67,7 +67,16 @@ func main() {
 	tokenEncryptor := crypto.NewTokenEncryptor(cfg.EncryptionKey)
 	authService := auth.NewService(cfg.JWTSecret)
 	apiTokenService := apitokens.NewService(db)
-	billingService := billing.NewService(db, cfg.PolarWebhookSecret)
+	billingService := billing.NewService(db, cfg.PolarWebhookSecret, billing.PolarConfig{
+		AccessToken: cfg.PolarAccessToken,
+		SuccessURL:  cfg.PolarCheckoutURL,
+		ReturnURL:   cfg.PolarReturnURL,
+		Plans: billing.DefaultPlanCatalog(
+			cfg.PolarStarterProductID,
+			cfg.PolarCreatorProductID,
+			cfg.PolarProProductID,
+		),
+	})
 	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
 	if cfg.Edition == config.EditionCloud {
 		entitlementService = entitlements.NewSubscriptionService(db, entitlementService)
@@ -177,7 +186,9 @@ func main() {
 
 	mediaHandler.RegisterRoutes(api)
 	mediaHandler.RegisterLegacyRoutes(e)
-	handlers.NewBillingHandler(billingService).RegisterRoutes(e)
+	billingHandler := handlers.NewBillingHandler(billingService, db, authenticator)
+	billingHandler.RegisterRoutes(e)
+	billingHandler.RegisterAPIRoutes(api)
 
 	e.GET("/openapi.json", func(c echo.Context) error {
 		spec := api.OpenAPI()

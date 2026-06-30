@@ -22,6 +22,7 @@ All notable changes to this project are documented in this file.
 - Added publishing-worker usage accounting for successful published posts and provider publish write calls.
 - Added Polar billing webhook configuration, signature verification, idempotent webhook event storage, and local subscription snapshot tables for OpenPost Cloud.
 - Added a subscription-backed entitlement service for cloud-mode workspace quotas using local Polar subscription snapshots.
+- Added authenticated Polar checkout and customer portal API endpoints for OpenPost Cloud billing.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

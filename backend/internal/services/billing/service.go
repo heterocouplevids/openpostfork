@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -8,11 +9,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/uptrace/bun"
 )
 
@@ -22,13 +26,77 @@ type Service struct {
 	db            *bun.DB
 	webhookSecret string
 	now           func() time.Time
+	httpClient    httpDoer
+	polar         PolarConfig
 }
 
-func NewService(db *bun.DB, webhookSecret string) *Service {
+type httpDoer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
+type PolarConfig struct {
+	AccessToken string
+	APIBaseURL  string
+	SuccessURL  string
+	ReturnURL   string
+	Plans       map[string]PlanConfig
+}
+
+type PlanConfig struct {
+	ProductID string
+	Limits    map[entitlements.LimitKey]int64
+}
+
+func DefaultPlanCatalog(starterProductID, creatorProductID, proProductID string) map[string]PlanConfig {
+	return map[string]PlanConfig{
+		"starter": {
+			ProductID: starterProductID,
+			Limits: map[entitlements.LimitKey]int64{
+				entitlements.LimitWorkspaces:                1,
+				entitlements.LimitSocialAccounts:            3,
+				entitlements.LimitScheduledPostsMonthly:     100,
+				entitlements.LimitMediaBytesStored:          1_000_000_000,
+				entitlements.LimitMediaBytesUploadedMonthly: 1_000_000_000,
+			},
+		},
+		"creator": {
+			ProductID: creatorProductID,
+			Limits: map[entitlements.LimitKey]int64{
+				entitlements.LimitWorkspaces:                3,
+				entitlements.LimitSocialAccounts:            6,
+				entitlements.LimitScheduledPostsMonthly:     500,
+				entitlements.LimitMediaBytesStored:          5_000_000_000,
+				entitlements.LimitMediaBytesUploadedMonthly: 5_000_000_000,
+			},
+		},
+		"pro": {
+			ProductID: proProductID,
+			Limits: map[entitlements.LimitKey]int64{
+				entitlements.LimitWorkspaces:                10,
+				entitlements.LimitSocialAccounts:            15,
+				entitlements.LimitScheduledPostsMonthly:     2_500,
+				entitlements.LimitMediaBytesStored:          25_000_000_000,
+				entitlements.LimitMediaBytesUploadedMonthly: 25_000_000_000,
+				entitlements.LimitTeamMembers:               5,
+			},
+		},
+	}
+}
+
+func NewService(db *bun.DB, webhookSecret string, polarConfig ...PolarConfig) *Service {
+	cfg := PolarConfig{APIBaseURL: "https://api.polar.sh"}
+	if len(polarConfig) > 0 {
+		cfg = polarConfig[0]
+		if cfg.APIBaseURL == "" {
+			cfg.APIBaseURL = "https://api.polar.sh"
+		}
+	}
 	return &Service{
 		db:            db,
 		webhookSecret: strings.TrimSpace(webhookSecret),
 		now:           func() time.Time { return time.Now().UTC() },
+		httpClient:    http.DefaultClient,
+		polar:         cfg,
 	}
 }
 
@@ -36,6 +104,147 @@ func (s *Service) SetNowForTest(now func() time.Time) {
 	if now != nil {
 		s.now = now
 	}
+}
+
+func (s *Service) SetHTTPClientForTest(client httpDoer) {
+	if client != nil {
+		s.httpClient = client
+	}
+}
+
+type CreateCheckoutInput struct {
+	WorkspaceID   string
+	UserID        string
+	CustomerEmail string
+	PlanID        string
+}
+
+type CheckoutResult struct {
+	ID  string
+	URL string
+}
+
+func (s *Service) CreateCheckout(ctx context.Context, input CreateCheckoutInput) (CheckoutResult, error) {
+	plan, err := s.planFor(input.PlanID)
+	if err != nil {
+		return CheckoutResult{}, err
+	}
+	if strings.TrimSpace(input.WorkspaceID) == "" {
+		return CheckoutResult{}, fmt.Errorf("workspace id is required")
+	}
+	if strings.TrimSpace(input.CustomerEmail) == "" {
+		return CheckoutResult{}, fmt.Errorf("customer email is required")
+	}
+
+	payload := map[string]any{
+		"products":             []string{plan.ProductID},
+		"external_customer_id": input.WorkspaceID,
+		"customer_email":       input.CustomerEmail,
+		"success_url":          s.polar.SuccessURL,
+		"return_url":           s.polar.ReturnURL,
+		"metadata":             checkoutMetadata(input.WorkspaceID, input.UserID, input.PlanID, plan.Limits),
+		"customer_metadata": map[string]any{
+			"workspace_id": input.WorkspaceID,
+		},
+	}
+	var out struct {
+		ID  string `json:"id"`
+		URL string `json:"url"`
+	}
+	if err := s.postPolar(ctx, "/v1/checkouts/", payload, &out); err != nil {
+		return CheckoutResult{}, err
+	}
+	if out.URL == "" {
+		return CheckoutResult{}, fmt.Errorf("polar checkout response missing url")
+	}
+	return CheckoutResult{ID: out.ID, URL: out.URL}, nil
+}
+
+type CustomerPortalResult struct {
+	ID  string
+	URL string
+}
+
+func (s *Service) CreateCustomerPortalSession(ctx context.Context, workspaceID string) (CustomerPortalResult, error) {
+	if strings.TrimSpace(workspaceID) == "" {
+		return CustomerPortalResult{}, fmt.Errorf("workspace id is required")
+	}
+	payload := map[string]any{
+		"external_customer_id": workspaceID,
+		"return_url":           s.polar.ReturnURL,
+	}
+	var out struct {
+		ID                string `json:"id"`
+		CustomerPortalURL string `json:"customer_portal_url"`
+	}
+	if err := s.postPolar(ctx, "/v1/customer-sessions/", payload, &out); err != nil {
+		return CustomerPortalResult{}, err
+	}
+	if out.CustomerPortalURL == "" {
+		return CustomerPortalResult{}, fmt.Errorf("polar customer session response missing customer_portal_url")
+	}
+	return CustomerPortalResult{ID: out.ID, URL: out.CustomerPortalURL}, nil
+}
+
+func (s *Service) planFor(planID string) (PlanConfig, error) {
+	planID = strings.ToLower(strings.TrimSpace(planID))
+	if planID == "" {
+		return PlanConfig{}, fmt.Errorf("plan id is required")
+	}
+	plan, ok := s.polar.Plans[planID]
+	if !ok {
+		return PlanConfig{}, fmt.Errorf("unknown billing plan %q", planID)
+	}
+	if strings.TrimSpace(plan.ProductID) == "" {
+		return PlanConfig{}, fmt.Errorf("billing plan %q is not configured", planID)
+	}
+	return plan, nil
+}
+
+func checkoutMetadata(workspaceID, userID, planID string, limits map[entitlements.LimitKey]int64) map[string]any {
+	metadata := map[string]any{
+		"workspace_id": workspaceID,
+		"plan_id":      planID,
+	}
+	if userID != "" {
+		metadata["user_id"] = userID
+	}
+	for key, value := range limits {
+		metadata["limit_"+string(key)] = value
+	}
+	return metadata
+}
+
+func (s *Service) postPolar(ctx context.Context, path string, payload any, out any) error {
+	if strings.TrimSpace(s.polar.AccessToken) == "" {
+		return fmt.Errorf("polar access token is not configured")
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	url := strings.TrimRight(s.polar.APIBaseURL, "/") + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.polar.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("polar request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("polar request failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	if err := json.Unmarshal(respBody, out); err != nil {
+		return fmt.Errorf("invalid polar response: %w", err)
+	}
+	return nil
 }
 
 type WebhookHeaders struct {
@@ -264,14 +473,32 @@ func subscriptionFromPolarEvent(event polarEvent) (*models.BillingSubscription, 
 }
 
 func entitlementSnapshotJSON(data polarSubscriptionData, planID string) string {
+	productID := data.ProductID
+	if productID == "" {
+		productID = data.Product.ID
+	}
+	priceID := data.PriceID
+	if priceID == "" {
+		priceID = data.Price.ID
+	}
 	snapshot := map[string]any{
 		"provider":   ProviderPolar,
 		"plan_id":    planID,
 		"status":     data.Status,
-		"product_id": data.ProductID,
-		"price_id":   data.PriceID,
+		"product_id": productID,
+		"price_id":   priceID,
 	}
-	if limits, ok := data.Metadata["limits"]; ok {
+	limits := make(map[string]int64)
+	for key, value := range data.Metadata {
+		metric, ok := strings.CutPrefix(key, "limit_")
+		if !ok {
+			continue
+		}
+		if parsed, ok := metadataLimitAsInt64(value); ok {
+			limits[metric] = parsed
+		}
+	}
+	if len(limits) > 0 {
 		snapshot["limits"] = limits
 	}
 	encoded, err := json.Marshal(snapshot)
@@ -279,6 +506,22 @@ func entitlementSnapshotJSON(data polarSubscriptionData, planID string) string {
 		return "{}"
 	}
 	return string(encoded)
+}
+
+func metadataLimitAsInt64(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return int64(typed), typed >= 0 && typed == float64(int64(typed))
+	case int64:
+		return typed, typed >= 0
+	case int:
+		return int64(typed), typed >= 0
+	case string:
+		parsed, err := strconv.ParseInt(typed, 10, 64)
+		return parsed, err == nil && parsed >= 0
+	default:
+		return 0, false
+	}
 }
 
 func firstMetadataString(metadata map[string]any, key string) string {

@@ -57,10 +57,13 @@ type Config struct {
 	S3PublicBaseURL   string
 	S3ForcePathStyle  bool
 
-	PolarAccessToken    string
-	PolarWebhookSecret  string
-	PolarCheckoutURL    string
-	PolarCustomerPortal string
+	PolarAccessToken      string
+	PolarWebhookSecret    string
+	PolarCheckoutURL      string
+	PolarReturnURL        string
+	PolarStarterProductID string
+	PolarCreatorProductID string
+	PolarProProductID     string
 }
 
 const minSecretLength = 32
@@ -127,10 +130,13 @@ func Load() *Config {
 		S3PublicBaseURL:   strings.TrimRight(getEnvDefault("OPENPOST_S3_PUBLIC_BASE_URL", ""), "/"),
 		S3ForcePathStyle:  getEnvBoolWithAliases(false, "OPENPOST_S3_FORCE_PATH_STYLE"),
 
-		PolarAccessToken:    getEnvDefault("OPENPOST_POLAR_ACCESS_TOKEN", ""),
-		PolarWebhookSecret:  getEnvDefault("OPENPOST_POLAR_WEBHOOK_SECRET", ""),
-		PolarCheckoutURL:    strings.TrimRight(getEnvDefault("OPENPOST_POLAR_CHECKOUT_SUCCESS_URL", ""), "/"),
-		PolarCustomerPortal: strings.TrimRight(getEnvDefault("OPENPOST_POLAR_CUSTOMER_PORTAL_URL", ""), "/"),
+		PolarAccessToken:      getEnvDefault("OPENPOST_POLAR_ACCESS_TOKEN", ""),
+		PolarWebhookSecret:    getEnvDefault("OPENPOST_POLAR_WEBHOOK_SECRET", ""),
+		PolarCheckoutURL:      strings.TrimRight(getEnvDefault("OPENPOST_POLAR_CHECKOUT_SUCCESS_URL", ""), "/"),
+		PolarReturnURL:        strings.TrimRight(getEnvWithFallbacks("OPENPOST_POLAR_RETURN_URL", "", "OPENPOST_POLAR_CUSTOMER_PORTAL_URL"), "/"),
+		PolarStarterProductID: getEnvDefault("OPENPOST_POLAR_STARTER_PRODUCT_ID", ""),
+		PolarCreatorProductID: getEnvDefault("OPENPOST_POLAR_CREATOR_PRODUCT_ID", ""),
+		PolarProProductID:     getEnvDefault("OPENPOST_POLAR_PRO_PRODUCT_ID", ""),
 	}
 
 	if cfg.PublicURL == "" {

@@ -34,7 +34,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 ### 2. Billing And Plans
 
 - Use Polar for OpenPost Cloud checkout, subscriptions, customer portal, and webhooks.
-- Store local subscription state and entitlement snapshots; do not call Polar on every request. The Polar webhook foundation now verifies signed events, deduplicates webhook deliveries, and upserts workspace subscription snapshots.
+- Store local subscription state and entitlement snapshots; do not call Polar on every request. The Polar checkout, customer portal, and webhook foundation now creates hosted billing sessions, verifies signed events, deduplicates webhook deliveries, and upserts workspace subscription snapshots.
 - Keep self-hosted entitlement defaults permissive and configurable.
 - Suggested launch plans:
   - Starter: 3 open-web connections, Bluesky/Mastodon first, 1 workspace, 100 scheduled posts/month, 1 GB media.
