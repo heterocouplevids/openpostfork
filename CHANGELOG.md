@@ -41,6 +41,7 @@ All notable changes to this project are documented in this file.
 - Added DB-backed dynamic Mastodon app registration so hosted and self-hosted deployments can connect user-supplied Mastodon instances without preconfigured server entries.
 - Added Accounts UI support for custom Mastodon instance connection, including OOB exchange persistence and Playwright coverage.
 - Added MCP `set_post_renditions` so assistants can write destination-specific post variants for draft and scheduled posts.
+- Added MCP `list_drafts`, `update_draft`, and `schedule_draft` so assistant clients can review, revise, and queue existing draft posts without creating duplicates.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

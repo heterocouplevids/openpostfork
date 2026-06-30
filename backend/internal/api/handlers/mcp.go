@@ -25,19 +25,22 @@ import (
 )
 
 const (
-	mcpProtocolVersion  = "2025-06-18"
-	mcpToolWorkspaces   = "list_workspaces"
-	mcpToolAccounts     = "list_accounts"
-	mcpToolCreateDraft  = "create_draft"
-	mcpToolRenditions   = "set_post_renditions"
-	mcpToolSchedulePost = "schedule_post"
-	mcpToolGetPost      = "get_post_status"
-	mcpToolListPosts    = "list_scheduled_posts"
-	mcpToolCancelPost   = "cancel_post"
-	mcpToolSuggestSlot  = "suggest_next_slot"
-	mcpToolUploadURL    = "upload_media_from_url"
-	mcpScopeFull        = apitokens.ScopeMCP
-	maxRemoteMediaBytes = 50 * 1024 * 1024
+	mcpProtocolVersion   = "2025-06-18"
+	mcpToolWorkspaces    = "list_workspaces"
+	mcpToolAccounts      = "list_accounts"
+	mcpToolCreateDraft   = "create_draft"
+	mcpToolListDrafts    = "list_drafts"
+	mcpToolUpdateDraft   = "update_draft"
+	mcpToolRenditions    = "set_post_renditions"
+	mcpToolSchedulePost  = "schedule_post"
+	mcpToolScheduleDraft = "schedule_draft"
+	mcpToolGetPost       = "get_post_status"
+	mcpToolListPosts     = "list_scheduled_posts"
+	mcpToolCancelPost    = "cancel_post"
+	mcpToolSuggestSlot   = "suggest_next_slot"
+	mcpToolUploadURL     = "upload_media_from_url"
+	mcpScopeFull         = apitokens.ScopeMCP
+	maxRemoteMediaBytes  = 50 * 1024 * 1024
 )
 
 type MCPHandler struct {
@@ -237,8 +240,11 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 			mcpListWorkspacesTool(),
 			mcpListAccountsTool(),
 			mcpCreateDraftTool(),
+			mcpListDraftsTool(),
+			mcpUpdateDraftTool(),
 			mcpSetPostRenditionsTool(),
 			mcpSchedulePostTool(),
+			mcpScheduleDraftTool(),
 			mcpGetPostStatusTool(),
 			mcpListScheduledPostsTool(),
 			mcpCancelPostTool(),
@@ -307,6 +313,63 @@ func mcpCreateDraftTool() map[string]any {
 				},
 			},
 			"required":             []string{"workspace_id", "content"},
+			"additionalProperties": false,
+		},
+	}, false, false)
+}
+
+func mcpListDraftsTool() map[string]any {
+	return mcpToolDescriptor(map[string]any{
+		"name":        mcpToolListDrafts,
+		"title":       "List drafts",
+		"description": "List editable draft posts in a workspace so an assistant can inspect unfinished work before creating duplicates.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Workspace ID returned by list_workspaces.",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"maximum":     100,
+					"description": "Maximum drafts to return. Defaults to 20.",
+				},
+			},
+			"required":             []string{"workspace_id"},
+			"additionalProperties": false,
+		},
+	}, true, false)
+}
+
+func mcpUpdateDraftTool() map[string]any {
+	return mcpToolDescriptor(map[string]any{
+		"name":        mcpToolUpdateDraft,
+		"title":       "Update draft",
+		"description": "Update an editable draft's source content and optionally replace its destination accounts.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Workspace ID returned by list_workspaces.",
+				},
+				"post_id": map[string]any{
+					"type":        "string",
+					"description": "Draft post ID returned by create_draft or list_drafts.",
+				},
+				"content": map[string]any{
+					"type":        "string",
+					"description": "Updated source draft content.",
+				},
+				"social_account_ids": map[string]any{
+					"type":        "array",
+					"description": "Optional replacement destination account IDs returned by list_accounts. Pass an empty array to clear destinations.",
+					"items":       map[string]any{"type": "string"},
+				},
+			},
+			"required":             []string{"workspace_id", "post_id"},
 			"additionalProperties": false,
 		},
 	}, false, false)
@@ -389,6 +452,45 @@ func mcpSchedulePostTool() map[string]any {
 				},
 			},
 			"required":             []string{"workspace_id", "content", "scheduled_at", "social_account_ids"},
+			"additionalProperties": false,
+		},
+	}, false, true)
+}
+
+func mcpScheduleDraftTool() map[string]any {
+	return mcpToolDescriptor(map[string]any{
+		"name":        mcpToolScheduleDraft,
+		"title":       "Schedule draft",
+		"description": "Schedule an existing draft post and queue it for publishing without creating a duplicate post.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Workspace ID returned by list_workspaces.",
+				},
+				"post_id": map[string]any{
+					"type":        "string",
+					"description": "Draft post ID returned by create_draft or list_drafts.",
+				},
+				"scheduled_at": map[string]any{
+					"type":        "string",
+					"format":      "date-time",
+					"description": "Publish time as an RFC3339 timestamp.",
+				},
+				"social_account_ids": map[string]any{
+					"type":        "array",
+					"description": "Optional replacement destination account IDs returned by list_accounts. If omitted, the draft's current destinations are used.",
+					"items":       map[string]any{"type": "string"},
+					"minItems":    1,
+				},
+				"random_delay_minutes": map[string]any{
+					"type":        "integer",
+					"minimum":     0,
+					"description": "Optional natural-posting random delay window in minutes.",
+				},
+			},
+			"required":             []string{"workspace_id", "post_id", "scheduled_at"},
 			"additionalProperties": false,
 		},
 	}, false, true)
@@ -576,10 +678,16 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 		result, rpcErr = h.listAccounts(ctx, principal.UserID, params.Arguments)
 	case mcpToolCreateDraft:
 		result, rpcErr = h.createDraft(ctx, principal.UserID, params.Arguments)
+	case mcpToolListDrafts:
+		result, rpcErr = h.listDrafts(ctx, principal.UserID, params.Arguments)
+	case mcpToolUpdateDraft:
+		result, rpcErr = h.updateDraft(ctx, principal.UserID, params.Arguments)
 	case mcpToolRenditions:
 		result, rpcErr = h.setPostRenditions(ctx, principal.UserID, params.Arguments)
 	case mcpToolSchedulePost:
 		result, rpcErr = h.schedulePost(ctx, principal.UserID, params.Arguments)
+	case mcpToolScheduleDraft:
+		result, rpcErr = h.scheduleDraft(ctx, principal.UserID, params.Arguments)
 	case mcpToolGetPost:
 		result, rpcErr = h.getPostStatus(ctx, principal.UserID, params.Arguments)
 	case mcpToolListPosts:
@@ -830,6 +938,127 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 			},
 		},
 	}, nil
+}
+
+type mcpListDraftsInput struct {
+	WorkspaceID string `json:"workspace_id"`
+	Limit       int    `json:"limit"`
+}
+
+func (h *MCPHandler) listDrafts(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	var input mcpListDraftsInput
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return nil, &mcpError{Code: -32602, Message: "invalid list_drafts arguments"}
+	}
+	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
+		return nil, rpcErr
+	}
+	limit := input.Limit
+	if limit == 0 {
+		limit = 20
+	}
+	if limit < 1 || limit > 100 {
+		return nil, &mcpError{Code: -32602, Message: "limit must be between 1 and 100"}
+	}
+
+	var rows []models.Post
+	err := h.db.NewSelect().
+		Model(&rows).
+		Column("id").
+		Where("workspace_id = ?", input.WorkspaceID).
+		Where("status = ?", statusDraft).
+		Order("created_at DESC").
+		Limit(limit).
+		Scan(ctx)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, &mcpError{Code: -32603, Message: "failed to list drafts"}
+	}
+
+	posts := make([]mcpPostStatus, 0, len(rows))
+	for _, row := range rows {
+		postStatus, rpcErr := h.loadMCPPostStatus(ctx, row.ID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		posts = append(posts, postStatus)
+	}
+	text := fmt.Sprintf("Found %d drafts.", len(posts))
+	return map[string]any{
+		"content": []mcpContent{{
+			Type: "text",
+			Text: text,
+		}},
+		"structuredContent": map[string]any{
+			"posts": posts,
+		},
+	}, nil
+}
+
+type mcpUpdateDraftInput struct {
+	WorkspaceID      string    `json:"workspace_id"`
+	PostID           string    `json:"post_id"`
+	Content          *string   `json:"content"`
+	SocialAccountIDs *[]string `json:"social_account_ids"`
+}
+
+func (h *MCPHandler) updateDraft(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	input, post, accountIDs, rpcErr := h.validateUpdateDraftInput(ctx, userID, args)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+
+	err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		if input.Content != nil {
+			post.Content = *input.Content
+			if _, err := tx.NewUpdate().
+				Model(post).
+				Column("content").
+				Where("id = ?", post.ID).
+				Exec(txCtx); err != nil {
+				return err
+			}
+		}
+		if input.SocialAccountIDs != nil {
+			if err := replaceMCPPostDestinations(txCtx, tx, post.ID, accountIDs); err != nil {
+				return err
+			}
+			if err := pruneMCPPostVariants(txCtx, tx, post.ID, accountIDs); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, &mcpError{Code: -32603, Message: "failed to update draft"}
+	}
+
+	postStatus, rpcErr := h.loadMCPPostStatus(ctx, post.ID)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	return mcpPostToolResult("Draft updated: "+post.ID, postStatus), nil
+}
+
+func (h *MCPHandler) validateUpdateDraftInput(ctx context.Context, userID string, args map[string]any) (mcpUpdateDraftInput, *models.Post, []string, *mcpError) {
+	var input mcpUpdateDraftInput
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return input, nil, nil, &mcpError{Code: -32602, Message: "invalid update_draft arguments"}
+	}
+	post, rpcErr := h.accessibleMCPDraft(ctx, userID, input.WorkspaceID, input.PostID, "update_draft can only edit draft posts")
+	if rpcErr != nil {
+		return input, nil, nil, rpcErr
+	}
+	if input.Content == nil && input.SocialAccountIDs == nil {
+		return input, nil, nil, &mcpError{Code: -32602, Message: "content or social_account_ids is required"}
+	}
+	if input.Content != nil && strings.TrimSpace(*input.Content) == "" {
+		return input, nil, nil, &mcpError{Code: -32602, Message: "content is required"}
+	}
+	accountIDs, rpcErr := h.normalizeMCPOptionalDestinationAccounts(ctx, input.WorkspaceID, input.SocialAccountIDs)
+	if rpcErr != nil {
+		return input, nil, nil, rpcErr
+	}
+	return input, post, accountIDs, nil
 }
 
 type mcpPostRenditionInput struct {
@@ -1177,6 +1406,145 @@ func (h *MCPHandler) schedulePost(ctx context.Context, userID string, args map[s
 		return nil, rpcErr
 	}
 	return mcpPostToolResult("Post scheduled: "+post.ID, postStatus), nil
+}
+
+type mcpScheduleDraftInput struct {
+	WorkspaceID        string    `json:"workspace_id"`
+	PostID             string    `json:"post_id"`
+	ScheduledAt        string    `json:"scheduled_at"`
+	SocialAccountIDs   *[]string `json:"social_account_ids"`
+	RandomDelayMinutes *int      `json:"random_delay_minutes"`
+}
+
+func (h *MCPHandler) scheduleDraft(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	input, post, accountIDs, scheduledAt, jobRunAt, rpcErr := h.validateScheduleDraftInput(ctx, userID, args)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+
+	payload, err := json.Marshal(map[string]string{postIDKey: post.ID})
+	if err != nil {
+		return nil, &mcpError{Code: -32603, Message: "failed to create publish job payload"}
+	}
+	job := &models.Job{
+		ID:      newUUID(),
+		Type:    jobTypePublishPost,
+		Payload: string(payload),
+		Status:  "pending",
+		RunAt:   jobRunAt,
+	}
+
+	post.Status = statusScheduled
+	post.ScheduledAt = scheduledAt
+	post.ActualRunAt = jobRunAt
+	err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		if _, err := tx.NewUpdate().
+			Model(post).
+			Column("status", "scheduled_at", "actual_run_at", "random_delay_minutes").
+			Where("id = ?", post.ID).
+			Exec(txCtx); err != nil {
+			return err
+		}
+		if input.SocialAccountIDs != nil {
+			if err := replaceMCPPostDestinations(txCtx, tx, post.ID, accountIDs); err != nil {
+				return err
+			}
+			if err := pruneMCPPostVariants(txCtx, tx, post.ID, accountIDs); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.NewDelete().
+			Model(&models.Job{}).
+			Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, post.ID).
+			Exec(txCtx); err != nil {
+			return err
+		}
+		if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, &mcpError{Code: -32603, Message: "failed to schedule draft"}
+	}
+	if rpcErr := h.recordScheduledPostUsage(ctx, input.WorkspaceID, 1, scheduledAt); rpcErr != nil {
+		return nil, rpcErr
+	}
+
+	postStatus, rpcErr := h.loadMCPPostStatus(ctx, post.ID)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	return mcpPostToolResult("Draft scheduled: "+post.ID, postStatus), nil
+}
+
+func (h *MCPHandler) validateScheduleDraftInput(ctx context.Context, userID string, args map[string]any) (mcpScheduleDraftInput, *models.Post, []string, time.Time, time.Time, *mcpError) {
+	input, scheduledAt, rpcErr := decodeMCPScheduleDraftArguments(args)
+	if rpcErr != nil {
+		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+	}
+	post, rpcErr := h.accessibleMCPDraft(ctx, userID, input.WorkspaceID, input.PostID, "schedule_draft can only schedule draft posts")
+	if rpcErr != nil {
+		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+	}
+	randomDelayMinutes, rpcErr := resolveMCPScheduleDraftRandomDelay(post.RandomDelayMinutes, input.RandomDelayMinutes)
+	if rpcErr != nil {
+		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+	}
+	accountIDs, rpcErr := h.resolveScheduleDraftAccountIDs(ctx, input, post.ID)
+	if rpcErr != nil {
+		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+	}
+	if rpcErr := h.checkScheduledPostQuota(ctx, input.WorkspaceID, 1, scheduledAt); rpcErr != nil {
+		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+	}
+	post.RandomDelayMinutes = randomDelayMinutes
+	return input, post, accountIDs, scheduledAt, applyRandomDelay(scheduledAt, randomDelayMinutes), nil
+}
+
+func decodeMCPScheduleDraftArguments(args map[string]any) (mcpScheduleDraftInput, time.Time, *mcpError) {
+	var input mcpScheduleDraftInput
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return input, time.Time{}, &mcpError{Code: -32602, Message: "invalid schedule_draft arguments"}
+	}
+	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
+	if err != nil {
+		return input, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at must be an RFC3339 timestamp"}
+	}
+	if scheduledAt.IsZero() {
+		return input, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at is required"}
+	}
+	return input, scheduledAt, nil
+}
+
+func resolveMCPScheduleDraftRandomDelay(current int, requested *int) (int, *mcpError) {
+	if requested == nil {
+		return current, nil
+	}
+	if *requested < 0 {
+		return 0, &mcpError{Code: -32602, Message: "random_delay_minutes must be greater than or equal to 0"}
+	}
+	return *requested, nil
+}
+
+func (h *MCPHandler) resolveScheduleDraftAccountIDs(ctx context.Context, input mcpScheduleDraftInput, postID string) ([]string, *mcpError) {
+	accountIDs, rpcErr := h.normalizeMCPOptionalDestinationAccounts(ctx, input.WorkspaceID, input.SocialAccountIDs)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	if input.SocialAccountIDs == nil {
+		accountIDs, rpcErr = h.loadMCPPostDestinationAccountIDs(ctx, postID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+	}
+	if len(accountIDs) == 0 {
+		return nil, &mcpError{Code: -32602, Message: "draft must have at least one destination account before scheduling"}
+	}
+	if rpcErr := h.ensureActiveAccounts(ctx, input.WorkspaceID, accountIDs); rpcErr != nil {
+		return nil, rpcErr
+	}
+	return accountIDs, nil
 }
 
 func (h *MCPHandler) getPostStatus(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
@@ -1616,6 +1984,34 @@ func (h *MCPHandler) accessibleMCPPost(ctx context.Context, userID string, args 
 	return post, nil
 }
 
+func (h *MCPHandler) accessibleMCPDraft(ctx context.Context, userID, workspaceID, postID, wrongStatusMessage string) (*models.Post, *mcpError) {
+	post, rpcErr := h.accessibleMCPPost(ctx, userID, map[string]any{
+		"workspace_id": workspaceID,
+		"post_id":      postID,
+	})
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	if post.Status != statusDraft {
+		return nil, &mcpError{Code: -32602, Message: wrongStatusMessage}
+	}
+	return post, nil
+}
+
+func (h *MCPHandler) normalizeMCPOptionalDestinationAccounts(ctx context.Context, workspaceID string, accountIDs *[]string) ([]string, *mcpError) {
+	if accountIDs == nil {
+		return nil, nil
+	}
+	normalized, rpcErr := normalizeMCPIDs(*accountIDs, "social_account_ids")
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	if rpcErr := h.ensureActiveAccounts(ctx, workspaceID, normalized); rpcErr != nil {
+		return nil, rpcErr
+	}
+	return normalized, nil
+}
+
 func (h *MCPHandler) loadMCPPostStatus(ctx context.Context, postID string) (mcpPostStatus, *mcpError) {
 	var post models.Post
 	if err := h.db.NewSelect().Model(&post).Where("id = ?", postID).Scan(ctx); err != nil {
@@ -1691,6 +2087,58 @@ func mcpSlotToolResult(suggestion mcpSlotSuggestion) map[string]any {
 			"suggestion": suggestion,
 		},
 	}
+}
+
+func (h *MCPHandler) loadMCPPostDestinationAccountIDs(ctx context.Context, postID string) ([]string, *mcpError) {
+	var rows []models.PostDestination
+	err := h.db.NewSelect().
+		Model(&rows).
+		Column("social_account_id").
+		Where("post_id = ?", postID).
+		Order("social_account_id ASC").
+		Scan(ctx)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, &mcpError{Code: -32603, Message: "failed to load post destinations"}
+	}
+	accountIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		accountIDs = append(accountIDs, row.SocialAccountID)
+	}
+	return accountIDs, nil
+}
+
+func replaceMCPPostDestinations(ctx context.Context, tx bun.Tx, postID string, accountIDs []string) error {
+	if _, err := tx.NewDelete().
+		Model(&models.PostDestination{}).
+		Where("post_id = ?", postID).
+		Exec(ctx); err != nil {
+		return err
+	}
+	if len(accountIDs) == 0 {
+		return nil
+	}
+	destinations := make([]models.PostDestination, 0, len(accountIDs))
+	for _, accountID := range accountIDs {
+		destinations = append(destinations, models.PostDestination{
+			ID:              newUUID(),
+			PostID:          postID,
+			SocialAccountID: accountID,
+			Status:          postStatusPending,
+		})
+	}
+	_, err := tx.NewInsert().Model(&destinations).Exec(ctx)
+	return err
+}
+
+func pruneMCPPostVariants(ctx context.Context, tx bun.Tx, postID string, accountIDs []string) error {
+	query := tx.NewDelete().
+		Model(&models.PostVariant{}).
+		Where("post_id = ?", postID)
+	if len(accountIDs) > 0 {
+		query = query.Where("social_account_id NOT IN (?)", bun.List(accountIDs))
+	}
+	_, err := query.Exec(ctx)
+	return err
 }
 
 func (h *MCPHandler) checkScheduledPostQuota(ctx context.Context, workspaceID string, amount int64, scheduledAt time.Time) *mcpError {

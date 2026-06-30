@@ -45,9 +45,13 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - `list_workspaces`: returns the workspaces available to the authenticated user.
 - `list_accounts`: returns active social accounts for a workspace.
 - `create_draft`: creates a draft post in a workspace, optionally assigned to destination accounts.
+- `list_drafts`: returns editable draft posts for a workspace so an assistant can inspect existing work before creating more drafts.
+- `update_draft`: updates a draft's source content and optionally replaces destination accounts.
 - `set_post_renditions`: creates or updates destination-specific copy for draft and scheduled posts. Renditions can only target accounts already attached as post destinations.
 - `schedule_post`: creates a scheduled post with destination accounts and queues the `publish_post` job.
+- `schedule_draft`: schedules an existing draft and queues the `publish_post` job without duplicating the post.
 - `get_post_status`: returns the post status, scheduled run time, and per-destination status.
+- `list_scheduled_posts`: returns upcoming scheduled posts for queue inspection.
 - `cancel_post`: cancels a queued scheduled post and returns it to drafts.
 - `suggest_next_slot`: returns the next free configured posting slot for a workspace.
 - `upload_media_from_url`: fetches a public HTTP(S) media URL and stores it in a workspace.
@@ -60,6 +64,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. A dedicated OAuth authorization-server flow for ChatGPT account linking is still planned.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
+- Keeps draft iteration agent-friendly: assistants can list drafts, update draft copy/destinations, set per-destination renditions, and schedule the same draft when it is ready.
 - Validates rendition targets against the post destination list so assistants do not create variants that would never publish.
 - Rejects media URL fetches that resolve to private, loopback, link-local, multicast, or otherwise local addresses.
 - Enforces the same scheduled-post and media-upload entitlement and usage accounting as the web/API paths.

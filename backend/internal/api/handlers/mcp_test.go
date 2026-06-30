@@ -222,17 +222,20 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 10)
+	require.Len(t, tools, 13)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
 	require.Equal(t, "list_accounts", tools[1].(map[string]any)["name"])
 	require.Equal(t, "create_draft", tools[2].(map[string]any)["name"])
-	require.Equal(t, "set_post_renditions", tools[3].(map[string]any)["name"])
-	require.Equal(t, "schedule_post", tools[4].(map[string]any)["name"])
-	require.Equal(t, "get_post_status", tools[5].(map[string]any)["name"])
-	require.Equal(t, "list_scheduled_posts", tools[6].(map[string]any)["name"])
-	require.Equal(t, "cancel_post", tools[7].(map[string]any)["name"])
-	require.Equal(t, "suggest_next_slot", tools[8].(map[string]any)["name"])
-	require.Equal(t, "upload_media_from_url", tools[9].(map[string]any)["name"])
+	require.Equal(t, "list_drafts", tools[3].(map[string]any)["name"])
+	require.Equal(t, "update_draft", tools[4].(map[string]any)["name"])
+	require.Equal(t, "set_post_renditions", tools[5].(map[string]any)["name"])
+	require.Equal(t, "schedule_post", tools[6].(map[string]any)["name"])
+	require.Equal(t, "schedule_draft", tools[7].(map[string]any)["name"])
+	require.Equal(t, "get_post_status", tools[8].(map[string]any)["name"])
+	require.Equal(t, "list_scheduled_posts", tools[9].(map[string]any)["name"])
+	require.Equal(t, "cancel_post", tools[10].(map[string]any)["name"])
+	require.Equal(t, "suggest_next_slot", tools[11].(map[string]any)["name"])
+	require.Equal(t, "upload_media_from_url", tools[12].(map[string]any)["name"])
 
 	for _, tool := range tools {
 		descriptor := tool.(map[string]any)
@@ -423,6 +426,204 @@ func TestMCPCallCreateDraftRejectsOutsideAccount(t *testing.T) {
 	var count int
 	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &count))
 	require.Equal(t, 0, count)
+}
+
+func TestMCPCallListDraftsReturnsDraftInbox(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	posts := []models.Post{
+		{
+			ID:          "post-draft-old",
+			WorkspaceID: "ws-1",
+			CreatedByID: "user-1",
+			Content:     "Older draft",
+			Status:      statusDraft,
+			CreatedAt:   time.Date(2026, 6, 30, 15, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:          "post-draft-new",
+			WorkspaceID: "ws-1",
+			CreatedByID: "user-1",
+			Content:     "Newer draft",
+			Status:      statusDraft,
+			CreatedAt:   time.Date(2026, 6, 30, 16, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:          "post-draft-scheduled",
+			WorkspaceID: "ws-1",
+			CreatedByID: "user-1",
+			Content:     "Scheduled should not appear",
+			Status:      statusScheduled,
+			ScheduledAt: time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC),
+			CreatedAt:   time.Date(2026, 6, 30, 17, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:          "post-draft-other-workspace",
+			WorkspaceID: "ws-2",
+			CreatedByID: "user-1",
+			Content:     "Other workspace draft",
+			Status:      statusDraft,
+			CreatedAt:   time.Date(2026, 6, 30, 18, 0, 0, 0, time.UTC),
+		},
+	}
+	_, err := srv.db.NewInsert().Model(&posts).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.PostDestination{
+		ID:              "destination-draft-list",
+		PostID:          "post-draft-new",
+		SocialAccountID: "account-1",
+		Status:          postStatusPending,
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-list-drafts",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_drafts",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"limit":        10,
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	content := result["content"].([]any)
+	require.Contains(t, content[0].(map[string]any)["text"], "Found 2 drafts")
+	structured := result["structuredContent"].(map[string]any)
+	gotPosts := structured["posts"].([]any)
+	require.Len(t, gotPosts, 2)
+	first := gotPosts[0].(map[string]any)
+	require.Equal(t, "post-draft-new", first["id"])
+	require.Equal(t, "Newer draft", first["content"])
+	destinations := first["destinations"].([]any)
+	require.Len(t, destinations, 1)
+	require.Equal(t, "x", destinations[0].(map[string]any)["platform"])
+	require.Equal(t, "post-draft-old", gotPosts[1].(map[string]any)["id"])
+}
+
+func TestMCPCallUpdateDraftReplacesContentAndDestinations(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	_, err := srv.db.NewInsert().Model(&models.SocialAccount{
+		ID:             "account-2",
+		WorkspaceID:    "ws-1",
+		Platform:       "linkedin",
+		AccountID:      "linkedin-1",
+		Slug:           "linkedin-openpost",
+		AccessTokenEnc: []byte("token"),
+		IsActive:       true,
+		CreatedAt:      time.Date(2026, 6, 30, 14, 30, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	post := models.Post{
+		ID:          "post-update-draft",
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "Old draft",
+		Status:      statusDraft,
+		CreatedAt:   time.Date(2026, 6, 30, 15, 0, 0, 0, time.UTC),
+	}
+	_, err = srv.db.NewInsert().Model(&post).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.PostDestination{
+		ID:              "destination-update-old",
+		PostID:          post.ID,
+		SocialAccountID: "account-1",
+		Status:          postStatusPending,
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.PostVariant{
+		ID:              "variant-update-old",
+		PostID:          post.ID,
+		SocialAccountID: "account-1",
+		Content:         "Old account-specific copy",
+		MediaIDs:        "[]",
+		IsUnsynced:      true,
+		CreatedAt:       time.Date(2026, 6, 30, 15, 5, 0, 0, time.UTC),
+		UpdatedAt:       time.Date(2026, 6, 30, 15, 5, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-update-draft",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "update_draft",
+			"arguments": map[string]any{
+				"workspace_id":       "ws-1",
+				"post_id":            post.ID,
+				"content":            "Sharper agent draft",
+				"social_account_ids": []string{"account-2"},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	structured := result["structuredContent"].(map[string]any)
+	gotPost := structured["post"].(map[string]any)
+	require.Equal(t, post.ID, gotPost["id"])
+	require.Equal(t, "draft", gotPost["status"])
+	require.Equal(t, "Sharper agent draft", gotPost["content"])
+	destinations := gotPost["destinations"].([]any)
+	require.Len(t, destinations, 1)
+	require.Equal(t, "account-2", destinations[0].(map[string]any)["social_account_id"])
+	require.Equal(t, "linkedin", destinations[0].(map[string]any)["platform"])
+
+	var stored models.Post
+	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("id = ?", post.ID).Scan(context.Background()))
+	require.Equal(t, "Sharper agent draft", stored.Content)
+	var oldVariantCount int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("post_variants").Where("post_id = ?", post.ID).Scan(context.Background(), &oldVariantCount))
+	require.Equal(t, 0, oldVariantCount)
+}
+
+func TestMCPCallUpdateDraftRejectsScheduledPost(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	post := models.Post{
+		ID:          "post-update-scheduled",
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "Already scheduled",
+		Status:      statusScheduled,
+		ScheduledAt: time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC),
+		CreatedAt:   time.Date(2026, 6, 30, 15, 0, 0, 0, time.UTC),
+	}
+	_, err := srv.db.NewInsert().Model(&post).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-update-scheduled",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "update_draft",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"post_id":      post.ID,
+				"content":      "This should fail",
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	rpcErr := out["error"].(map[string]any)
+	require.Contains(t, rpcErr["message"], "draft")
 }
 
 func TestMCPCallSetPostRenditions(t *testing.T) {
@@ -828,6 +1029,110 @@ func TestMCPCallSchedulePostHonorsQuota(t *testing.T) {
 	var postCount int
 	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &postCount))
 	require.Equal(t, 0, postCount)
+}
+
+func TestMCPCallScheduleDraftQueuesExistingDraft(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	postID := "post-schedule-draft"
+	scheduledAt := "2026-07-04T10:30:00Z"
+	_, err := srv.db.NewInsert().Model(&models.Post{
+		ID:          postID,
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "Schedule the existing draft",
+		Status:      statusDraft,
+		CreatedAt:   time.Date(2026, 6, 30, 16, 0, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.PostDestination{
+		ID:              "destination-schedule-draft",
+		PostID:          postID,
+		SocialAccountID: "account-1",
+		Status:          postStatusPending,
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-schedule-draft",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "schedule_draft",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"post_id":      postID,
+				"scheduled_at": scheduledAt,
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	structured := result["structuredContent"].(map[string]any)
+	post := structured["post"].(map[string]any)
+	require.Equal(t, postID, post["id"])
+	require.Equal(t, "scheduled", post["status"])
+	require.Equal(t, scheduledAt, post["scheduled_at"])
+	require.Equal(t, scheduledAt, post["actual_run_at"])
+
+	var storedPost models.Post
+	require.NoError(t, srv.db.NewSelect().Model(&storedPost).Where("id = ?", postID).Scan(context.Background()))
+	require.Equal(t, statusScheduled, storedPost.Status)
+	require.Equal(t, time.Date(2026, 7, 4, 10, 30, 0, 0, time.UTC), storedPost.ScheduledAt)
+
+	var job models.Job
+	require.NoError(t, srv.db.NewSelect().Model(&job).Where("type = ?", jobTypePublishPost).Scan(context.Background()))
+	require.Equal(t, "pending", job.Status)
+	require.Equal(t, storedPost.ScheduledAt, job.RunAt)
+	var payload map[string]string
+	require.NoError(t, json.Unmarshal([]byte(job.Payload), &payload))
+	require.Equal(t, postID, payload[postIDKey])
+	var postCount int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &postCount))
+	require.Equal(t, 1, postCount)
+}
+
+func TestMCPCallScheduleDraftRejectsMissingDestinations(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	postID := "post-schedule-draft-no-destinations"
+	_, err := srv.db.NewInsert().Model(&models.Post{
+		ID:          postID,
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "Needs an account before scheduling",
+		Status:      statusDraft,
+		CreatedAt:   time.Date(2026, 6, 30, 16, 0, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-schedule-draft-empty",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "schedule_draft",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"post_id":      postID,
+				"scheduled_at": "2026-07-04T10:30:00Z",
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	rpcErr := out["error"].(map[string]any)
+	require.Contains(t, rpcErr["message"], "destination")
+	var jobCount int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("jobs").Scan(context.Background(), &jobCount))
+	require.Equal(t, 0, jobCount)
 }
 
 func TestMCPCallSuggestNextSlotReturnsFirstFreeSchedule(t *testing.T) {
