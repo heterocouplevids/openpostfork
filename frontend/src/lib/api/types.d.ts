@@ -618,6 +618,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/upload-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a direct-to-storage media upload session */
+        post: operations["create-media-upload-session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/upload-session/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a direct-to-storage media upload session */
+        post: operations["complete-media-upload-session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/{id}": {
         parameters: {
             query?: never;
@@ -1205,6 +1239,16 @@ export interface components {
             readonly $schema?: string;
             ok: boolean;
         };
+        CompleteMediaUploadSessionInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CompleteMediaUploadSessionInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Workspace ID */
+            workspace_id: string;
+        };
         ConfirmTOTPSetupInputBody: {
             /**
              * Format: uri
@@ -1302,6 +1346,41 @@ export interface components {
             readonly $schema?: string;
             /** @description URL the browser should redirect to after authorization */
             redirect_url: string;
+        };
+        CreateMediaUploadSessionInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateMediaUploadSessionInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Alt text for accessibility */
+            alt_text?: string;
+            /** @description Original filename */
+            filename: string;
+            /** @description Declared MIME type */
+            mime_type?: string;
+            /**
+             * Format: int64
+             * @description Expected upload size in bytes
+             */
+            size: number;
+            /** @description Workspace ID */
+            workspace_id: string;
+        };
+        CreateMediaUploadSessionOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateMediaUploadSessionOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description API path to call after the direct upload succeeds */
+            complete_url: string;
+            /** @description Pending media ID */
+            media_id: string;
+            /** @description Direct upload request details */
+            upload: components["schemas"]["DirectMediaUploadTarget"];
         };
         CreatePostInputBody: {
             /**
@@ -1529,6 +1608,20 @@ export interface components {
             readonly $schema?: string;
             device_code?: string;
             user_code?: string;
+        };
+        DirectMediaUploadTarget: {
+            /** @description Upload URL expiration time */
+            expires_at: string;
+            /** @description Headers that must be sent with the upload request */
+            headers: {
+                [key: string]: string;
+            };
+            /** @description HTTP method to use for the direct upload */
+            method: string;
+            /** @description Storage object key reserved for the upload */
+            object_key: string;
+            /** @description Presigned upload URL */
+            url: string;
         };
         DisableTOTPInputBody: {
             /**
@@ -1859,6 +1952,27 @@ export interface components {
             width: number;
             /** @description Workspace ID */
             workspace_id: string;
+        };
+        MediaUploadResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/MediaUploadResult.json
+             */
+            readonly $schema?: string;
+            /** @description Whether an existing media attachment was reused */
+            deduped: boolean;
+            /** @description Media ID */
+            id: string;
+            /** @description MIME type */
+            mime_type: string;
+            /**
+             * Format: int64
+             * @description File size in bytes
+             */
+            size: number;
+            /** @description URL to access the media */
+            url: string;
         };
         MediaUsageItem: {
             /** @description Post content (truncated) */
@@ -4595,6 +4709,138 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-media-upload-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMediaUploadSessionInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMediaUploadSessionOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "complete-media-upload-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pending media ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteMediaUploadSessionInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaUploadResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

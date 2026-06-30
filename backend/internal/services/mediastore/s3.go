@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -27,8 +30,13 @@ type s3ObjectClient interface {
 	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
 }
 
+type s3PresignClient interface {
+	PresignPutObject(context.Context, *s3.PutObjectInput, ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
+}
+
 type S3Storage struct {
 	client        s3ObjectClient
+	presignClient s3PresignClient
 	bucket        string
 	publicBaseURL string
 }
@@ -58,7 +66,7 @@ func NewS3Storage(ctx context.Context, cfg S3Config) (*S3Storage, error) {
 		}
 	})
 
-	storage := newS3StorageWithClient(client, cfg)
+	storage := newS3StorageWithClients(client, s3.NewPresignClient(client), cfg)
 
 	// Preserve the ctx parameter in the constructor signature so callers can
 	// pass startup-scoped contexts when validation checks are added later.
@@ -68,8 +76,13 @@ func NewS3Storage(ctx context.Context, cfg S3Config) (*S3Storage, error) {
 }
 
 func newS3StorageWithClient(client s3ObjectClient, cfg S3Config) *S3Storage {
+	return newS3StorageWithClients(client, nil, cfg)
+}
+
+func newS3StorageWithClients(client s3ObjectClient, presignClient s3PresignClient, cfg S3Config) *S3Storage {
 	return &S3Storage{
 		client:        client,
+		presignClient: presignClient,
 		bucket:        cfg.Bucket,
 		publicBaseURL: strings.TrimRight(cfg.PublicBaseURL, "/"),
 	}
@@ -116,6 +129,49 @@ func (s *S3Storage) Open(id string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	return out.Body, nil
+}
+
+func (s *S3Storage) CreateDirectUploadSession(ctx context.Context, input DirectUploadInput) (*DirectUploadSession, error) {
+	if s.presignClient == nil {
+		return nil, fmt.Errorf("direct upload presigner is not configured")
+	}
+	key := cleanObjectKey(input.Key)
+	expiresIn := input.ExpiresIn
+	if expiresIn <= 0 {
+		expiresIn = 15 * time.Minute
+	}
+	put := &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(key),
+		ContentLength: aws.Int64(input.Size),
+	}
+	if strings.TrimSpace(input.ContentType) != "" {
+		put.ContentType = aws.String(input.ContentType)
+	}
+	presigned, err := s.presignClient.PresignPutObject(ctx, put, func(options *s3.PresignOptions) {
+		options.Expires = expiresIn
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &DirectUploadSession{
+		Method:    presigned.Method,
+		URL:       presigned.URL,
+		Headers:   directUploadHeaders(presigned.SignedHeader),
+		Key:       key,
+		ExpiresAt: time.Now().UTC().Add(expiresIn),
+	}, nil
+}
+
+func directUploadHeaders(header http.Header) map[string]string {
+	headers := map[string]string{}
+	for key, values := range header {
+		if strings.EqualFold(key, "host") || len(values) == 0 {
+			continue
+		}
+		headers[key] = strings.Join(values, ",")
+	}
+	return headers
 }
 
 func cleanObjectKey(id string) string {

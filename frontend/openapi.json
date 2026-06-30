@@ -398,6 +398,24 @@
 				"required": ["ok"],
 				"type": "object"
 			},
+			"CompleteMediaUploadSessionInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CompleteMediaUploadSessionInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					}
+				},
+				"required": ["workspace_id"],
+				"type": "object"
+			},
 			"ConfirmTOTPSetupInputBody": {
 				"additionalProperties": false,
 				"properties": {
@@ -576,6 +594,67 @@
 					}
 				},
 				"required": ["redirect_url"],
+				"type": "object"
+			},
+			"CreateMediaUploadSessionInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateMediaUploadSessionInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"alt_text": {
+						"description": "Alt text for accessibility",
+						"type": "string"
+					},
+					"filename": {
+						"description": "Original filename",
+						"type": "string"
+					},
+					"mime_type": {
+						"description": "Declared MIME type",
+						"type": "string"
+					},
+					"size": {
+						"description": "Expected upload size in bytes",
+						"format": "int64",
+						"type": "integer"
+					},
+					"workspace_id": {
+						"description": "Workspace ID",
+						"type": "string"
+					}
+				},
+				"required": ["workspace_id", "filename", "size"],
+				"type": "object"
+			},
+			"CreateMediaUploadSessionOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateMediaUploadSessionOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"complete_url": {
+						"description": "API path to call after the direct upload succeeds",
+						"type": "string"
+					},
+					"media_id": {
+						"description": "Pending media ID",
+						"type": "string"
+					},
+					"upload": {
+						"$ref": "#/components/schemas/DirectMediaUploadTarget",
+						"description": "Direct upload request details"
+					}
+				},
+				"required": ["media_id", "upload", "complete_url"],
 				"type": "object"
 			},
 			"CreatePostInputBody": {
@@ -980,6 +1059,36 @@
 						"type": "string"
 					}
 				},
+				"type": "object"
+			},
+			"DirectMediaUploadTarget": {
+				"additionalProperties": false,
+				"properties": {
+					"expires_at": {
+						"description": "Upload URL expiration time",
+						"type": "string"
+					},
+					"headers": {
+						"additionalProperties": {
+							"type": "string"
+						},
+						"description": "Headers that must be sent with the upload request",
+						"type": "object"
+					},
+					"method": {
+						"description": "HTTP method to use for the direct upload",
+						"type": "string"
+					},
+					"object_key": {
+						"description": "Storage object key reserved for the upload",
+						"type": "string"
+					},
+					"url": {
+						"description": "Presigned upload URL",
+						"type": "string"
+					}
+				},
+				"required": ["method", "url", "headers", "expires_at", "object_key"],
 				"type": "object"
 			},
 			"DisableTOTPInputBody": {
@@ -1601,6 +1710,41 @@
 					"can_delete",
 					"processing_status"
 				],
+				"type": "object"
+			},
+			"MediaUploadResult": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/MediaUploadResult.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"deduped": {
+						"description": "Whether an existing media attachment was reused",
+						"type": "boolean"
+					},
+					"id": {
+						"description": "Media ID",
+						"type": "string"
+					},
+					"mime_type": {
+						"description": "MIME type",
+						"type": "string"
+					},
+					"size": {
+						"description": "File size in bytes",
+						"format": "int64",
+						"type": "integer"
+					},
+					"url": {
+						"description": "URL to access the media",
+						"type": "string"
+					}
+				},
+				"required": ["id", "mime_type", "url", "size", "deduped"],
 				"type": "object"
 			},
 			"MediaUsageItem": {
@@ -5469,6 +5613,166 @@
 					}
 				},
 				"summary": "Delete multiple media attachments at once",
+				"tags": ["Media"]
+			}
+		},
+		"/media/upload-session": {
+			"post": {
+				"operationId": "create-media-upload-session",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateMediaUploadSessionInputBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CreateMediaUploadSessionOutputBody"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Create a direct-to-storage media upload session",
+				"tags": ["Media"]
+			}
+		},
+		"/media/upload-session/{id}/complete": {
+			"post": {
+				"operationId": "complete-media-upload-session",
+				"parameters": [
+					{
+						"description": "Pending media ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": {
+							"description": "Pending media ID",
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CompleteMediaUploadSessionInputBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MediaUploadResult"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Complete a direct-to-storage media upload session",
 				"tags": ["Media"]
 			}
 		},

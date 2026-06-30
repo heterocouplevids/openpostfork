@@ -33,8 +33,14 @@ import (
 )
 
 const (
-	ThumbnailSizeSM = 150
-	ThumbnailSizeMD = 400
+	ThumbnailSizeSM             = 150
+	ThumbnailSizeMD             = 400
+	MaxMediaUploadBytes   int64 = 50 * 1024 * 1024
+	MediaUploadSessionTTL       = 15 * time.Minute
+	defaultMediaMimeType        = "application/octet-stream"
+	mediaProcessingStatus       = "processing"
+	mediaReadyStatus            = "ready"
+	mediaFailedStatus           = "failed"
 )
 
 type MediaHandler struct {
@@ -210,6 +216,51 @@ type UpdateMediaOutput struct {
 	Body struct {
 		Message string `json:"message" doc:"Success message"`
 	}
+}
+
+type CreateMediaUploadSessionInput struct {
+	Body struct {
+		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
+		Filename    string `json:"filename" doc:"Original filename"`
+		MimeType    string `json:"mime_type,omitempty" doc:"Declared MIME type"`
+		Size        int64  `json:"size" doc:"Expected upload size in bytes"`
+		AltText     string `json:"alt_text,omitempty" doc:"Alt text for accessibility"`
+	}
+}
+
+type DirectMediaUploadTarget struct {
+	Method    string            `json:"method" doc:"HTTP method to use for the direct upload"`
+	URL       string            `json:"url" doc:"Presigned upload URL"`
+	Headers   map[string]string `json:"headers" doc:"Headers that must be sent with the upload request"`
+	ExpiresAt string            `json:"expires_at" doc:"Upload URL expiration time"`
+	ObjectKey string            `json:"object_key" doc:"Storage object key reserved for the upload"`
+}
+
+type CreateMediaUploadSessionOutput struct {
+	Body struct {
+		MediaID     string                  `json:"media_id" doc:"Pending media ID"`
+		Upload      DirectMediaUploadTarget `json:"upload" doc:"Direct upload request details"`
+		CompleteURL string                  `json:"complete_url" doc:"API path to call after the direct upload succeeds"`
+	}
+}
+
+type CompleteMediaUploadSessionInput struct {
+	PathID string `path:"id" doc:"Pending media ID"`
+	Body   struct {
+		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
+	}
+}
+
+type MediaUploadResult struct {
+	ID       string `json:"id" doc:"Media ID"`
+	MimeType string `json:"mime_type" doc:"MIME type"`
+	URL      string `json:"url" doc:"URL to access the media"`
+	Size     int64  `json:"size" doc:"File size in bytes"`
+	Deduped  bool   `json:"deduped" doc:"Whether an existing media attachment was reused"`
+}
+
+type CompleteMediaUploadSessionOutput struct {
+	Body MediaUploadResult
 }
 
 //nolint:gocyclo
@@ -579,11 +630,318 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			Message string `json:"message" doc:"Success message"`
 		}{Message: "media updated successfully"}}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "create-media-upload-session",
+		Method:      http.MethodPost,
+		Path:        "/media/upload-session",
+		Summary:     "Create a direct-to-storage media upload session",
+		Tags:        []string{tagMedia},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)},
+		Errors:      []int{400, 403},
+	}, func(ctx context.Context, input *CreateMediaUploadSessionInput) (*CreateMediaUploadSessionOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		workspaceID := strings.TrimSpace(input.Body.WorkspaceID)
+		if workspaceID == "" {
+			return nil, huma.Error400BadRequest(errWorkspaceIDRequired)
+		}
+		if err := h.ensureMediaWorkspaceAccess(ctx, userID, workspaceID); err != nil {
+			return nil, err
+		}
+
+		filename := cleanUploadFilename(input.Body.Filename)
+		if filename == "" {
+			return nil, huma.Error400BadRequest("filename is required")
+		}
+		if input.Body.Size <= 0 {
+			return nil, huma.Error400BadRequest("size must be positive")
+		}
+		if input.Body.Size > MaxMediaUploadBytes {
+			return nil, huma.Error400BadRequest("file size exceeds 50MB limit")
+		}
+		if err := h.checkUploadQuota(ctx, workspaceID, input.Body.Size); err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
+
+		directStorage, ok := h.storage.(mediastore.DirectUploadStorage)
+		if !ok {
+			return nil, huma.Error400BadRequest("direct media upload sessions require s3 storage")
+		}
+
+		mediaID := uuid.New().String()
+		objectKey := mediaID + filepath.Ext(filename)
+		mimeType := strings.TrimSpace(input.Body.MimeType)
+		if mimeType == "" {
+			mimeType = defaultMediaMimeType
+		}
+		session, err := directStorage.CreateDirectUploadSession(ctx, mediastore.DirectUploadInput{
+			Key:         objectKey,
+			ContentType: mimeType,
+			Size:        input.Body.Size,
+			ExpiresIn:   MediaUploadSessionTTL,
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to create media upload session")
+		}
+
+		now := time.Now().UTC()
+		media := &models.MediaAttachment{
+			ID:               mediaID,
+			WorkspaceID:      workspaceID,
+			FilePath:         session.Key,
+			StorageType:      h.storage.Driver(),
+			MimeType:         mimeType,
+			ProcessingStatus: mediaProcessingStatus,
+			Size:             input.Body.Size,
+			OriginalFilename: filename,
+			FileHash:         "pending:" + mediaID,
+			AltText:          input.Body.AltText,
+			CreatedAt:        now,
+		}
+		if _, err := h.db.NewInsert().Model(media).Exec(ctx); err != nil {
+			return nil, huma.Error500InternalServerError("failed to reserve media upload")
+		}
+
+		return &CreateMediaUploadSessionOutput{Body: struct {
+			MediaID     string                  `json:"media_id" doc:"Pending media ID"`
+			Upload      DirectMediaUploadTarget `json:"upload" doc:"Direct upload request details"`
+			CompleteURL string                  `json:"complete_url" doc:"API path to call after the direct upload succeeds"`
+		}{
+			MediaID: mediaID,
+			Upload: DirectMediaUploadTarget{
+				Method:    session.Method,
+				URL:       session.URL,
+				Headers:   session.Headers,
+				ExpiresAt: session.ExpiresAt.Format(time.RFC3339),
+				ObjectKey: session.Key,
+			},
+			CompleteURL: "/api/v1/media/upload-session/" + mediaID + "/complete",
+		}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "complete-media-upload-session",
+		Method:      http.MethodPost,
+		Path:        "/media/upload-session/{id}/complete",
+		Summary:     "Complete a direct-to-storage media upload session",
+		Tags:        []string{tagMedia},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)},
+		Errors:      []int{400, 403, 404},
+	}, func(ctx context.Context, input *CompleteMediaUploadSessionInput) (*CompleteMediaUploadSessionOutput, error) {
+		userID := middleware.GetUserID(ctx)
+		workspaceID := strings.TrimSpace(input.Body.WorkspaceID)
+		if workspaceID == "" {
+			return nil, huma.Error400BadRequest(errWorkspaceIDRequired)
+		}
+
+		result, err := h.completeDirectMediaUpload(ctx, userID, workspaceID, input.PathID)
+		if err != nil {
+			return nil, err
+		}
+		return &CompleteMediaUploadSessionOutput{Body: result}, nil
+	})
 }
 
 type mediaUsageSummary struct {
 	Total    int
 	Blocking int
+}
+
+func (h *MediaHandler) ensureMediaWorkspaceAccess(ctx context.Context, userID, workspaceID string) error {
+	var memberCount int
+	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError(errValidateWorkspaceAccess)
+	}
+	if memberCount == 0 {
+		return huma.Error403Forbidden(errWorkspaceAccessDenied)
+	}
+	return nil
+}
+
+func cleanUploadFilename(filename string) string {
+	filename = strings.TrimSpace(strings.ReplaceAll(filename, "\\", "/"))
+	if filename == "" {
+		return ""
+	}
+	filename = filepath.Base(filename)
+	if filename == "." || filename == "/" {
+		return ""
+	}
+	return filename
+}
+
+func (h *MediaHandler) completeDirectMediaUpload(ctx context.Context, userID, workspaceID, mediaID string) (MediaUploadResult, error) {
+	var result MediaUploadResult
+	media, err := h.loadDirectMediaUpload(ctx, userID, workspaceID, mediaID)
+	if err != nil {
+		return result, err
+	}
+	if media.ProcessingStatus == mediaReadyStatus {
+		return mediaUploadResultFromAttachment(media, false), nil
+	}
+
+	content, err := h.readDirectMediaUploadContent(ctx, media)
+	if err != nil {
+		return result, err
+	}
+	if err := h.checkUploadQuotaExcludingMedia(ctx, workspaceID, int64(len(content)), media.ID); err != nil {
+		return result, huma.Error400BadRequest(err.Error())
+	}
+
+	hash := sha256.Sum256(content)
+	fileHash := hex.EncodeToString(hash[:])
+	if existing, found, err := h.findDuplicateMedia(ctx, workspaceID, fileHash, media.ID); err != nil {
+		return result, err
+	} else if found {
+		_ = h.storage.Delete(filepath.Base(media.FilePath))
+		_, _ = h.db.NewDelete().Model(&media).Where("id = ?", media.ID).Exec(ctx)
+		return mediaUploadResultFromAttachment(existing, true), nil
+	}
+
+	media, err = h.finalizeDirectMediaUploadRecord(ctx, media, content, fileHash)
+	if err != nil {
+		return result, err
+	}
+	if _, err := h.usage.IncrementMonthly(ctx, workspaceID, entitlements.LimitMediaBytesUploadedMonthly, media.Size, time.Now().UTC()); err != nil {
+		return result, huma.Error500InternalServerError("failed to record media upload usage")
+	}
+
+	return mediaUploadResultFromAttachment(media, false), nil
+}
+
+func (h *MediaHandler) loadDirectMediaUpload(ctx context.Context, userID, workspaceID, mediaID string) (models.MediaAttachment, error) {
+	var media models.MediaAttachment
+	if strings.TrimSpace(mediaID) == "" {
+		return media, huma.Error400BadRequest("media id is required")
+	}
+	if err := h.db.NewSelect().Model(&media).Where("id = ?", mediaID).Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return media, huma.Error404NotFound(errMediaNotFound)
+		}
+		return media, huma.Error500InternalServerError("failed to fetch media")
+	}
+	if media.WorkspaceID != workspaceID {
+		return media, huma.Error403Forbidden(errWorkspaceAccessDenied)
+	}
+	if err := h.ensureMediaWorkspaceAccess(ctx, userID, workspaceID); err != nil {
+		return media, err
+	}
+	if media.ProcessingStatus != mediaReadyStatus && media.ProcessingStatus != mediaProcessingStatus {
+		return media, huma.Error400BadRequest("media upload session is not pending")
+	}
+	if media.StorageType != h.storage.Driver() {
+		return media, huma.Error400BadRequest("media upload session belongs to a different storage driver")
+	}
+	return media, nil
+}
+
+func (h *MediaHandler) readDirectMediaUploadContent(ctx context.Context, media models.MediaAttachment) ([]byte, error) {
+	file, err := h.storage.Open(filepath.Base(media.FilePath))
+	if err != nil {
+		h.markMediaUploadFailed(ctx, media.ID)
+		return nil, huma.Error400BadRequest("uploaded media object was not found")
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(io.LimitReader(file, MaxMediaUploadBytes+1))
+	if err != nil {
+		h.markMediaUploadFailed(ctx, media.ID)
+		return nil, huma.Error500InternalServerError("failed to read uploaded media")
+	}
+	if int64(len(content)) > MaxMediaUploadBytes {
+		h.markMediaUploadFailed(ctx, media.ID)
+		return nil, huma.Error400BadRequest("file size exceeds 50MB limit")
+	}
+	if len(content) == 0 {
+		h.markMediaUploadFailed(ctx, media.ID)
+		return nil, huma.Error400BadRequest("uploaded media object is empty")
+	}
+	if media.Size > 0 && media.Size != int64(len(content)) {
+		h.markMediaUploadFailed(ctx, media.ID)
+		return nil, huma.Error400BadRequest("uploaded media size does not match upload session")
+	}
+	return content, nil
+}
+
+func (h *MediaHandler) findDuplicateMedia(ctx context.Context, workspaceID, fileHash, mediaID string) (models.MediaAttachment, bool, error) {
+	var existing models.MediaAttachment
+	err := h.db.NewSelect().Model(&existing).
+		Where("workspace_id = ? AND file_hash = ? AND id != ?", workspaceID, fileHash, mediaID).
+		Scan(ctx)
+	if err == nil {
+		return existing, true, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return existing, false, nil
+	}
+	return existing, false, huma.Error500InternalServerError("failed to check duplicate media")
+}
+
+func (h *MediaHandler) finalizeDirectMediaUploadRecord(ctx context.Context, media models.MediaAttachment, content []byte, fileHash string) (models.MediaAttachment, error) {
+	mimeType := detectedMediaMimeType(content, media.MimeType)
+	width, height := 0, 0
+	var thumbnails Thumbnails
+	var err error
+	if strings.HasPrefix(mimeType, "image/") {
+		width, height, thumbnails, err = h.processImage(content, media.ID, mimeType)
+		if err != nil {
+			width, height = h.getImageDimensions(bytes.NewReader(content), mimeType)
+		}
+	}
+	thumbsJSON := ""
+	if encoded, err := json.Marshal(thumbnails); err == nil {
+		thumbsJSON = string(encoded)
+	}
+
+	media.MimeType = mimeType
+	media.ProcessingStatus = mediaReadyStatus
+	media.Size = int64(len(content))
+	media.FileHash = fileHash
+	media.Width = width
+	media.Height = height
+	media.ThumbnailsJSON = thumbsJSON
+	if _, err := h.db.NewUpdate().
+		Model(&media).
+		Column("mime_type", "processing_status", "size", "file_hash", "width", "height", "thumbnails").
+		Where("id = ?", media.ID).
+		Exec(ctx); err != nil {
+		h.markMediaUploadFailed(ctx, media.ID)
+		return media, huma.Error500InternalServerError("failed to finalize media record")
+	}
+	return media, nil
+}
+
+func detectedMediaMimeType(content []byte, fallback string) string {
+	mimeType := http.DetectContentType(content)
+	if !strings.HasPrefix(mimeType, defaultMediaMimeType) {
+		return mimeType
+	}
+	if fallback != "" {
+		return fallback
+	}
+	return defaultMediaMimeType
+}
+
+func (h *MediaHandler) markMediaUploadFailed(ctx context.Context, mediaID string) {
+	_, _ = h.db.NewUpdate().
+		Model((*models.MediaAttachment)(nil)).
+		Set("processing_status = ?", mediaFailedStatus).
+		Where("id = ?", mediaID).
+		Exec(ctx)
+}
+
+func mediaUploadResultFromAttachment(media models.MediaAttachment, deduped bool) MediaUploadResult {
+	return MediaUploadResult{
+		ID:       media.ID,
+		MimeType: media.MimeType,
+		URL:      "/media/" + media.ID,
+		Size:     media.Size,
+		Deduped:  deduped,
+	}
 }
 
 func (h *MediaHandler) mediaUsageSummary(ctx context.Context, workspaceID, mediaID string) (mediaUsageSummary, error) {
@@ -923,7 +1281,7 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 }
 
 func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUploadBytesInput) (map[string]interface{}, error) {
-	if input.Size > 50*1024*1024 {
+	if input.Size > MaxMediaUploadBytes {
 		return nil, errors.New("file size exceeds 50MB limit")
 	}
 	if input.Size < 0 {
@@ -938,10 +1296,10 @@ func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUpload
 	fileHash := hex.EncodeToString(hash[:])
 
 	mimeType := http.DetectContentType(input.Content)
-	if strings.HasPrefix(mimeType, "application/octet-stream") {
+	if strings.HasPrefix(mimeType, defaultMediaMimeType) {
 		mimeType = input.DeclaredMimeType
 		if mimeType == "" {
-			mimeType = "application/octet-stream"
+			mimeType = defaultMediaMimeType
 		}
 	}
 
@@ -977,7 +1335,7 @@ func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUpload
 		FilePath:         savedPath,
 		StorageType:      h.storage.Driver(),
 		MimeType:         mimeType,
-		ProcessingStatus: "ready",
+		ProcessingStatus: mediaReadyStatus,
 		Size:             input.Size,
 		OriginalFilename: input.Filename,
 		FileHash:         fileHash,
@@ -1016,6 +1374,10 @@ func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUpload
 }
 
 func (h *MediaHandler) checkUploadQuota(ctx context.Context, workspaceID string, size int64) error {
+	return h.checkUploadQuotaExcludingMedia(ctx, workspaceID, size, "")
+}
+
+func (h *MediaHandler) checkUploadQuotaExcludingMedia(ctx context.Context, workspaceID string, size int64, excludeMediaID string) error {
 	uploaded, err := h.usage.CurrentMonthly(ctx, workspaceID, entitlements.LimitMediaBytesUploadedMonthly, time.Now().UTC())
 	if err != nil {
 		return errors.New("failed to load upload usage")
@@ -1025,11 +1387,14 @@ func (h *MediaHandler) checkUploadQuota(ctx context.Context, workspaceID string,
 	}
 
 	var stored int64
-	if err := h.db.NewSelect().
+	storedQuery := h.db.NewSelect().
 		Model((*models.MediaAttachment)(nil)).
 		ColumnExpr("COALESCE(SUM(size), 0)").
-		Where("workspace_id = ?", workspaceID).
-		Scan(ctx, &stored); err != nil {
+		Where("workspace_id = ?", workspaceID)
+	if excludeMediaID != "" {
+		storedQuery = storedQuery.Where("id != ?", excludeMediaID)
+	}
+	if err := storedQuery.Scan(ctx, &stored); err != nil {
 		return errors.New("failed to load stored media usage")
 	}
 	return h.checkQuota(ctx, workspaceID, entitlements.LimitMediaBytesStored, stored, size)

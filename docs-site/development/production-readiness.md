@@ -52,7 +52,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 ### 4. Media Pipeline
 
-- Move cloud uploads to direct browser-to-S3/R2 upload sessions.
+- Move cloud uploads to direct browser-to-S3/R2 upload sessions. The S3 storage driver now issues authenticated upload sessions with presigned PUT targets, pending media reservations, completion finalization, dedupe, and quota accounting.
 - Track media assets separately from provider-uploaded media IDs.
 - Store size, checksum, dimensions, duration, processing status, storage driver, object key, and public URL mode.
 - Add provider media state for X, LinkedIn, Mastodon, Threads, Instagram, Facebook, YouTube, and TikTok.

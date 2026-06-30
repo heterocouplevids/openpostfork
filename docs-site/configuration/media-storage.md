@@ -38,4 +38,14 @@ OPENPOST_S3_PUBLIC_BASE_URL=https://media.openpost.example
 OPENPOST_S3_FORCE_PATH_STYLE=false
 ```
 
-The S3-compatible storage driver is available for server-side media uploads. Direct browser-to-S3 upload sessions and provider media-state tracking are part of the production-readiness roadmap.
+The S3-compatible storage driver supports server-side uploads and direct browser-to-S3 upload sessions.
+
+Direct upload flow:
+
+1. Call `POST /api/v1/media/upload-session` with `workspace_id`, `filename`, `mime_type`, and `size`.
+2. Upload the file to the returned presigned `PUT` target with the returned headers.
+3. Call `POST /api/v1/media/upload-session/{media_id}/complete` with the same `workspace_id`.
+
+OpenPost reserves a pending media record before issuing the presigned URL, then finalizes the upload by reading the stored object, computing metadata and the SHA-256 dedupe hash, creating thumbnails when possible, recording media-upload usage, and marking the media ready. Local filesystem deployments should keep using the existing multipart upload endpoint.
+
+Provider media-state tracking is still part of the production-readiness roadmap.

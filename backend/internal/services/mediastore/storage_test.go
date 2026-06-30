@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/require"
 )
@@ -43,6 +46,34 @@ func (f *fakeS3Client) GetObject(_ context.Context, input *s3.GetObjectInput, _ 
 	f.getBucket = aws.ToString(input.Bucket)
 	f.getKey = aws.ToString(input.Key)
 	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewBufferString(f.getBody))}, nil
+}
+
+type fakeS3PresignClient struct {
+	bucket      string
+	key         string
+	contentType string
+	size        int64
+	expires     time.Duration
+}
+
+func (f *fakeS3PresignClient) PresignPutObject(_ context.Context, input *s3.PutObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error) {
+	options := s3.PresignOptions{}
+	for _, optFn := range optFns {
+		optFn(&options)
+	}
+	f.bucket = aws.ToString(input.Bucket)
+	f.key = aws.ToString(input.Key)
+	f.contentType = aws.ToString(input.ContentType)
+	f.size = aws.ToInt64(input.ContentLength)
+	f.expires = options.Expires
+	return &v4.PresignedHTTPRequest{
+		URL:    "https://uploads.openpost.test/" + f.key,
+		Method: http.MethodPut,
+		SignedHeader: http.Header{
+			"Content-Type": []string{f.contentType},
+			"Host":         []string{"uploads.openpost.test"},
+		},
+	}, nil
 }
 
 func TestLocalStorageReportsDriver(t *testing.T) {
@@ -86,4 +117,30 @@ func TestS3StorageUsesBlobStorageContract(t *testing.T) {
 	require.NoError(t, storage.Delete("media/example.png"))
 	require.Equal(t, "openpost-media", client.deleteBucket)
 	require.Equal(t, "media/example.png", client.deleteKey)
+}
+
+func TestS3StorageCreatesDirectUploadSession(t *testing.T) {
+	presigner := &fakeS3PresignClient{}
+	storage := newS3StorageWithClients(&fakeS3Client{}, presigner, S3Config{
+		Bucket: "openpost-media",
+	})
+
+	session, err := storage.CreateDirectUploadSession(context.Background(), DirectUploadInput{
+		Key:         "/media/direct.png",
+		ContentType: "image/png",
+		Size:        1234,
+		ExpiresIn:   10 * time.Minute,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "openpost-media", presigner.bucket)
+	require.Equal(t, "media/direct.png", presigner.key)
+	require.Equal(t, "image/png", presigner.contentType)
+	require.Equal(t, int64(1234), presigner.size)
+	require.Equal(t, 10*time.Minute, presigner.expires)
+	require.Equal(t, http.MethodPut, session.Method)
+	require.Equal(t, "https://uploads.openpost.test/media/direct.png", session.URL)
+	require.Equal(t, "media/direct.png", session.Key)
+	require.Equal(t, map[string]string{"Content-Type": "image/png"}, session.Headers)
+	require.True(t, session.ExpiresAt.After(time.Now().UTC()))
 }
