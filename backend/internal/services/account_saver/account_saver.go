@@ -13,6 +13,7 @@ import (
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/crypto"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
@@ -22,15 +23,27 @@ var slugUnsafeChars = regexp.MustCompile(`[^a-z0-9]+`)
 // AccountSaver handles saving social account information to the database.
 // This service extracts the duplicated account-saving logic from the OAuth handler.
 type AccountSaver struct {
-	db     *bun.DB
-	crypto *crypto.TokenEncryptor
+	db          *bun.DB
+	crypto      *crypto.TokenEncryptor
+	entitlement entitlements.Service
 }
 
 // NewAccountSaver creates a new AccountSaver instance.
-func NewAccountSaver(db *bun.DB, crypto *crypto.TokenEncryptor) *AccountSaver {
+func NewAccountSaver(db *bun.DB, crypto *crypto.TokenEncryptor, entitlement ...entitlements.Service) *AccountSaver {
+	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
+	if len(entitlement) > 0 && entitlement[0] != nil {
+		entitlementService = entitlement[0]
+	}
 	return &AccountSaver{
-		db:     db,
-		crypto: crypto,
+		db:          db,
+		crypto:      crypto,
+		entitlement: entitlementService,
+	}
+}
+
+func (s *AccountSaver) SetEntitlement(entitlement entitlements.Service) {
+	if entitlement != nil {
+		s.entitlement = entitlement
 	}
 }
 
@@ -66,6 +79,9 @@ func (s *AccountSaver) SaveAccount(ctx context.Context, userID, platformName, wo
 		if uid, ok := tokenResp.Extra["user_id"]; ok && uid != "" {
 			accountID = uid
 		}
+	}
+	if err := s.checkSocialAccountQuota(ctx, workspaceID); err != nil {
+		return nil, err
 	}
 
 	encAccess, err := s.crypto.Encrypt(tokenResp.AccessToken)
@@ -111,6 +127,34 @@ func (s *AccountSaver) SaveAccount(ctx context.Context, userID, platformName, wo
 	}
 
 	return account, nil
+}
+
+func (s *AccountSaver) checkSocialAccountQuota(ctx context.Context, workspaceID string) error {
+	current, err := s.db.NewSelect().
+		Model((*models.SocialAccount)(nil)).
+		Where("workspace_id = ?", workspaceID).
+		Where("is_active = ?", true).
+		Count(ctx)
+	if err != nil {
+		return fmt.Errorf("loading social account usage: %w", err)
+	}
+
+	decision, err := s.entitlement.Check(ctx, entitlements.Request{
+		WorkspaceID: workspaceID,
+		Limit:       entitlements.LimitSocialAccounts,
+		Current:     int64(current),
+		Amount:      1,
+	})
+	if err != nil {
+		return fmt.Errorf("checking social account limit: %w", err)
+	}
+	if !decision.Allowed {
+		if decision.Reason != "" {
+			return fmt.Errorf("%s", decision.Reason)
+		}
+		return fmt.Errorf("social account limit exceeded")
+	}
+	return nil
 }
 
 func defaultSlug(platformName, accountUsername, accountID, instanceURL string) string {

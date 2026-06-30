@@ -12,6 +12,7 @@ import (
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/crypto"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
@@ -227,6 +228,90 @@ func TestSaveAccountGeneratesUniqueSlugs(t *testing.T) {
 
 	require.Equal(t, "x-main-account", first.Slug)
 	require.Equal(t, "x-main-account-2", second.Slug)
+}
+
+func TestSaveAccountRejectsSocialAccountQuota(t *testing.T) {
+	t.Parallel()
+
+	db := createTestDB(t)
+	crypto := crypto.NewTokenEncryptor("test-secret-key-for-testing-only")
+	saver := NewAccountSaver(db, crypto, entitlements.NewStaticService(entitlements.PlanSnapshot{
+		Limits: map[entitlements.LimitKey]int64{
+			entitlements.LimitSocialAccounts: 1,
+		},
+	}))
+
+	ctx := context.Background()
+	workspaceID := "workspace"
+	userID := "user"
+	seedWorkspaceMember(t, db, workspaceID, userID)
+	_, err := db.NewInsert().Model(&models.SocialAccount{
+		ID:             "existing",
+		WorkspaceID:    workspaceID,
+		Platform:       "x",
+		AccountID:      "existing",
+		Slug:           "x-existing",
+		AccessTokenEnc: []byte("token"),
+		IsActive:       true,
+		CreatedAt:      time.Now().UTC(),
+	}).Exec(ctx)
+	require.NoError(t, err)
+
+	account, err := saver.SaveAccount(ctx, userID, "mastodon", workspaceID, "next", "next", "https://masto.example", &platform.TokenResult{
+		AccessToken: "token",
+	})
+
+	require.Nil(t, account)
+	require.ErrorContains(t, err, "social_accounts limit exceeded")
+	count, err := db.NewSelect().
+		Model((*models.SocialAccount)(nil)).
+		Where("workspace_id = ?", workspaceID).
+		Where("is_active = ?", true).
+		Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+}
+
+func TestSaveAccountIgnoresInactiveAccountsForQuota(t *testing.T) {
+	t.Parallel()
+
+	db := createTestDB(t)
+	crypto := crypto.NewTokenEncryptor("test-secret-key-for-testing-only")
+	saver := NewAccountSaver(db, crypto, entitlements.NewStaticService(entitlements.PlanSnapshot{
+		Limits: map[entitlements.LimitKey]int64{
+			entitlements.LimitSocialAccounts: 1,
+		},
+	}))
+
+	ctx := context.Background()
+	workspaceID := "workspace"
+	userID := "user"
+	seedWorkspaceMember(t, db, workspaceID, userID)
+	_, err := db.NewInsert().Model(&models.SocialAccount{
+		ID:             "inactive",
+		WorkspaceID:    workspaceID,
+		Platform:       "x",
+		AccountID:      "inactive",
+		Slug:           "x-inactive",
+		AccessTokenEnc: []byte("token"),
+		IsActive:       true,
+		CreatedAt:      time.Now().UTC(),
+	}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewUpdate().
+		Model((*models.SocialAccount)(nil)).
+		Set("is_active = ?", false).
+		Where("id = ?", "inactive").
+		Exec(ctx)
+	require.NoError(t, err)
+
+	account, err := saver.SaveAccount(ctx, userID, "mastodon", workspaceID, "next", "next", "https://masto.example", &platform.TokenResult{
+		AccessToken: "token",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, account)
+	require.Equal(t, "mastodon-next", account.Slug)
 }
 
 // TestSaveAccount_EncryptionError tests handling of encryption failures.
