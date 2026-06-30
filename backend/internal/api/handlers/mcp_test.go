@@ -274,6 +274,88 @@ func TestMCPToolsList(t *testing.T) {
 	require.Equal(t, false, annotations["openWorldHint"])
 }
 
+func TestMCPInitializeAdvertisesPrompts(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "init",
+		"method":  "initialize",
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	capabilities := result["capabilities"].(map[string]any)
+	require.Contains(t, capabilities, "tools")
+	require.Contains(t, capabilities, "prompts")
+}
+
+func TestMCPPromptsListAndGet(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	listResp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "prompts",
+		"method":  "prompts/list",
+	})
+	require.Equal(t, http.StatusOK, listResp.Code)
+	var listed map[string]any
+	require.NoError(t, json.Unmarshal(listResp.Body.Bytes(), &listed))
+	prompts := listed["result"].(map[string]any)["prompts"].([]any)
+	require.Len(t, prompts, 3)
+	require.Equal(t, mcpPromptPlanPost, prompts[0].(map[string]any)["name"])
+	require.Equal(t, mcpPromptRenditions, prompts[1].(map[string]any)["name"])
+	require.Equal(t, mcpPromptReviewQueue, prompts[2].(map[string]any)["name"])
+
+	getResp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "prompt",
+		"method":  "prompts/get",
+		"params": map[string]any{
+			"name": mcpPromptPlanPost,
+			"arguments": map[string]string{
+				"idea":         "Launch the demo recording",
+				"workspace_id": "ws-1",
+				"platforms":    "x, linkedin",
+			},
+		},
+	})
+	require.Equal(t, http.StatusOK, getResp.Code)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(getResp.Body.Bytes(), &got))
+	result := got["result"].(map[string]any)
+	messages := result["messages"].([]any)
+	require.Len(t, messages, 1)
+	message := messages[0].(map[string]any)
+	require.Equal(t, "user", message["role"])
+	text := message["content"].(map[string]any)["text"].(string)
+	require.Contains(t, text, "Launch the demo recording")
+	require.Contains(t, text, "workspace_id: ws-1")
+	require.Contains(t, text, "x, linkedin")
+}
+
+func TestMCPPromptsGetRejectsUnknownPrompt(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "bad-prompt",
+		"method":  "prompts/get",
+		"params": map[string]any{
+			"name": "unknown",
+		},
+	})
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	require.Equal(t, "unknown prompt", out["error"].(map[string]any)["message"])
+}
+
 func TestMCPCallListWorkspaces(t *testing.T) {
 	t.Parallel()
 

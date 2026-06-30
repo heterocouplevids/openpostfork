@@ -39,6 +39,9 @@ const (
 	mcpToolCancelPost    = "cancel_post"
 	mcpToolSuggestSlot   = "suggest_next_slot"
 	mcpToolUploadURL     = "upload_media_from_url"
+	mcpPromptPlanPost    = "plan_social_post"
+	mcpPromptRenditions  = "adapt_platform_renditions"
+	mcpPromptReviewQueue = "review_schedule"
 	mcpScopeFull         = apitokens.ScopeMCP
 	maxRemoteMediaBytes  = 50 * 1024 * 1024
 )
@@ -233,7 +236,8 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 				"version": "0.1.0",
 			},
 			"capabilities": map[string]any{
-				"tools": map[string]any{"listChanged": false},
+				"tools":   map[string]any{"listChanged": false},
+				"prompts": map[string]any{"listChanged": false},
 			},
 		}, nil
 	case "tools/list":
@@ -252,11 +256,149 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 			mcpSuggestNextSlotTool(),
 			mcpUploadMediaFromURLTool(),
 		}}, nil
+	case "prompts/list":
+		return map[string]any{"prompts": []map[string]any{
+			mcpPlanSocialPostPrompt(),
+			mcpAdaptPlatformRenditionsPrompt(),
+			mcpReviewSchedulePrompt(),
+		}}, nil
+	case "prompts/get":
+		return mcpGetPrompt(req.Params)
 	case "tools/call":
 		return h.callTool(ctx, principal, req.Params)
 	default:
 		return nil, &mcpError{Code: -32601, Message: "method not found"}
 	}
+}
+
+func mcpPlanSocialPostPrompt() map[string]any {
+	return map[string]any{
+		"name":        mcpPromptPlanPost,
+		"title":       "Plan social post",
+		"description": "Turn an idea into a workspace-aware OpenPost draft plan.",
+		"arguments": []map[string]any{
+			{"name": "idea", "description": "The source idea, note, link, or rough post to develop.", "required": true},
+			{"name": "workspace_id", "description": "Optional workspace ID if already known.", "required": false},
+			{"name": "platforms", "description": "Optional comma-separated destination platforms to consider.", "required": false},
+		},
+	}
+}
+
+func mcpAdaptPlatformRenditionsPrompt() map[string]any {
+	return map[string]any{
+		"name":        mcpPromptRenditions,
+		"title":       "Adapt platform renditions",
+		"description": "Rewrite a draft or scheduled post into platform-native destination copy.",
+		"arguments": []map[string]any{
+			{"name": "workspace_id", "description": "Workspace ID that owns the post.", "required": true},
+			{"name": "post_id", "description": "Draft or scheduled post ID to adapt.", "required": true},
+			{"name": "goal", "description": "Optional campaign goal, audience, or tone guidance.", "required": false},
+		},
+	}
+}
+
+func mcpReviewSchedulePrompt() map[string]any {
+	return map[string]any{
+		"name":        mcpPromptReviewQueue,
+		"title":       "Review publishing queue",
+		"description": "Inspect upcoming scheduled posts and recommend useful next actions.",
+		"arguments": []map[string]any{
+			{"name": "workspace_id", "description": "Workspace ID to inspect.", "required": true},
+			{"name": "window", "description": "Optional time window, such as today, this week, or next 14 days.", "required": false},
+		},
+	}
+}
+
+func mcpGetPrompt(raw json.RawMessage) (any, *mcpError) {
+	var params struct {
+		Name      string            `json:"name"`
+		Arguments map[string]string `json:"arguments"`
+	}
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil, &mcpError{Code: -32602, Message: "invalid prompt params"}
+	}
+	switch params.Name {
+	case mcpPromptPlanPost:
+		return mcpPromptResult("Plan an OpenPost draft from an idea.", mcpPlanPostPromptText(params.Arguments)), nil
+	case mcpPromptRenditions:
+		return mcpPromptResult("Adapt a post into platform-native renditions.", mcpRenditionsPromptText(params.Arguments)), nil
+	case mcpPromptReviewQueue:
+		return mcpPromptResult("Review the scheduled publishing queue.", mcpReviewQueuePromptText(params.Arguments)), nil
+	default:
+		return nil, &mcpError{Code: -32602, Message: "unknown prompt"}
+	}
+}
+
+func mcpPromptResult(description, text string) map[string]any {
+	return map[string]any{
+		"description": description,
+		"messages": []map[string]any{{
+			"role": "user",
+			"content": map[string]string{
+				"type": "text",
+				"text": text,
+			},
+		}},
+	}
+}
+
+func mcpPlanPostPromptText(args map[string]string) string {
+	return strings.TrimSpace(fmt.Sprintf(`
+Use OpenPost as an agentic social media scheduler.
+
+Source idea:
+%s
+
+Workflow:
+1. If workspace_id is missing, call list_workspaces and ask which workspace to use.
+2. Call list_accounts for the selected workspace and pick destination accounts matching these platform hints: %s.
+3. Create one concise draft with create_draft. Do not schedule it until the user approves timing and destinations.
+4. Explain what you created and suggest the next scheduling step.
+
+workspace_id: %s
+`, promptArg(args, "idea", "(missing idea)"), promptArg(args, "platforms", "any connected platforms"), promptArg(args, "workspace_id", "(choose with list_workspaces)")))
+}
+
+func mcpRenditionsPromptText(args map[string]string) string {
+	return strings.TrimSpace(fmt.Sprintf(`
+Adapt an existing OpenPost post into platform-native renditions.
+
+workspace_id: %s
+post_id: %s
+goal: %s
+
+Workflow:
+1. Call get_post_status to inspect destinations and current state.
+2. Write concise, platform-native copy for each destination account.
+3. Call set_post_renditions with one rendition per destination account.
+4. Summarize what changed and mention any platforms that need media, hashtags, or shorter copy.
+`, promptArg(args, "workspace_id", "(required)"), promptArg(args, "post_id", "(required)"), promptArg(args, "goal", "match the source post and audience")))
+}
+
+func mcpReviewQueuePromptText(args map[string]string) string {
+	return strings.TrimSpace(fmt.Sprintf(`
+Review the OpenPost publishing queue and recommend useful next actions.
+
+workspace_id: %s
+window: %s
+
+Workflow:
+1. Call list_scheduled_posts for the workspace and requested window.
+2. Look for collisions, empty stretches, missing platform coverage, and posts that need destination-specific renditions.
+3. Call suggest_next_slot if a useful new slot is needed.
+4. Recommend concrete actions without canceling or scheduling anything unless the user explicitly asks.
+`, promptArg(args, "workspace_id", "(required)"), promptArg(args, "window", "upcoming queue")))
+}
+
+func promptArg(args map[string]string, name, fallback string) string {
+	if args == nil {
+		return fallback
+	}
+	value := strings.TrimSpace(args[name])
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func mcpListWorkspacesTool() map[string]any {

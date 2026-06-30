@@ -65,6 +65,12 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - `suggest_next_slot`: returns the next free configured posting slot for a workspace.
 - `upload_media_from_url`: fetches a public HTTP(S) media URL and stores it in a workspace.
 
+## Current prompts
+
+- `plan_social_post`: guides an assistant from a rough idea to a workspace-aware draft.
+- `adapt_platform_renditions`: guides destination-specific copywriting for an existing draft or scheduled post.
+- `review_schedule`: guides queue inspection and next-action recommendations without mutating posts.
+
 ## Current scope
 
 - Uses the same Bearer authentication path as the CLI and API tokens.
@@ -75,6 +81,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Validates client metadata redirect URIs for URL-based client IDs, accepts ChatGPT fallback redirects for predefined clients, and binds OAuth-issued MCP tokens to the `/mcp` resource audience.
 - Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. Fine-grained per-session scopes are still planned.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
+- Advertises MCP prompt templates for common agentic scheduling workflows: planning a post, adapting platform renditions, and reviewing the publishing queue.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
 - Keeps draft iteration agent-friendly: assistants can list drafts, update draft copy/destinations, set per-destination renditions, and schedule the same draft when it is ready.
 - Validates rendition targets against the post destination list so assistants do not create variants that would never publish.
