@@ -28,7 +28,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Add `OPENPOST_DATABASE_DRIVER=sqlite|postgres` and Postgres-backed Bun ORM initialization.
 - Add `OPENPOST_STORAGE_DRIVER=local|s3` with S3-compatible storage.
 - Add usage counters and entitlement checks at API boundaries. The first foundation is in place with monthly `usage_counters` and workspace-creation entitlement checks.
-- Add quota enforcement for account connection, media upload, scheduling, and team invites.
+- Add quota enforcement for account connection, scheduling, and team invites. Media upload quota enforcement is in place for monthly uploaded bytes and stored bytes.
 - Add monthly usage counters for scheduled posts, published posts, uploaded bytes, stored bytes, and provider write calls.
 
 ### 2. Billing And Plans

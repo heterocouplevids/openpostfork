@@ -25,8 +25,10 @@ import (
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/auth"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
+	"github.com/openpost/backend/internal/services/usage"
 	"github.com/uptrace/bun"
 )
 
@@ -41,6 +43,8 @@ type MediaHandler struct {
 	auth    *auth.Service
 	authn   middleware.Authenticator
 	signer  *mediasigner.Signer
+	quota   entitlements.Service
+	usage   *usage.Service
 }
 
 func NewMediaHandler(
@@ -53,7 +57,27 @@ func NewMediaHandler(
 	if authenticator == nil && authService != nil {
 		authenticator = middleware.NewJWTAuthenticator(authService)
 	}
-	return &MediaHandler{db: db, storage: storage, auth: authService, authn: authenticator, signer: signer}
+	return &MediaHandler{
+		db:      db,
+		storage: storage,
+		auth:    authService,
+		authn:   authenticator,
+		signer:  signer,
+		quota:   entitlements.NewSelfHostedService(),
+		usage:   usage.NewService(db),
+	}
+}
+
+func (h *MediaHandler) SetEntitlement(entitlement entitlements.Service) {
+	if entitlement != nil {
+		h.quota = entitlement
+	}
+}
+
+func (h *MediaHandler) SetUsage(usageService *usage.Service) {
+	if usageService != nil {
+		h.usage = usageService
+	}
 }
 
 type Thumbnails struct {
@@ -907,6 +931,9 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 			"deduped":   true,
 		}, nil
 	}
+	if err := h.checkUploadQuota(context.Background(), workspaceID, fileHeader.Size); err != nil {
+		return nil, err
+	}
 
 	mediaID := uuid.New().String()
 	ext := filepath.Ext(fileHeader.Filename)
@@ -948,6 +975,9 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 	if _, err := h.db.NewInsert().Model(media).Exec(context.Background()); err != nil {
 		return nil, errors.New("failed to save media record")
 	}
+	if _, err := h.usage.IncrementMonthly(context.Background(), workspaceID, entitlements.LimitMediaBytesUploadedMonthly, fileHeader.Size, time.Now().UTC()); err != nil {
+		return nil, errors.New("failed to record media upload usage")
+	}
 
 	return map[string]interface{}{
 		"id":        mediaID,
@@ -956,6 +986,45 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 		"size":      fileHeader.Size,
 		"deduped":   false,
 	}, nil
+}
+
+func (h *MediaHandler) checkUploadQuota(ctx context.Context, workspaceID string, size int64) error {
+	uploaded, err := h.usage.CurrentMonthly(ctx, workspaceID, entitlements.LimitMediaBytesUploadedMonthly, time.Now().UTC())
+	if err != nil {
+		return errors.New("failed to load upload usage")
+	}
+	if err := h.checkQuota(ctx, workspaceID, entitlements.LimitMediaBytesUploadedMonthly, uploaded, size); err != nil {
+		return err
+	}
+
+	var stored int64
+	if err := h.db.NewSelect().
+		Model((*models.MediaAttachment)(nil)).
+		ColumnExpr("COALESCE(SUM(size), 0)").
+		Where("workspace_id = ?", workspaceID).
+		Scan(ctx, &stored); err != nil {
+		return errors.New("failed to load stored media usage")
+	}
+	return h.checkQuota(ctx, workspaceID, entitlements.LimitMediaBytesStored, stored, size)
+}
+
+func (h *MediaHandler) checkQuota(ctx context.Context, workspaceID string, limit entitlements.LimitKey, current, amount int64) error {
+	decision, err := h.quota.Check(ctx, entitlements.Request{
+		WorkspaceID: workspaceID,
+		Limit:       limit,
+		Current:     current,
+		Amount:      amount,
+	})
+	if err != nil {
+		return errors.New("failed to check quota")
+	}
+	if !decision.Allowed {
+		if decision.Reason != "" {
+			return errors.New(decision.Reason)
+		}
+		return errors.New("quota exceeded")
+	}
+	return nil
 }
 
 func (h *MediaHandler) processImage(content []byte, mediaID, mimeType string) (int, int, Thumbnails, error) {
