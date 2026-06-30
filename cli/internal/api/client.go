@@ -468,6 +468,100 @@ func (c *Client) DeleteMedia(ctx context.Context, mediaID string) error {
 	return c.DeleteJSON(ctx, "/api/v1/media/"+mediaID, nil)
 }
 
+// ----- Publications -----
+
+type Publication struct {
+	ID              string   `json:"id"`
+	WorkspaceID     string   `json:"workspace_id"`
+	CreatedBy       string   `json:"created_by"`
+	Title           string   `json:"title"`
+	SourceContent   string   `json:"source_content"`
+	SourceURL       string   `json:"source_url,omitempty"`
+	Goal            string   `json:"goal,omitempty"`
+	Audience        string   `json:"audience,omitempty"`
+	Status          string   `json:"status"`
+	ReleasePlanJSON string   `json:"release_plan_json"`
+	MediaIDs        []string `json:"media_ids,omitempty"`
+	CreatedAt       string   `json:"created_at"`
+	UpdatedAt       string   `json:"updated_at"`
+}
+
+type CreatePublicationInput struct {
+	WorkspaceID   string   `json:"workspace_id"`
+	Title         string   `json:"title"`
+	SourceContent string   `json:"source_content"`
+	SourceURL     string   `json:"source_url,omitempty"`
+	Goal          string   `json:"goal,omitempty"`
+	Audience      string   `json:"audience,omitempty"`
+	MediaIDs      []string `json:"media_ids,omitempty"`
+}
+
+func (c *Client) CreatePublication(ctx context.Context, in CreatePublicationInput) (*Publication, error) {
+	var out Publication
+	if err := c.PostJSON(ctx, "/api/v1/publications", in, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+type ListPublicationsInput struct {
+	WorkspaceID string
+	Status      string
+	Limit       int
+	Offset      int
+}
+
+func (c *Client) ListPublications(ctx context.Context, in ListPublicationsInput) ([]Publication, error) {
+	v := url.Values{}
+	if in.WorkspaceID != "" {
+		v.Set("workspace_id", in.WorkspaceID)
+	}
+	if in.Status != "" {
+		v.Set("status", in.Status)
+	}
+	if in.Limit > 0 {
+		v.Set("limit", strconv.Itoa(in.Limit))
+	}
+	if in.Offset > 0 {
+		v.Set("offset", strconv.Itoa(in.Offset))
+	}
+	path := "/api/v1/publications"
+	if encoded := v.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var out []Publication
+	if err := c.GetJSON(ctx, path, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) GetPublication(ctx context.Context, id string) (*Publication, error) {
+	var out Publication
+	if err := c.GetJSON(ctx, "/api/v1/publications/"+url.PathEscape(id), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+type UpdatePublicationInput struct {
+	Title         *string   `json:"title,omitempty"`
+	SourceContent *string   `json:"source_content,omitempty"`
+	SourceURL     *string   `json:"source_url,omitempty"`
+	Goal          *string   `json:"goal,omitempty"`
+	Audience      *string   `json:"audience,omitempty"`
+	Status        *string   `json:"status,omitempty"`
+	MediaIDs      *[]string `json:"media_ids,omitempty"`
+}
+
+func (c *Client) UpdatePublication(ctx context.Context, id string, in UpdatePublicationInput) (*Publication, error) {
+	var out Publication
+	if err := c.PatchJSON(ctx, "/api/v1/publications/"+url.PathEscape(id), in, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ----- Posts -----
 
 type PostDestination struct {

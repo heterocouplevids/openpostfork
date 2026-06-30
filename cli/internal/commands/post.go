@@ -22,6 +22,7 @@ type postFlags struct {
 	accounts    string
 	set         string
 	schedule    string
+	publication string
 	media       []string
 	mediaAlt    []string
 	threadDraft string
@@ -76,6 +77,7 @@ func newPostCreateCmd() *cobra.Command {
 				ScheduledAt:        scheduledAt,
 				SocialAccountIDs:   targets.AccountIDs,
 				MediaIDs:           mediaIDs,
+				PublicationID:      strings.TrimSpace(flags.publication),
 				RandomDelayMinutes: flags.randomDelay,
 			}
 			if flags.threadDraft != "" {
@@ -113,9 +115,16 @@ func newPostListCmd() *cobra.Command {
 			}
 			rows := make([][]string, 0, len(posts))
 			for _, post := range posts {
-				rows = append(rows, []string{post.ID, post.Status, scheduleLabel(post.ScheduledAt), preview(post.Content, 80), strconv.Itoa(len(post.Destinations))})
+				rows = append(rows, []string{
+					post.ID,
+					post.Status,
+					emptyDash(post.PublicationID),
+					scheduleLabel(post.ScheduledAt),
+					preview(post.Content, 80),
+					strconv.Itoa(len(post.Destinations)),
+				})
 			}
-			p.Table([]string{"ID", "STATUS", "SCHEDULED", "CONTENT", "ACCOUNTS"}, rows)
+			p.Table([]string{"ID", "STATUS", "PUBLICATION", "SCHEDULED", "CONTENT", "ACCOUNTS"}, rows)
 			return nil
 		},
 	}
@@ -150,6 +159,7 @@ func newPostViewCmd() *cobra.Command {
 				{"id", post.ID},
 				{"workspace_id", post.WorkspaceID},
 				{"created_by", post.CreatedBy},
+				{"publication_id", emptyDash(post.PublicationID)},
 				{"status", post.Status},
 				{"scheduled_at", scheduleLabel(post.ScheduledAt)},
 				{"actual_run_at", emptyDash(post.ActualRunAt)},
@@ -210,6 +220,10 @@ func newPostUpdateCmd() *cobra.Command {
 			if cmd.Flags().Changed("random-delay") {
 				in.RandomDelayMinutes = &flags.randomDelay
 			}
+			if cmd.Flags().Changed("publication") {
+				publicationID := strings.TrimSpace(flags.publication)
+				in.PublicationID = &publicationID
+			}
 			post, err := client.UpdatePost(cmd.Context(), args[0], in)
 			if err != nil {
 				return err
@@ -219,6 +233,7 @@ func newPostUpdateCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&flags.content, "content", "", "post content")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language, RFC3339, next-slot, now, or draft; empty string unschedules")
+	cmd.Flags().StringVar(&flags.publication, "publication", "", "source publication ID; pass an empty string to clear")
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
 	cmd.Flags().StringVar(&flags.set, "set", "", "social set name or ID to publish to")
 	cmd.Flags().IntVar(&flags.randomDelay, "random-delay", 0, "random delay in minutes")
@@ -267,6 +282,7 @@ func addCreatePostFlags(cmd *cobra.Command, flags *postFlags) {
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
 	cmd.Flags().StringVar(&flags.set, "set", "", "social set name or ID to publish to")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language, RFC3339, next-slot, now, or draft")
+	cmd.Flags().StringVar(&flags.publication, "publication", "", "source publication ID")
 	cmd.Flags().StringArrayVar(&flags.media, "media", nil, "media id or local file path; repeatable")
 	cmd.Flags().StringArrayVar(&flags.mediaAlt, "media-alt", nil, "alt text for the matching uploaded --media")
 	cmd.Flags().StringVar(&flags.threadDraft, "thread-draft", "", "encoded thread draft to attach")
@@ -481,9 +497,10 @@ func printPostSummary(cfg *config.Runtime, post *api.Post) error {
 	if cfg.AsJSON {
 		return p.PrintJSON(post)
 	}
-	p.Table([]string{"ID", "STATUS", "SCHEDULED", "ACCOUNTS", "MEDIA"}, [][]string{{
+	p.Table([]string{"ID", "STATUS", "PUBLICATION", "SCHEDULED", "ACCOUNTS", "MEDIA"}, [][]string{{
 		post.ID,
 		post.Status,
+		emptyDash(post.PublicationID),
 		scheduleLabel(post.ScheduledAt),
 		strconv.Itoa(len(post.Destinations)),
 		strconv.Itoa(len(post.MediaIDs) + len(post.Media)),

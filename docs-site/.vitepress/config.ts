@@ -33,6 +33,7 @@ const docsSidebar = [
 			{ text: 'Overview', link: '/cli/' },
 			{ text: 'Installation', link: '/cli/installation' },
 			{ text: 'Authentication', link: '/cli/authentication' },
+			{ text: 'Publications', link: '/cli/publications' },
 			{ text: 'Posting', link: '/cli/posting' },
 			{ text: 'Automation', link: '/cli/automation' },
 			{ text: 'Command Reference', link: '/reference/cli' },
