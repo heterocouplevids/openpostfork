@@ -31,6 +31,7 @@ const (
 	mcpToolCreateDraft  = "create_draft"
 	mcpToolSchedulePost = "schedule_post"
 	mcpToolGetPost      = "get_post_status"
+	mcpToolListPosts    = "list_scheduled_posts"
 	mcpToolCancelPost   = "cancel_post"
 	mcpToolSuggestSlot  = "suggest_next_slot"
 	mcpToolUploadURL    = "upload_media_from_url"
@@ -237,6 +238,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 			mcpCreateDraftTool(),
 			mcpSchedulePostTool(),
 			mcpGetPostStatusTool(),
+			mcpListScheduledPostsTool(),
 			mcpCancelPostTool(),
 			mcpSuggestNextSlotTool(),
 			mcpUploadMediaFromURLTool(),
@@ -360,6 +362,41 @@ func mcpGetPostStatusTool() map[string]any {
 				},
 			},
 			"required":             []string{"workspace_id", "post_id"},
+			"additionalProperties": false,
+		},
+	}, true, false)
+}
+
+func mcpListScheduledPostsTool() map[string]any {
+	return mcpToolDescriptor(map[string]any{
+		"name":        mcpToolListPosts,
+		"title":       "List scheduled posts",
+		"description": "List upcoming scheduled posts in a workspace so an assistant can inspect the publishing queue.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Workspace ID returned by list_workspaces.",
+				},
+				"from": map[string]any{
+					"type":        "string",
+					"format":      "date-time",
+					"description": "Optional inclusive RFC3339 lower bound for scheduled_at.",
+				},
+				"to": map[string]any{
+					"type":        "string",
+					"format":      "date-time",
+					"description": "Optional exclusive RFC3339 upper bound for scheduled_at.",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"maximum":     100,
+					"description": "Maximum posts to return. Defaults to 20.",
+				},
+			},
+			"required":             []string{"workspace_id"},
 			"additionalProperties": false,
 		},
 	}, true, false)
@@ -493,6 +530,8 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 		result, rpcErr = h.schedulePost(ctx, principal.UserID, params.Arguments)
 	case mcpToolGetPost:
 		result, rpcErr = h.getPostStatus(ctx, principal.UserID, params.Arguments)
+	case mcpToolListPosts:
+		result, rpcErr = h.listScheduledPosts(ctx, principal.UserID, params.Arguments)
 	case mcpToolCancelPost:
 		result, rpcErr = h.cancelPost(ctx, principal.UserID, params.Arguments)
 	case mcpToolSuggestSlot:
@@ -876,6 +915,76 @@ func (h *MCPHandler) getPostStatus(ctx context.Context, userID string, args map[
 		return nil, rpcErr
 	}
 	return mcpPostToolResult("Post status: "+post.Status, postStatus), nil
+}
+
+type mcpListScheduledPostsInput struct {
+	WorkspaceID string `json:"workspace_id"`
+	From        string `json:"from"`
+	To          string `json:"to"`
+	Limit       int    `json:"limit"`
+}
+
+func (h *MCPHandler) listScheduledPosts(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	var input mcpListScheduledPostsInput
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return nil, &mcpError{Code: -32602, Message: "invalid list_scheduled_posts arguments"}
+	}
+	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
+		return nil, rpcErr
+	}
+	limit := input.Limit
+	if limit == 0 {
+		limit = 20
+	}
+	if limit < 1 || limit > 100 {
+		return nil, &mcpError{Code: -32602, Message: "limit must be between 1 and 100"}
+	}
+
+	var rows []models.Post
+	query := h.db.NewSelect().
+		Model(&rows).
+		Column("id").
+		Where("workspace_id = ?", input.WorkspaceID).
+		Where("status = ?", statusScheduled).
+		Order("scheduled_at ASC").
+		Limit(limit)
+	if strings.TrimSpace(input.From) != "" {
+		from, err := time.Parse(time.RFC3339, input.From)
+		if err != nil {
+			return nil, &mcpError{Code: -32602, Message: "from must be an RFC3339 timestamp"}
+		}
+		query = query.Where("scheduled_at >= ?", from)
+	}
+	if strings.TrimSpace(input.To) != "" {
+		to, err := time.Parse(time.RFC3339, input.To)
+		if err != nil {
+			return nil, &mcpError{Code: -32602, Message: "to must be an RFC3339 timestamp"}
+		}
+		query = query.Where("scheduled_at < ?", to)
+	}
+
+	if err := query.Scan(ctx); err != nil && err != sql.ErrNoRows {
+		return nil, &mcpError{Code: -32603, Message: "failed to list scheduled posts"}
+	}
+
+	posts := make([]mcpPostStatus, 0, len(rows))
+	for _, row := range rows {
+		postStatus, rpcErr := h.loadMCPPostStatus(ctx, row.ID)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		posts = append(posts, postStatus)
+	}
+	text := fmt.Sprintf("Found %d scheduled posts.", len(posts))
+	return map[string]any{
+		"content": []mcpContent{{
+			Type: "text",
+			Text: text,
+		}},
+		"structuredContent": map[string]any{
+			"posts": posts,
+		},
+	}, nil
 }
 
 func (h *MCPHandler) cancelPost(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {

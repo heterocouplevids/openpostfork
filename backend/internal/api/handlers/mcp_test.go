@@ -221,15 +221,16 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 8)
+	require.Len(t, tools, 9)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
 	require.Equal(t, "list_accounts", tools[1].(map[string]any)["name"])
 	require.Equal(t, "create_draft", tools[2].(map[string]any)["name"])
 	require.Equal(t, "schedule_post", tools[3].(map[string]any)["name"])
 	require.Equal(t, "get_post_status", tools[4].(map[string]any)["name"])
-	require.Equal(t, "cancel_post", tools[5].(map[string]any)["name"])
-	require.Equal(t, "suggest_next_slot", tools[6].(map[string]any)["name"])
-	require.Equal(t, "upload_media_from_url", tools[7].(map[string]any)["name"])
+	require.Equal(t, "list_scheduled_posts", tools[5].(map[string]any)["name"])
+	require.Equal(t, "cancel_post", tools[6].(map[string]any)["name"])
+	require.Equal(t, "suggest_next_slot", tools[7].(map[string]any)["name"])
+	require.Equal(t, "upload_media_from_url", tools[8].(map[string]any)["name"])
 
 	for _, tool := range tools {
 		descriptor := tool.(map[string]any)
@@ -524,6 +525,93 @@ func TestMCPCallGetPostStatusReturnsDestinations(t *testing.T) {
 	require.Len(t, destinations, 1)
 	require.Equal(t, "x", destinations[0].(map[string]any)["platform"])
 	require.Equal(t, "x-openpost", destinations[0].(map[string]any)["slug"])
+}
+
+func TestMCPCallListScheduledPostsReturnsQueue(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	posts := []models.Post{
+		{
+			ID:          "post-list-early",
+			WorkspaceID: "ws-1",
+			CreatedByID: "user-1",
+			Content:     "First queued post",
+			Status:      statusScheduled,
+			ScheduledAt: time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC),
+			ActualRunAt: time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC),
+			CreatedAt:   time.Date(2026, 6, 30, 17, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:          "post-list-late",
+			WorkspaceID: "ws-1",
+			CreatedByID: "user-1",
+			Content:     "Second queued post",
+			Status:      statusScheduled,
+			ScheduledAt: time.Date(2026, 7, 2, 11, 0, 0, 0, time.UTC),
+			ActualRunAt: time.Date(2026, 7, 2, 11, 0, 0, 0, time.UTC),
+			CreatedAt:   time.Date(2026, 6, 30, 17, 5, 0, 0, time.UTC),
+		},
+		{
+			ID:          "post-list-draft",
+			WorkspaceID: "ws-1",
+			CreatedByID: "user-1",
+			Content:     "Draft should not be listed",
+			Status:      statusDraft,
+			CreatedAt:   time.Date(2026, 6, 30, 17, 10, 0, 0, time.UTC),
+		},
+		{
+			ID:          "post-list-other-workspace",
+			WorkspaceID: "ws-2",
+			CreatedByID: "user-1",
+			Content:     "Other workspace queued post",
+			Status:      statusScheduled,
+			ScheduledAt: time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC),
+			CreatedAt:   time.Date(2026, 6, 30, 17, 15, 0, 0, time.UTC),
+		},
+	}
+	_, err := srv.db.NewInsert().Model(&posts).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.PostDestination{
+		ID:              "destination-list",
+		PostID:          "post-list-early",
+		SocialAccountID: "account-1",
+		Status:          postStatusPending,
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-list-scheduled",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_scheduled_posts",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"from":         "2026-07-01T00:00:00Z",
+				"to":           "2026-07-03T00:00:00Z",
+				"limit":        10,
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	content := result["content"].([]any)
+	require.Contains(t, content[0].(map[string]any)["text"], "Found 2 scheduled posts")
+	structured := result["structuredContent"].(map[string]any)
+	gotPosts := structured["posts"].([]any)
+	require.Len(t, gotPosts, 2)
+	first := gotPosts[0].(map[string]any)
+	require.Equal(t, "post-list-early", first["id"])
+	require.Equal(t, "First queued post", first["content"])
+	require.Equal(t, "2026-07-01T09:00:00Z", first["scheduled_at"])
+	destinations := first["destinations"].([]any)
+	require.Len(t, destinations, 1)
+	require.Equal(t, "x", destinations[0].(map[string]any)["platform"])
+	require.Equal(t, "post-list-late", gotPosts[1].(map[string]any)["id"])
 }
 
 func TestMCPCallCancelPostRemovesQueuedJobAndReturnsDraft(t *testing.T) {
