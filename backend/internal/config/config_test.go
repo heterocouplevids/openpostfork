@@ -6,6 +6,70 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestLoadProductionPrimitiveDefaults(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://openpost.example.com")
+
+	cfg := Load()
+
+	require.Equal(t, EditionSelfHost, cfg.Edition)
+	require.Equal(t, DatabaseDriverSQLite, cfg.DatabaseDriver)
+	require.Equal(t, "file:openpost.db?cache=shared&mode=rwc", cfg.DatabaseDSN())
+	require.Equal(t, StorageDriverLocal, cfg.StorageDriver)
+	require.Empty(t, cfg.DatabaseURL)
+	require.Empty(t, cfg.S3Bucket)
+}
+
+func TestLoadCloudPostgresAndS3Primitives(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("OPENPOST_EDITION", "cloud")
+	t.Setenv("OPENPOST_DATABASE_DRIVER", "postgres")
+	t.Setenv("OPENPOST_DATABASE_URL", "postgres://openpost:secret@db.internal:5432/openpost?sslmode=require")
+	t.Setenv("OPENPOST_STORAGE_DRIVER", "s3")
+	t.Setenv("OPENPOST_S3_ENDPOINT", "https://r2.example.com")
+	t.Setenv("OPENPOST_S3_REGION", "auto")
+	t.Setenv("OPENPOST_S3_BUCKET", "openpost-media")
+	t.Setenv("OPENPOST_S3_ACCESS_KEY_ID", "access-key")
+	t.Setenv("OPENPOST_S3_SECRET_ACCESS_KEY", "secret-key")
+	t.Setenv("OPENPOST_S3_PUBLIC_BASE_URL", "https://media.openpost.social")
+	t.Setenv("OPENPOST_S3_FORCE_PATH_STYLE", "true")
+
+	cfg := Load()
+
+	require.Equal(t, EditionCloud, cfg.Edition)
+	require.Equal(t, DatabaseDriverPostgres, cfg.DatabaseDriver)
+	require.Equal(t, "postgres://openpost:secret@db.internal:5432/openpost?sslmode=require", cfg.DatabaseDSN())
+	require.Equal(t, StorageDriverS3, cfg.StorageDriver)
+	require.Equal(t, "https://r2.example.com", cfg.S3Endpoint)
+	require.Equal(t, "auto", cfg.S3Region)
+	require.Equal(t, "openpost-media", cfg.S3Bucket)
+	require.Equal(t, "access-key", cfg.S3AccessKeyID)
+	require.Equal(t, "secret-key", cfg.S3SecretAccessKey)
+	require.Equal(t, "https://media.openpost.social", cfg.S3PublicBaseURL)
+	require.True(t, cfg.S3ForcePathStyle)
+}
+
+func TestLoadInvalidProductionPrimitiveEnumsFallback(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://openpost.example.com")
+	t.Setenv("OPENPOST_EDITION", "enterprise")
+	t.Setenv("OPENPOST_DATABASE_DRIVER", "mysql")
+	t.Setenv("OPENPOST_STORAGE_DRIVER", "gcs")
+
+	cfg := Load()
+
+	require.Equal(t, EditionSelfHost, cfg.Edition)
+	require.Equal(t, DatabaseDriverSQLite, cfg.DatabaseDriver)
+	require.Equal(t, StorageDriverLocal, cfg.StorageDriver)
+}
+
+func TestDatabaseDSNFallsBackToDatabasePathForPostgres(t *testing.T) {
+	cfg := &Config{
+		DatabaseDriver: DatabaseDriverPostgres,
+		DatabasePath:   "postgres://legacy/path",
+	}
+
+	require.Equal(t, "postgres://legacy/path", cfg.DatabaseDSN())
+}
+
 // TestOauthRedirectFromFrontendPreferesExplicitEnv pins the contract
 // that an operator-set env var (or its alias) wins over the derived
 // default from FrontendURL. This matters for users who proxy their

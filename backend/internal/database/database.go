@@ -4,15 +4,33 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/openpost/backend/internal/database/migrations"
 	"github.com/openpost/backend/internal/models"
 	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
+	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/driver/sqliteshim"
 )
 
 func InitDB(dsn string) (*bun.DB, error) {
+	return initSQLiteDB(dsn)
+}
+
+func InitDBWithDriver(driver, dsn string) (*bun.DB, error) {
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "", "sqlite":
+		return initSQLiteDB(dsn)
+	case "postgres":
+		return initPostgresDB(dsn)
+	default:
+		return nil, fmt.Errorf("unsupported database driver %q", driver)
+	}
+}
+
+func initSQLiteDB(dsn string) (*bun.DB, error) {
 	// DSN e.g. "file:openpost.db?cache=shared&mode=rwc"
 	sqldb, err := sql.Open(sqliteshim.ShimName, dsn)
 	if err != nil {
@@ -40,6 +58,15 @@ func InitDB(dsn string) (*bun.DB, error) {
 	}
 
 	return db, nil
+}
+
+func initPostgresDB(dsn string) (*bun.DB, error) {
+	if strings.TrimSpace(dsn) == "" {
+		return nil, fmt.Errorf("postgres database dsn is required")
+	}
+
+	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	return bun.NewDB(sqldb, pgdialect.New()), nil
 }
 
 func CreateSchema(db *bun.DB) error {

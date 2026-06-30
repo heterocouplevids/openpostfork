@@ -17,8 +17,11 @@ type MastodonServerConfig struct {
 }
 
 type Config struct {
+	Edition              string
 	Port                 string
+	DatabaseDriver       string
 	DatabasePath         string
+	DatabaseURL          string
 	JWTSecret            string
 	EncryptionKey        string
 	DisableRegistrations bool
@@ -43,11 +46,30 @@ type Config struct {
 	ThreadsClientSecret string
 	ThreadsRedirectURI  string
 
-	MediaPath string
-	MediaURL  string
+	StorageDriver     string
+	MediaPath         string
+	MediaURL          string
+	S3Endpoint        string
+	S3Region          string
+	S3Bucket          string
+	S3AccessKeyID     string
+	S3SecretAccessKey string
+	S3PublicBaseURL   string
+	S3ForcePathStyle  bool
 }
 
 const minSecretLength = 32
+
+const (
+	EditionSelfHost = "selfhost"
+	EditionCloud    = "cloud"
+
+	DatabaseDriverSQLite   = "sqlite"
+	DatabaseDriverPostgres = "postgres"
+
+	StorageDriverLocal = "local"
+	StorageDriverS3    = "s3"
+)
 
 func Load() *Config {
 	// FrontendURL is computed up front so the platform-specific OAuth
@@ -60,8 +82,11 @@ func Load() *Config {
 	frontendURL := strings.TrimRight(getEnvWithFallbacks("OPENPOST_APP_URL", "http://localhost:8080", "OPENPOST_FRONTEND_URL"), "/")
 
 	cfg := &Config{
+		Edition:              getEnvEnum("OPENPOST_EDITION", EditionSelfHost, EditionSelfHost, EditionCloud),
 		Port:                 getEnvWithFallbacks("OPENPOST_PORT", "8080"),
+		DatabaseDriver:       getEnvEnum("OPENPOST_DATABASE_DRIVER", DatabaseDriverSQLite, DatabaseDriverSQLite, DatabaseDriverPostgres),
 		DatabasePath:         getEnvWithFallbacks("OPENPOST_DATABASE_PATH", "file:openpost.db?cache=shared&mode=rwc", "OPENPOST_DB_PATH"),
+		DatabaseURL:          getEnvWithFallbacks("OPENPOST_DATABASE_URL", "", "DATABASE_URL"),
 		JWTSecret:            getEnvWithFallbacks("OPENPOST_JWT_SECRET", "", "JWT_SECRET"),
 		EncryptionKey:        getEnvWithFallbacks("OPENPOST_ENCRYPTION_KEY", "", "ENCRYPTION_KEY"),
 		DisableRegistrations: getEnvBoolWithAliases(false, "OPENPOST_DISABLE_REGISTRATIONS"),
@@ -86,8 +111,16 @@ func Load() *Config {
 		ThreadsClientSecret: getEnvWithFallbacks("THREADS_CLIENT_SECRET", ""),
 		ThreadsRedirectURI:  oauthRedirectFromFrontend("THREADS_REDIRECT_URI", "", frontendURL, "/api/v1/accounts/threads/callback"),
 
-		MediaPath: getEnvDefault("OPENPOST_MEDIA_PATH", "./media"),
-		MediaURL:  getEnvDefault("OPENPOST_MEDIA_URL", "/media"),
+		StorageDriver:     getEnvEnum("OPENPOST_STORAGE_DRIVER", StorageDriverLocal, StorageDriverLocal, StorageDriverS3),
+		MediaPath:         getEnvDefault("OPENPOST_MEDIA_PATH", "./media"),
+		MediaURL:          getEnvDefault("OPENPOST_MEDIA_URL", "/media"),
+		S3Endpoint:        getEnvDefault("OPENPOST_S3_ENDPOINT", ""),
+		S3Region:          getEnvDefault("OPENPOST_S3_REGION", ""),
+		S3Bucket:          getEnvDefault("OPENPOST_S3_BUCKET", ""),
+		S3AccessKeyID:     getEnvDefault("OPENPOST_S3_ACCESS_KEY_ID", ""),
+		S3SecretAccessKey: getEnvDefault("OPENPOST_S3_SECRET_ACCESS_KEY", ""),
+		S3PublicBaseURL:   strings.TrimRight(getEnvDefault("OPENPOST_S3_PUBLIC_BASE_URL", ""), "/"),
+		S3ForcePathStyle:  getEnvBoolWithAliases(false, "OPENPOST_S3_FORCE_PATH_STYLE"),
 	}
 
 	if cfg.PublicURL == "" {
@@ -125,6 +158,13 @@ func Load() *Config {
 	warnOnPlaceholderURL(cfg)
 
 	return cfg
+}
+
+func (c *Config) DatabaseDSN() string {
+	if c.DatabaseDriver == DatabaseDriverPostgres && c.DatabaseURL != "" {
+		return c.DatabaseURL
+	}
+	return c.DatabasePath
 }
 
 // warnOnPlaceholderURL emits a loud startup warning when the operator is
@@ -183,6 +223,22 @@ func getEnvBoolWithAliases(fallback bool, keys ...string) bool {
 		return parsed
 	}
 
+	return fallback
+}
+
+func getEnvEnum(key, fallback string, allowed ...string) string {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+
+	for _, candidate := range allowed {
+		if value == candidate {
+			return value
+		}
+	}
+
+	log.Printf("WARNING: invalid value for %s=%q, using default %q", key, value, fallback)
 	return fallback
 }
 

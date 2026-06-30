@@ -45,9 +45,12 @@ RUN mkdir -p /data/media /data/db && chown -R openpost:openpost /data
 
 USER openpost
 
-ENV OPENPOST_DATABASE_PATH=/data/db/openpost.db
-ENV OPENPOST_MEDIA_PATH=/data/media
 ENV OPENPOST_PORT=8080
+ENV OPENPOST_EDITION=selfhost
+ENV OPENPOST_DATABASE_DRIVER=sqlite
+ENV OPENPOST_DATABASE_PATH=/data/db/openpost.db
+ENV OPENPOST_STORAGE_DRIVER=local
+ENV OPENPOST_MEDIA_PATH=/data/media
 
 EXPOSE 8080
 

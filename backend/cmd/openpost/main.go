@@ -55,7 +55,7 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	db, err := database.InitDB(cfg.DatabasePath)
+	db, err := database.InitDBWithDriver(cfg.DatabaseDriver, cfg.DatabaseDSN())
 	if err != nil {
 		log.Fatal(err)
 	}

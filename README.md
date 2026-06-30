@@ -81,7 +81,7 @@ OpenPost is for people who want the core social media scheduling workflow withou
 - **Reusable media library**: upload once, reuse across posts
 - **Self-hosted**: your data, schedules, and tokens stay on your server
 
-Built with Go, SvelteKit, and SQLite. Runs as a single binary or container with no Redis, no Postgres, and no external queue.
+Built with Go, SvelteKit, and SQLite by default. Runs as a single binary or container with no Redis, no mandatory Postgres, and no external queue.
 
 ## Who is this for?
 
