@@ -16,6 +16,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/entitlements"
+	"github.com/openpost/backend/internal/services/usage"
 	"github.com/uptrace/bun"
 )
 
@@ -26,12 +28,35 @@ const (
 )
 
 type PostHandler struct {
-	db   *bun.DB
-	auth middleware.Authenticator
+	db          *bun.DB
+	auth        middleware.Authenticator
+	entitlement entitlements.Service
+	usage       *usage.Service
 }
 
-func NewPostHandler(db *bun.DB, authenticator middleware.Authenticator) *PostHandler {
-	return &PostHandler{db: db, auth: authenticator}
+func NewPostHandler(db *bun.DB, authenticator middleware.Authenticator, entitlement ...entitlements.Service) *PostHandler {
+	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
+	if len(entitlement) > 0 && entitlement[0] != nil {
+		entitlementService = entitlement[0]
+	}
+	return &PostHandler{
+		db:          db,
+		auth:        authenticator,
+		entitlement: entitlementService,
+		usage:       usage.NewService(db),
+	}
+}
+
+func (h *PostHandler) SetEntitlement(entitlement entitlements.Service) {
+	if entitlement != nil {
+		h.entitlement = entitlement
+	}
+}
+
+func (h *PostHandler) SetUsage(usageService *usage.Service) {
+	if usageService != nil {
+		h.usage = usageService
+	}
 }
 
 type CreatePostInput struct {
@@ -183,6 +208,38 @@ func (h *PostHandler) validateMediaBelongsToWorkspace(ctx context.Context, works
 	return nil
 }
 
+func (h *PostHandler) checkScheduledPostQuota(ctx context.Context, workspaceID string, amount int64, scheduledAt time.Time) error {
+	current, err := h.usage.CurrentMonthly(ctx, workspaceID, entitlements.LimitScheduledPostsMonthly, scheduledAt)
+	if err != nil {
+		return huma.Error500InternalServerError("failed to load scheduled post usage")
+	}
+
+	decision, err := h.entitlement.Check(ctx, entitlements.Request{
+		WorkspaceID: workspaceID,
+		Limit:       entitlements.LimitScheduledPostsMonthly,
+		Current:     current,
+		Amount:      amount,
+	})
+	if err != nil {
+		return huma.Error500InternalServerError("failed to check scheduled post limit")
+	}
+	if !decision.Allowed {
+		reason := decision.Reason
+		if reason == "" {
+			reason = "scheduled post limit exceeded"
+		}
+		return huma.NewError(http.StatusPaymentRequired, reason)
+	}
+	return nil
+}
+
+func (h *PostHandler) recordScheduledPostUsage(ctx context.Context, workspaceID string, amount int64, scheduledAt time.Time) error {
+	if _, err := h.usage.IncrementMonthly(ctx, workspaceID, entitlements.LimitScheduledPostsMonthly, amount, scheduledAt); err != nil {
+		return huma.Error500InternalServerError("failed to record scheduled post usage")
+	}
+	return nil
+}
+
 // applyRandomDelay applies a random delay of ±N minutes to the scheduled time.
 func applyRandomDelay(scheduledAt time.Time, randomDelayMinutes int) time.Time {
 	if randomDelayMinutes <= 0 {
@@ -216,7 +273,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 		Summary:     "Create a new post",
 		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-		Errors:      []int{400},
+		Errors:      []int{400, 402},
 	}, func(ctx context.Context, input *CreatePostInput) (*CreatePostOutput, error) {
 		userID := middleware.GetUserID(ctx)
 		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
@@ -232,6 +289,11 @@ func (h *PostHandler) CreatePost(api huma.API) {
 		status := statusDraft
 		if input.Body.ScheduledAt != nil {
 			status = statusScheduled
+		}
+		if status == statusScheduled {
+			if err := h.checkScheduledPostQuota(ctx, input.Body.WorkspaceID, 1, *input.Body.ScheduledAt); err != nil {
+				return nil, err
+			}
 		}
 
 		post := &models.Post{
@@ -315,6 +377,11 @@ func (h *PostHandler) CreatePost(api huma.API) {
 		})
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to create post")
+		}
+		if post.Status == statusScheduled {
+			if err := h.recordScheduledPostUsage(ctx, input.Body.WorkspaceID, 1, post.ScheduledAt); err != nil {
+				return nil, err
+			}
 		}
 
 		resp := &CreatePostOutput{}
@@ -801,7 +868,7 @@ func (h *PostHandler) CreateThread(api huma.API) {
 		Summary:     "Create a thread of posts",
 		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-		Errors:      []int{400},
+		Errors:      []int{400, 402},
 	}, func(ctx context.Context, input *CreateThreadInput) (*CreateThreadOutput, error) {
 		userID := middleware.GetUserID(ctx)
 		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
@@ -829,6 +896,11 @@ func (h *PostHandler) CreateThread(api huma.API) {
 		status := statusDraft
 		if input.Body.ScheduledAt != nil {
 			status = statusScheduled
+		}
+		if status == statusScheduled {
+			if err := h.checkScheduledPostQuota(ctx, input.Body.WorkspaceID, int64(len(input.Body.Posts)), *input.Body.ScheduledAt); err != nil {
+				return nil, err
+			}
 		}
 
 		posts := make([]*models.Post, 0, len(input.Body.Posts))
@@ -916,6 +988,11 @@ func (h *PostHandler) CreateThread(api huma.API) {
 		})
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to create thread")
+		}
+		if status == statusScheduled {
+			if err := h.recordScheduledPostUsage(ctx, input.Body.WorkspaceID, int64(len(posts)), *input.Body.ScheduledAt); err != nil {
+				return nil, err
+			}
 		}
 
 		postIDs := make([]string, len(posts))
