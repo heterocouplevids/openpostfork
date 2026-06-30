@@ -47,6 +47,15 @@ type MediaHandler struct {
 	usage   *usage.Service
 }
 
+type mediaUploadBytesInput struct {
+	WorkspaceID      string
+	Filename         string
+	DeclaredMimeType string
+	Size             int64
+	Content          []byte
+	AltText          string
+}
+
 func NewMediaHandler(
 	db *bun.DB,
 	storage mediastore.BlobStorage,
@@ -892,10 +901,6 @@ func (h *MediaHandler) batchUploadMedia(c echo.Context) error {
 }
 
 func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.FileHeader, altText string) (map[string]interface{}, error) {
-	if fileHeader.Size > 50*1024*1024 {
-		return nil, errors.New("file size exceeds 50MB limit")
-	}
-
 	file, err := fileHeader.Open()
 	if err != nil {
 		return nil, errors.New("failed to open file")
@@ -907,12 +912,34 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 		return nil, errors.New("failed to read file")
 	}
 
-	hash := sha256.Sum256(content)
+	return h.processUploadBytes(context.Background(), mediaUploadBytesInput{
+		WorkspaceID:      workspaceID,
+		Filename:         fileHeader.Filename,
+		DeclaredMimeType: fileHeader.Header.Get("Content-Type"),
+		Size:             fileHeader.Size,
+		Content:          content,
+		AltText:          altText,
+	})
+}
+
+func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUploadBytesInput) (map[string]interface{}, error) {
+	if input.Size > 50*1024*1024 {
+		return nil, errors.New("file size exceeds 50MB limit")
+	}
+	if input.Size < 0 {
+		return nil, errors.New("file size is invalid")
+	}
+	if int64(len(input.Content)) != input.Size {
+		input.Size = int64(len(input.Content))
+	}
+
+	var err error
+	hash := sha256.Sum256(input.Content)
 	fileHash := hex.EncodeToString(hash[:])
 
-	mimeType := http.DetectContentType(content)
+	mimeType := http.DetectContentType(input.Content)
 	if strings.HasPrefix(mimeType, "application/octet-stream") {
-		mimeType = fileHeader.Header.Get("Content-Type")
+		mimeType = input.DeclaredMimeType
 		if mimeType == "" {
 			mimeType = "application/octet-stream"
 		}
@@ -920,8 +947,8 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 
 	var existing models.MediaAttachment
 	err = h.db.NewSelect().Model(&existing).
-		Where("workspace_id = ? AND file_hash = ?", workspaceID, fileHash).
-		Scan(context.Background())
+		Where("workspace_id = ? AND file_hash = ?", input.WorkspaceID, fileHash).
+		Scan(ctx)
 	if err == nil {
 		return map[string]interface{}{
 			"id":        existing.ID,
@@ -931,39 +958,39 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 			"deduped":   true,
 		}, nil
 	}
-	if err := h.checkUploadQuota(context.Background(), workspaceID, fileHeader.Size); err != nil {
+	if err := h.checkUploadQuota(ctx, input.WorkspaceID, input.Size); err != nil {
 		return nil, err
 	}
 
 	mediaID := uuid.New().String()
-	ext := filepath.Ext(fileHeader.Filename)
+	ext := filepath.Ext(input.Filename)
 	filename := mediaID + ext
 
-	savedPath, err := h.storage.Save(filename, bytes.NewReader(content))
+	savedPath, err := h.storage.Save(filename, bytes.NewReader(input.Content))
 	if err != nil {
 		return nil, errors.New("failed to save media")
 	}
 
 	media := &models.MediaAttachment{
 		ID:               mediaID,
-		WorkspaceID:      workspaceID,
+		WorkspaceID:      input.WorkspaceID,
 		FilePath:         savedPath,
 		StorageType:      h.storage.Driver(),
 		MimeType:         mimeType,
 		ProcessingStatus: "ready",
-		Size:             fileHeader.Size,
-		OriginalFilename: fileHeader.Filename,
+		Size:             input.Size,
+		OriginalFilename: input.Filename,
 		FileHash:         fileHash,
-		AltText:          altText,
+		AltText:          input.AltText,
 	}
 
 	width, height := 0, 0
 	var thumbnails Thumbnails
 
 	if strings.HasPrefix(mimeType, "image/") {
-		width, height, thumbnails, err = h.processImage(content, mediaID, mimeType)
+		width, height, thumbnails, err = h.processImage(input.Content, mediaID, mimeType)
 		if err != nil {
-			width, height = h.getImageDimensions(bytes.NewReader(content), mimeType)
+			width, height = h.getImageDimensions(bytes.NewReader(input.Content), mimeType)
 		}
 		media.Width = width
 		media.Height = height
@@ -972,10 +999,10 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 		}
 	}
 
-	if _, err := h.db.NewInsert().Model(media).Exec(context.Background()); err != nil {
+	if _, err := h.db.NewInsert().Model(media).Exec(ctx); err != nil {
 		return nil, errors.New("failed to save media record")
 	}
-	if _, err := h.usage.IncrementMonthly(context.Background(), workspaceID, entitlements.LimitMediaBytesUploadedMonthly, fileHeader.Size, time.Now().UTC()); err != nil {
+	if _, err := h.usage.IncrementMonthly(ctx, input.WorkspaceID, entitlements.LimitMediaBytesUploadedMonthly, input.Size, time.Now().UTC()); err != nil {
 		return nil, errors.New("failed to record media upload usage")
 	}
 
@@ -983,7 +1010,7 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 		"id":        mediaID,
 		"mime_type": mimeType,
 		"url":       "/media/" + mediaID,
-		"size":      fileHeader.Size,
+		"size":      input.Size,
 		"deduped":   false,
 	}, nil
 }

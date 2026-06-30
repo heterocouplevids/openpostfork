@@ -4,21 +4,25 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/entitlements"
+	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 )
 
 type mcpTestServer struct {
-	echo *echo.Echo
-	db   *bun.DB
+	echo    *echo.Echo
+	db      *bun.DB
+	handler *MCPHandler
 }
 
 func newMCPTestServer(t *testing.T) *mcpTestServer {
@@ -38,6 +42,7 @@ func newMCPTestServerWithEntitlement(t *testing.T, entitlement entitlements.Serv
 		(*models.Job)(nil),
 		(*models.UsageCounter)(nil),
 		(*models.PostingSchedule)(nil),
+		(*models.MediaAttachment)(nil),
 	)
 	ctx := context.Background()
 	workspaces := []models.Workspace{
@@ -95,8 +100,10 @@ func newMCPTestServerWithEntitlement(t *testing.T, entitlement entitlements.Serv
 	require.NoError(t, err)
 
 	e := echo.New()
-	NewMCPHandler(db, testAuthenticator{}, entitlement).RegisterRoutes(e)
-	return &mcpTestServer{echo: e, db: db}
+	handler := NewMCPHandler(db, testAuthenticator{}, entitlement)
+	handler.SetMediaStorage(mediastore.NewLocalStorage(t.TempDir(), "/media"))
+	handler.RegisterRoutes(e)
+	return &mcpTestServer{echo: e, db: db, handler: handler}
 }
 
 func (s *mcpTestServer) request(t *testing.T, token string, body any) *httptest.ResponseRecorder {
@@ -112,6 +119,12 @@ func (s *mcpTestServer) request(t *testing.T, token string, body any) *httptest.
 	rec := httptest.NewRecorder()
 	s.echo.ServeHTTP(rec, req)
 	return rec
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 func TestMCPRejectsMissingAuthorization(t *testing.T) {
@@ -142,7 +155,7 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 7)
+	require.Len(t, tools, 8)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
 	require.Equal(t, "list_accounts", tools[1].(map[string]any)["name"])
 	require.Equal(t, "create_draft", tools[2].(map[string]any)["name"])
@@ -150,6 +163,7 @@ func TestMCPToolsList(t *testing.T) {
 	require.Equal(t, "get_post_status", tools[4].(map[string]any)["name"])
 	require.Equal(t, "cancel_post", tools[5].(map[string]any)["name"])
 	require.Equal(t, "suggest_next_slot", tools[6].(map[string]any)["name"])
+	require.Equal(t, "upload_media_from_url", tools[7].(map[string]any)["name"])
 }
 
 func TestMCPCallListWorkspaces(t *testing.T) {
@@ -588,4 +602,86 @@ func TestMCPCallSuggestNextSlotSkipsOccupiedSlot(t *testing.T) {
 	slot := suggestion["slot"].(map[string]any)
 	require.Equal(t, "slot-17", slot["id"])
 	require.Equal(t, "Evening", slot["label"])
+}
+
+func TestMCPCallUploadMediaFromURLStoresMedia(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	srv.handler.SetMediaURLValidator(func(_ context.Context, remote *url.URL) error {
+		require.Equal(t, "https", remote.Scheme)
+		require.Equal(t, "cdn.example", remote.Hostname())
+		return nil
+	})
+	srv.handler.SetMediaURLHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		require.Equal(t, "https://cdn.example/launch.txt", req.URL.String())
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/plain"}},
+			Body:       io.NopCloser(bytes.NewBufferString("launch media")),
+			Request:    req,
+		}, nil
+	})})
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-upload-url",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "upload_media_from_url",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"url":          "https://cdn.example/launch.txt",
+				"alt_text":     "Launch text asset",
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	structured := result["structuredContent"].(map[string]any)
+	media := structured["media"].(map[string]any)
+	require.NotEmpty(t, media["id"])
+	require.Equal(t, "text/plain; charset=utf-8", media["mime_type"])
+	require.Equal(t, "/media/"+media["id"].(string), media["url"])
+	require.Equal(t, "launch.txt", media["filename"])
+	require.Equal(t, "Launch text asset", media["alt_text"])
+	require.Equal(t, "https://cdn.example/launch.txt", media["source_url"])
+	require.Equal(t, false, media["deduped"])
+
+	var stored models.MediaAttachment
+	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("id = ?", media["id"]).Scan(context.Background()))
+	require.Equal(t, "ws-1", stored.WorkspaceID)
+	require.Equal(t, "launch.txt", stored.OriginalFilename)
+	require.Equal(t, "Launch text asset", stored.AltText)
+	require.Equal(t, int64(len("launch media")), stored.Size)
+}
+
+func TestMCPCallUploadMediaFromURLRejectsLocalhost(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-upload-localhost",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "upload_media_from_url",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"url":          "http://127.0.0.1/private.png",
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	rpcErr := out["error"].(map[string]any)
+	require.Contains(t, rpcErr["message"], "private or local address")
+	var count int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("media_attachments").Scan(context.Background(), &count))
+	require.Equal(t, 0, count)
 }

@@ -30,15 +30,13 @@ JSON-RPC frames to the remote `/mcp` endpoint.
 - `get_post_status`: returns the post status, scheduled run time, and per-destination status.
 - `cancel_post`: cancels a queued scheduled post and returns it to drafts.
 - `suggest_next_slot`: returns the next free configured posting slot for a workspace.
+- `upload_media_from_url`: fetches a public HTTP(S) media URL and stores it in a workspace.
 
 ## Current scope
 
 - Uses the same Bearer authentication path as the CLI and API tokens.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
-- Validates workspace membership and account ownership before returning, creating, scheduling, or canceling data.
-- Enforces the same scheduled-post entitlement and usage accounting as the web/API post creation path.
-- Returns structured content so assistants can inspect workspace, account, post, destination, and suggested slot IDs without parsing prose.
-
-## Next tools
-
-- `upload_media_from_url`
+- Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
+- Rejects media URL fetches that resolve to private, loopback, link-local, multicast, or otherwise local addresses.
+- Enforces the same scheduled-post and media-upload entitlement and usage accounting as the web/API paths.
+- Returns structured content so assistants can inspect workspace, account, post, destination, media, and suggested slot IDs without parsing prose.

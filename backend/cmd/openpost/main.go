@@ -230,6 +230,7 @@ func main() {
 	cliAuthHandler.RegisterRoutes(api)
 
 	mcpHandler := handlers.NewMCPHandler(db, authenticator, entitlementService)
+	mcpHandler.SetMediaStorage(storage)
 	mcpHandler.RegisterRoutes(e)
 
 	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator, entitlementService)

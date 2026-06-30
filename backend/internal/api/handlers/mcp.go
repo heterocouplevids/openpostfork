@@ -5,7 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -14,6 +18,7 @@ import (
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/entitlements"
+	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/usage"
 	"github.com/uptrace/bun"
 )
@@ -27,13 +32,18 @@ const (
 	mcpToolGetPost      = "get_post_status"
 	mcpToolCancelPost   = "cancel_post"
 	mcpToolSuggestSlot  = "suggest_next_slot"
+	mcpToolUploadURL    = "upload_media_from_url"
+	maxRemoteMediaBytes = 50 * 1024 * 1024
 )
 
 type MCPHandler struct {
-	db          *bun.DB
-	auth        middleware.Authenticator
-	entitlement entitlements.Service
-	usage       *usage.Service
+	db                *bun.DB
+	auth              middleware.Authenticator
+	entitlement       entitlements.Service
+	usage             *usage.Service
+	mediaStorage      mediastore.BlobStorage
+	mediaURLHTTP      *http.Client
+	mediaURLValidator func(context.Context, *url.URL) error
 }
 
 func NewMCPHandler(db *bun.DB, authenticator middleware.Authenticator, entitlement ...entitlements.Service) *MCPHandler {
@@ -53,6 +63,18 @@ func (h *MCPHandler) SetUsage(usageService *usage.Service) {
 	if usageService != nil {
 		h.usage = usageService
 	}
+}
+
+func (h *MCPHandler) SetMediaStorage(storage mediastore.BlobStorage) {
+	h.mediaStorage = storage
+}
+
+func (h *MCPHandler) SetMediaURLHTTPClient(client *http.Client) {
+	h.mediaURLHTTP = client
+}
+
+func (h *MCPHandler) SetMediaURLValidator(validator func(context.Context, *url.URL) error) {
+	h.mediaURLValidator = validator
 }
 
 func (h *MCPHandler) RegisterRoutes(e *echo.Echo) {
@@ -145,6 +167,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 			mcpGetPostStatusTool(),
 			mcpCancelPostTool(),
 			mcpSuggestNextSlotTool(),
+			mcpUploadMediaFromURLTool(),
 		}}, nil
 	case "tools/call":
 		return h.callTool(ctx, principal, req.Params)
@@ -321,6 +344,38 @@ func mcpSuggestNextSlotTool() map[string]any {
 	}
 }
 
+func mcpUploadMediaFromURLTool() map[string]any {
+	return map[string]any{
+		"name":        mcpToolUploadURL,
+		"title":       "Upload media from URL",
+		"description": "Fetch a public media URL and store it in an OpenPost workspace.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Workspace ID returned by list_workspaces.",
+				},
+				"url": map[string]any{
+					"type":        "string",
+					"format":      "uri",
+					"description": "Public http(s) URL to fetch.",
+				},
+				"filename": map[string]any{
+					"type":        "string",
+					"description": "Optional filename to store for display and extension detection.",
+				},
+				"alt_text": map[string]any{
+					"type":        "string",
+					"description": "Optional accessible alt text for the media.",
+				},
+			},
+			"required":             []string{"workspace_id", "url"},
+			"additionalProperties": false,
+		},
+	}
+}
+
 func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Principal, raw json.RawMessage) (any, *mcpError) {
 	var params struct {
 		Name      string         `json:"name"`
@@ -344,6 +399,8 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 		return h.cancelPost(ctx, principal.UserID, params.Arguments)
 	case mcpToolSuggestSlot:
 		return h.suggestNextSlot(ctx, principal.UserID, params.Arguments)
+	case mcpToolUploadURL:
+		return h.uploadMediaFromURL(ctx, principal.UserID, params.Arguments)
 	default:
 		return nil, &mcpError{Code: -32602, Message: "unknown tool"}
 	}
@@ -823,6 +880,170 @@ func (h *MCPHandler) suggestNextSlot(ctx context.Context, userID string, args ma
 	return mcpSlotToolResult(suggestion), nil
 }
 
+type mcpMedia struct {
+	ID        string `json:"id"`
+	MimeType  string `json:"mime_type"`
+	URL       string `json:"url"`
+	Size      int64  `json:"size"`
+	Deduped   bool   `json:"deduped"`
+	Filename  string `json:"filename"`
+	AltText   string `json:"alt_text,omitempty"`
+	SourceURL string `json:"source_url"`
+}
+
+func (h *MCPHandler) uploadMediaFromURL(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	var input struct {
+		WorkspaceID string `json:"workspace_id"`
+		URL         string `json:"url"`
+		Filename    string `json:"filename"`
+		AltText     string `json:"alt_text"`
+	}
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return nil, &mcpError{Code: -32602, Message: "invalid upload_media_from_url arguments"}
+	}
+	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if h.mediaStorage == nil {
+		return nil, &mcpError{Code: -32603, Message: "media storage is not configured"}
+	}
+
+	remote, filename, declaredMimeType, content, rpcErr := h.fetchRemoteMedia(ctx, input.URL, input.Filename)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	mediaHandler := &MediaHandler{
+		db:      h.db,
+		storage: h.mediaStorage,
+		quota:   h.entitlement,
+		usage:   h.usage,
+	}
+	result, err := mediaHandler.processUploadBytes(ctx, mediaUploadBytesInput{
+		WorkspaceID:      input.WorkspaceID,
+		Filename:         filename,
+		DeclaredMimeType: declaredMimeType,
+		Size:             int64(len(content)),
+		Content:          content,
+		AltText:          input.AltText,
+	})
+	if err != nil {
+		return nil, &mcpError{Code: -32602, Message: err.Error()}
+	}
+
+	media := mcpMedia{
+		ID:        stringFromMap(result, "id"),
+		MimeType:  stringFromMap(result, "mime_type"),
+		URL:       stringFromMap(result, "url"),
+		Size:      int64FromMap(result, "size"),
+		Deduped:   boolFromMap(result, "deduped"),
+		Filename:  filename,
+		AltText:   input.AltText,
+		SourceURL: remote.String(),
+	}
+	return map[string]any{
+		"content": []mcpContent{{
+			Type: "text",
+			Text: "Media uploaded: " + media.ID,
+		}},
+		"structuredContent": map[string]any{
+			"media": media,
+		},
+	}, nil
+}
+
+func (h *MCPHandler) fetchRemoteMedia(ctx context.Context, rawURL, requestedFilename string) (*url.URL, string, string, []byte, *mcpError) {
+	remote, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || remote == nil || remote.Host == "" {
+		return nil, "", "", nil, &mcpError{Code: -32602, Message: "url must be an absolute http(s) URL"}
+	}
+	if rpcErr := h.validateMediaURL(ctx, remote); rpcErr != nil {
+		return nil, "", "", nil, rpcErr
+	}
+
+	client := h.mediaURLHTTP
+	if client == nil {
+		client = &http.Client{
+			Timeout: 30 * time.Second,
+			CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+				if err := h.defaultValidateMediaURL(req.Context(), req.URL); err != nil {
+					return err
+				}
+				return nil
+			},
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, remote.String(), nil)
+	if err != nil {
+		return nil, "", "", nil, &mcpError{Code: -32602, Message: "invalid url"}
+	}
+	req.Header.Set("User-Agent", "openpost-mcp-media/0.1.0")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", "", nil, &mcpError{Code: -32602, Message: "failed to fetch media url"}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", "", nil, &mcpError{Code: -32602, Message: fmt.Sprintf("media url returned HTTP %d", resp.StatusCode)}
+	}
+	finalURL := resp.Request.URL
+	if rpcErr := h.validateMediaURL(ctx, finalURL); rpcErr != nil {
+		return nil, "", "", nil, rpcErr
+	}
+	content, err := io.ReadAll(io.LimitReader(resp.Body, maxRemoteMediaBytes+1))
+	if err != nil {
+		return nil, "", "", nil, &mcpError{Code: -32603, Message: "failed to read remote media"}
+	}
+	if len(content) == 0 {
+		return nil, "", "", nil, &mcpError{Code: -32602, Message: "remote media is empty"}
+	}
+	if len(content) > maxRemoteMediaBytes {
+		return nil, "", "", nil, &mcpError{Code: -32602, Message: "file size exceeds 50MB limit"}
+	}
+
+	filename := cleanRemoteMediaFilename(requestedFilename)
+	if filename == "" {
+		filename = cleanRemoteMediaFilename(path.Base(finalURL.Path))
+	}
+	if filename == "" || filename == "." || filename == "/" {
+		filename = "remote-media"
+	}
+	return finalURL, filename, resp.Header.Get("Content-Type"), content, nil
+}
+
+func (h *MCPHandler) validateMediaURL(ctx context.Context, remote *url.URL) *mcpError {
+	validator := h.mediaURLValidator
+	if validator == nil {
+		validator = h.defaultValidateMediaURL
+	}
+	if err := validator(ctx, remote); err != nil {
+		return &mcpError{Code: -32602, Message: err.Error()}
+	}
+	return nil
+}
+
+func (h *MCPHandler) defaultValidateMediaURL(ctx context.Context, remote *url.URL) error {
+	if remote == nil || remote.Hostname() == "" {
+		return fmt.Errorf("url must be absolute")
+	}
+	if remote.Scheme != "http" && remote.Scheme != "https" {
+		return fmt.Errorf("url scheme must be http or https")
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, remote.Hostname())
+	if err != nil {
+		return fmt.Errorf("failed to resolve url host")
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("url host did not resolve")
+	}
+	for _, addr := range ips {
+		ip := addr.IP
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
+			return fmt.Errorf("url host resolves to a private or local address")
+		}
+	}
+	return nil
+}
+
 func (h *MCPHandler) accessibleMCPPost(ctx context.Context, userID string, args map[string]any) (*models.Post, *mcpError) {
 	var input struct {
 		WorkspaceID string `json:"workspace_id"`
@@ -1006,6 +1227,44 @@ func normalizeMCPIDs(ids []string, field string) ([]string, *mcpError) {
 		unique = append(unique, id)
 	}
 	return unique, nil
+}
+
+func cleanRemoteMediaFilename(filename string) string {
+	filename = strings.TrimSpace(filename)
+	filename = strings.Trim(filename, `/\`)
+	if filename == "" || filename == "." {
+		return ""
+	}
+	filename = path.Base(filename)
+	filename = strings.ReplaceAll(filename, "\x00", "")
+	return filename
+}
+
+func stringFromMap(values map[string]interface{}, key string) string {
+	if value, ok := values[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+func boolFromMap(values map[string]interface{}, key string) bool {
+	if value, ok := values[key].(bool); ok {
+		return value
+	}
+	return false
+}
+
+func int64FromMap(values map[string]interface{}, key string) int64 {
+	switch value := values[key].(type) {
+	case int64:
+		return value
+	case int:
+		return int64(value)
+	case float64:
+		return int64(value)
+	default:
+		return 0
+	}
 }
 
 func newUUID() string {
