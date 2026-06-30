@@ -19,6 +19,7 @@ import (
 	account_saver "github.com/openpost/backend/internal/services/account_saver"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/entitlements"
+	"github.com/openpost/backend/internal/services/mastodonapps"
 	"github.com/openpost/backend/internal/services/oauthstate"
 	"github.com/uptrace/bun"
 )
@@ -32,6 +33,7 @@ type OAuthHandler struct {
 	auth                         middleware.Authenticator
 	disableLinkedInThreadReplies bool
 	accountSaver                 *account_saver.AccountSaver
+	mastodonApps                 *mastodonapps.Service
 	oauthStates                  *oauthstate.Store
 	// frontendURL is the absolute base URL the SPA is served from
 	// (e.g. "https://openpost.example.com"). OAuth callback redirects go
@@ -79,6 +81,10 @@ func (h *OAuthHandler) SetEntitlement(entitlement entitlements.Service) {
 	}
 }
 
+func (h *OAuthHandler) SetMastodonAppService(service *mastodonapps.Service) {
+	h.mastodonApps = service
+}
+
 type MastodonServerInfo struct {
 	Name        string `json:"name" doc:"Server configuration name"`
 	InstanceURL string `json:"instance_url" doc:"Mastodon instance URL"`
@@ -105,6 +111,7 @@ type GetAuthURLInput struct {
 	Platform    string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads)"`
 	WorkspaceID string `query:"workspace_id" required:"true" doc:"Workspace ID to link account to"`
 	ServerName  string `query:"server_name" doc:"Mastodon server name from config (required for mastodon)"`
+	InstanceURL string `query:"instance_url" doc:"Mastodon instance URL to dynamically register"`
 }
 
 type GetAuthURLOutput struct {
@@ -128,6 +135,7 @@ type ExchangeCodeInput struct {
 	Body struct {
 		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
 		ServerName  string `json:"server_name" doc:"Mastodon server name from config"`
+		InstanceURL string `json:"instance_url" doc:"Mastodon instance URL to dynamically register"`
 		Code        string `json:"code" doc:"Authorization code from OAuth flow"`
 	}
 }
@@ -192,6 +200,58 @@ func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapte
 	return adapter, nil
 }
 
+func (h *OAuthHandler) getMastodonProvider(ctx context.Context, serverName, instanceURL string) (platform.Adapter, string, error) {
+	if strings.TrimSpace(instanceURL) != "" {
+		return h.getDynamicMastodonProvider(ctx, instanceURL)
+	}
+	adapter, err := h.getProvider(mastodonProvider, serverName)
+	if err == nil {
+		return adapter, serverName, nil
+	}
+	if h.mastodonApps != nil && strings.Contains(serverName, "://") {
+		return h.getDynamicMastodonProvider(ctx, serverName)
+	}
+	return nil, "", err
+}
+
+func (h *OAuthHandler) getDynamicMastodonProvider(ctx context.Context, instanceURL string) (platform.Adapter, string, error) {
+	if h.mastodonApps == nil {
+		return nil, "", fmt.Errorf("dynamic mastodon instance registration is not configured")
+	}
+	adapter, canonicalURL, err := h.mastodonApps.AdapterForInstance(ctx, instanceURL)
+	if err != nil {
+		return nil, "", err
+	}
+	if h.providers == nil {
+		h.providers = map[string]platform.Adapter{}
+	}
+	h.providers["mastodon:"+canonicalURL] = adapter
+	return adapter, canonicalURL, nil
+}
+
+func (h *OAuthHandler) isDynamicMastodonConfigured() bool {
+	return h.mastodonApps != nil
+}
+
+func (h *OAuthHandler) dynamicMastodonInfo() ProviderInfo {
+	return ProviderInfo{
+		Platform:    mastodonProvider,
+		DisplayName: "Mastodon",
+		AuthMode:    "oauth_oob",
+		Configured:  true,
+		Name:        "Custom instance",
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func (h *OAuthHandler) ListProviders(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-account-providers",
@@ -222,6 +282,9 @@ func (h *OAuthHandler) providerAvailability() []ProviderInfo {
 func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
 	servers := h.configuredMastodonServers()
 	if len(servers) == 0 {
+		if h.isDynamicMastodonConfigured() {
+			return []ProviderInfo{h.dynamicMastodonInfo()}
+		}
 		return []ProviderInfo{{
 			Platform:    mastodonProvider,
 			DisplayName: "Mastodon",
@@ -230,7 +293,10 @@ func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
 		}}
 	}
 
-	providers := make([]ProviderInfo, 0, len(servers))
+	providers := make([]ProviderInfo, 0, len(servers)+1)
+	if h.isDynamicMastodonConfigured() {
+		providers = append(providers, h.dynamicMastodonInfo())
+	}
 	for _, server := range servers {
 		providers = append(providers, ProviderInfo{
 			Platform:    mastodonProvider,
@@ -306,15 +372,21 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 			return nil, err
 		}
 
-		if input.Platform == mastodonProvider && input.ServerName == "" {
-			return nil, huma.Error400BadRequest("server_name required for mastodon")
+		if input.Platform == mastodonProvider && input.ServerName == "" && input.InstanceURL == "" {
+			return nil, huma.Error400BadRequest("server_name or instance_url required for mastodon")
 		}
 
 		var (
-			adapter platform.Adapter
-			err     error
+			adapter            platform.Adapter
+			serverNameForState string
+			err                error
 		)
-		if input.Platform != mastodonProvider || input.ServerName != "" {
+		if input.Platform == mastodonProvider {
+			adapter, serverNameForState, err = h.getMastodonProvider(ctx, input.ServerName, input.InstanceURL)
+			if err != nil {
+				return nil, huma.Error400BadRequest(err.Error())
+			}
+		} else {
 			adapter, err = h.getProvider(input.Platform, input.ServerName)
 			if err != nil {
 				return nil, huma.Error400BadRequest(err.Error())
@@ -340,7 +412,7 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 			UserID:      userID,
 			WorkspaceID: input.WorkspaceID,
 			Platform:    input.Platform,
-			ServerName:  input.ServerName,
+			ServerName:  firstNonEmpty(serverNameForState, input.ServerName),
 		})
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to create oauth state")
@@ -420,9 +492,16 @@ func (h *OAuthHandler) Callback(api huma.API) {
 				input.ServerName = statePayload.ServerName
 			}
 
-			adapter, err = h.getProvider(input.Platform, input.ServerName)
-			if err != nil {
-				return nil, huma.Error400BadRequest(err.Error())
+			if input.Platform == mastodonProvider {
+				adapter, _, err = h.getMastodonProvider(ctx, input.ServerName, "")
+				if err != nil {
+					return nil, huma.Error400BadRequest(err.Error())
+				}
+			} else {
+				adapter, err = h.getProvider(input.Platform, input.ServerName)
+				if err != nil {
+					return nil, huma.Error400BadRequest(err.Error())
+				}
 			}
 		}
 
@@ -518,7 +597,7 @@ func (h *OAuthHandler) ExchangeCode(api huma.API) {
 			return nil, err
 		}
 
-		adapter, err := h.getProvider(mastodonProvider, input.Body.ServerName)
+		adapter, _, err := h.getMastodonProvider(ctx, input.Body.ServerName, input.Body.InstanceURL)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}

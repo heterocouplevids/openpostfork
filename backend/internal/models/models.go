@@ -169,6 +169,24 @@ type MCPToolCall struct {
 	CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+type MastodonInstance struct {
+	bun.BaseModel `bun:"table:mastodon_instances"`
+
+	ID                 string    `bun:",pk" json:"id"`
+	InstanceURL        string    `bun:",unique,notnull" json:"instance_url"`
+	Host               string    `bun:",notnull" json:"host"`
+	ClientID           string    `bun:",notnull" json:"client_id"`
+	ClientSecretEnc    []byte    `bun:"client_secret_encrypted,notnull" json:"-"`
+	RedirectURI        string    `bun:",notnull" json:"redirect_uri"`
+	Scopes             string    `bun:",notnull,default:'read write'" json:"scopes"`
+	RegistrationStatus string    `bun:",notnull,default:'registered'" json:"registration_status"`
+	LastVerifiedAt     time.Time `bun:",nullzero" json:"last_verified_at"`
+	BlockedAt          time.Time `bun:",nullzero" json:"blocked_at"`
+	BlockReason        string    `json:"block_reason"`
+	CreatedAt          time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt          time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
 type SocialAccount struct {
 	bun.BaseModel `bun:"table:social_accounts"`
 

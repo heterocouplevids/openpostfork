@@ -30,6 +30,7 @@ import (
 	cliauth "github.com/openpost/backend/internal/services/cli_auth"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/entitlements"
+	"github.com/openpost/backend/internal/services/mastodonapps"
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/mfa"
@@ -241,6 +242,10 @@ func main() {
 
 	oauthHandler := handlers.NewOAuthHandler(db, tokenEncryptor, providers, authenticator, cfg.DisableLinkedInThreadReplies, cfg.FrontendURL)
 	oauthHandler.SetEntitlement(entitlementService)
+	oauthHandler.SetMastodonAppService(mastodonapps.NewService(db, tokenEncryptor, mastodonapps.Options{
+		RedirectURI: cfg.MastodonRedirectURI,
+		Website:     cfg.PublicURL,
+	}))
 	oauthHandler.ListProviders(api)
 	oauthHandler.ListMastodonServers(api)
 	oauthHandler.GetAuthURL(api)

@@ -12,6 +12,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/mastodonapps"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,4 +93,23 @@ func TestListProvidersIncludesUnavailableMastodonPlaceholder(t *testing.T) {
 
 	require.Len(t, out, 5)
 	require.Equal(t, ProviderInfo{Platform: "mastodon", DisplayName: "Mastodon", AuthMode: "oauth_oob", Configured: false}, out[2])
+}
+
+func TestListProvidersReportsDynamicMastodonAvailable(t *testing.T) {
+	t.Parallel()
+
+	handler := &OAuthHandler{
+		providers:    map[string]platform.Adapter{},
+		mastodonApps: mastodonapps.NewService(nil, nil, mastodonapps.Options{}),
+	}
+	out := handler.providerAvailability()
+
+	require.Len(t, out, 5)
+	require.Equal(t, ProviderInfo{
+		Platform:    "mastodon",
+		DisplayName: "Mastodon",
+		AuthMode:    "oauth_oob",
+		Configured:  true,
+		Name:        "Custom instance",
+	}, out[2])
 }

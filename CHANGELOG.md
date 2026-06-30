@@ -38,6 +38,7 @@ All notable changes to this project are documented in this file.
 - Added an authenticated account-provider discovery endpoint so clients can distinguish configured provider apps from unavailable providers.
 - Added provider-discovery rendering on the Accounts page, including unavailable states for provider apps that still need operator configuration.
 - Added MCP `list_scheduled_posts` so assistant clients can inspect the upcoming publishing queue before scheduling or canceling posts.
+- Added DB-backed dynamic Mastodon app registration so hosted and self-hosted deployments can connect user-supplied Mastodon instances without preconfigured server entries.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

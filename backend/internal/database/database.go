@@ -79,6 +79,7 @@ func CreateSchema(db *bun.DB) error {
 		(*models.BillingSubscription)(nil),
 		(*models.BillingWebhookEvent)(nil),
 		(*models.MCPToolCall)(nil),
+		(*models.MastodonInstance)(nil),
 		(*models.SocialAccount)(nil),
 		(*models.UserPasskey)(nil),
 		(*models.AuthChallenge)(nil),
