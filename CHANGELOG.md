@@ -78,6 +78,7 @@ All notable changes to this project are documented in this file.
 - Moved the JavaScript workspace to pnpm workspaces with Turborepo orchestration across the web app, docs site, and marketing site.
 
 ### Fixed
+- Enforced cloud-mode runtime validation so hosted deployments must boot with Postgres and S3-compatible media storage instead of local SQLite/filesystem defaults.
 - Made app Playwright E2E runs start a freshly built Go server by default instead of silently reusing stale local servers.
 - Removed duplicate Huma route registration from the Go binary startup path so app E2E runs and production boot no longer panic on repeated operation IDs.
 - Wrapped the docs API reference OpenAPI renderer in client-only rendering so VitePress builds no longer emit a nonfatal SSR TypeError.

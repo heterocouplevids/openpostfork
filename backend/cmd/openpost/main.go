@@ -48,6 +48,9 @@ func main() {
 
 	cfg := config.Load()
 	config.Init()
+	if err := cfg.ValidateRuntime(); err != nil {
+		log.Fatal(err)
+	}
 
 	e := echo.New()
 	e.Use(middleware.RequestLogger())

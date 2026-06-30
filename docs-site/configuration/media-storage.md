@@ -1,6 +1,6 @@
 # Media Storage
 
-OpenPost stores media through its `BlobStorage` abstraction. Local filesystem storage is the default; S3-compatible storage is the cloud-ready driver path.
+OpenPost stores media through its `BlobStorage` abstraction. Local filesystem storage is the self-hosted default; S3-compatible storage is the cloud-ready driver path.
 
 ## Key settings
 
@@ -37,6 +37,19 @@ OPENPOST_S3_SECRET_ACCESS_KEY=...
 OPENPOST_S3_PUBLIC_BASE_URL=https://media.openpost.example
 OPENPOST_S3_FORCE_PATH_STYLE=false
 ```
+
+## Cloud mode
+
+When `OPENPOST_EDITION=cloud`, OpenPost refuses to start unless:
+
+- `OPENPOST_STORAGE_DRIVER=s3`
+- `OPENPOST_S3_REGION` is set
+- `OPENPOST_S3_BUCKET` is set
+- `OPENPOST_S3_ACCESS_KEY_ID` is set
+- `OPENPOST_S3_SECRET_ACCESS_KEY` is set
+- `OPENPOST_S3_PUBLIC_BASE_URL` is set
+
+`OPENPOST_S3_PUBLIC_BASE_URL` is required in cloud mode because provider APIs need stable, publicly reachable media URLs.
 
 The S3-compatible storage driver supports server-side uploads and direct browser-to-S3 upload sessions.
 

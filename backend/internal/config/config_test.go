@@ -50,6 +50,76 @@ func TestLoadCloudPostgresAndS3Primitives(t *testing.T) {
 	require.True(t, cfg.S3ForcePathStyle)
 }
 
+func TestValidateRuntimeAllowsSelfHostedLocalDefaults(t *testing.T) {
+	cfg := &Config{
+		Edition:        EditionSelfHost,
+		DatabaseDriver: DatabaseDriverSQLite,
+		DatabasePath:   "file:openpost.db?cache=shared&mode=rwc",
+		StorageDriver:  StorageDriverLocal,
+	}
+
+	require.NoError(t, cfg.ValidateRuntime())
+}
+
+func TestValidateRuntimeAllowsCloudPostgresAndS3(t *testing.T) {
+	cfg := validCloudRuntimeConfig()
+
+	require.NoError(t, cfg.ValidateRuntime())
+}
+
+func TestValidateRuntimeRejectsCloudLocalDefaults(t *testing.T) {
+	cfg := &Config{
+		Edition:        EditionCloud,
+		DatabaseDriver: DatabaseDriverSQLite,
+		DatabasePath:   "file:openpost.db?cache=shared&mode=rwc",
+		StorageDriver:  StorageDriverLocal,
+	}
+
+	err := cfg.ValidateRuntime()
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, "OPENPOST_EDITION=cloud")
+	require.ErrorContains(t, err, "OPENPOST_DATABASE_DRIVER=postgres")
+	require.ErrorContains(t, err, "OPENPOST_DATABASE_URL")
+	require.ErrorContains(t, err, "OPENPOST_STORAGE_DRIVER=s3")
+}
+
+func TestValidateRuntimeRejectsCloudMissingS3Primitives(t *testing.T) {
+	cfg := validCloudRuntimeConfig()
+	cfg.S3Region = ""
+	cfg.S3Bucket = ""
+	cfg.S3AccessKeyID = ""
+	cfg.S3SecretAccessKey = ""
+	cfg.S3PublicBaseURL = ""
+
+	err := cfg.ValidateRuntime()
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, "OPENPOST_S3_REGION")
+	require.ErrorContains(t, err, "OPENPOST_S3_BUCKET")
+	require.ErrorContains(t, err, "OPENPOST_S3_ACCESS_KEY_ID")
+	require.ErrorContains(t, err, "OPENPOST_S3_SECRET_ACCESS_KEY")
+	require.ErrorContains(t, err, "OPENPOST_S3_PUBLIC_BASE_URL")
+}
+
+func validCloudRuntimeConfig() *Config {
+	return &Config{
+		Edition:               EditionCloud,
+		DatabaseDriver:        DatabaseDriverPostgres,
+		DatabaseURL:           "postgres://openpost:secret@db.internal:5432/openpost?sslmode=require",
+		StorageDriver:         StorageDriverS3,
+		S3Region:              "auto",
+		S3Bucket:              "openpost-media",
+		S3AccessKeyID:         "access-key",
+		S3SecretAccessKey:     "secret-key",
+		S3PublicBaseURL:       "https://media.openpost.social",
+		S3ForcePathStyle:      true,
+		PolarAccessToken:      "polar-token",
+		PolarWebhookSecret:    "whsec_secret",
+		PolarCreatorProductID: "creator-product",
+	}
+}
+
 func TestLoadPolarPrimitives(t *testing.T) {
 	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
 	t.Setenv("OPENPOST_POLAR_ACCESS_TOKEN", "polar-token")

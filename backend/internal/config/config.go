@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -284,6 +285,42 @@ func (c *Config) DatabaseDSN() string {
 		return c.DatabaseURL
 	}
 	return c.DatabasePath
+}
+
+func (c *Config) ValidateRuntime() error {
+	if c.Edition != EditionCloud {
+		return nil
+	}
+
+	missing := []string{}
+	if c.DatabaseDriver != DatabaseDriverPostgres {
+		missing = append(missing, "OPENPOST_DATABASE_DRIVER=postgres")
+	}
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		missing = append(missing, "OPENPOST_DATABASE_URL")
+	}
+	if c.StorageDriver != StorageDriverS3 {
+		missing = append(missing, "OPENPOST_STORAGE_DRIVER=s3")
+	}
+	if strings.TrimSpace(c.S3Region) == "" {
+		missing = append(missing, "OPENPOST_S3_REGION")
+	}
+	if strings.TrimSpace(c.S3Bucket) == "" {
+		missing = append(missing, "OPENPOST_S3_BUCKET")
+	}
+	if strings.TrimSpace(c.S3AccessKeyID) == "" {
+		missing = append(missing, "OPENPOST_S3_ACCESS_KEY_ID")
+	}
+	if strings.TrimSpace(c.S3SecretAccessKey) == "" {
+		missing = append(missing, "OPENPOST_S3_SECRET_ACCESS_KEY")
+	}
+	if strings.TrimSpace(c.S3PublicBaseURL) == "" {
+		missing = append(missing, "OPENPOST_S3_PUBLIC_BASE_URL")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("OPENPOST_EDITION=cloud requires: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 // warnOnPlaceholderURL emits a loud startup warning when the operator is

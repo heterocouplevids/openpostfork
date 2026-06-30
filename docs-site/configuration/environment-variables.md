@@ -7,25 +7,25 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 | Variable | Required | Default | Description |
 |---|---:|---|---|
 | `OPENPOST_PORT` | No | `8080` | HTTP server port. |
-| `OPENPOST_EDITION` | No | `selfhost` | Product edition. Valid values: `selfhost`, `cloud`. |
-| `OPENPOST_DATABASE_DRIVER` | No | `sqlite` | Database driver. Valid values: `sqlite`, `postgres`. SQLite remains the self-hosted default. |
+| `OPENPOST_EDITION` | No | `selfhost` | Product edition. Valid values: `selfhost`, `cloud`. Cloud mode enforces hosted storage requirements at startup. |
+| `OPENPOST_DATABASE_DRIVER` | Required as `postgres` in cloud mode | `sqlite` | Database driver. Valid values: `sqlite`, `postgres`. SQLite remains the self-hosted default. |
 | `OPENPOST_DATABASE_PATH` | No | `file:openpost.db?cache=shared&mode=rwc` | SQLite database path or DSN. Also acts as a legacy fallback DSN for Postgres if `OPENPOST_DATABASE_URL` is unset. |
-| `OPENPOST_DATABASE_URL` | Required for Postgres | empty | Postgres connection URL used when `OPENPOST_DATABASE_DRIVER=postgres`. |
+| `OPENPOST_DATABASE_URL` | Required for Postgres and cloud mode | empty | Postgres connection URL used when `OPENPOST_DATABASE_DRIVER=postgres`. |
 | `OPENPOST_APP_URL` | No, but set it in real deployments | `http://localhost:8080` | Public frontend origin used for CORS and auth flow assumptions. |
 | `OPENPOST_PUBLIC_URL` | No | falls back to `OPENPOST_APP_URL` | Canonical browser origin used when configuring WebAuthn/passkeys. Set this to your real app URL in production. |
 | `OPENPOST_EXTRA_CORS_ORIGINS` | No | empty | Extra comma-separated origins to allow. |
 | `OPENPOST_DISABLE_REGISTRATIONS` | No | `false` | Disables new self-service signups after setup. The first account on a fresh instance is still allowed and becomes the instance admin automatically. |
 | `OPENPOST_JWT_SECRET` | Yes | none | Secret used to sign JWTs. Must be at least 32 characters. |
 | `OPENPOST_ENCRYPTION_KEY` | Yes | none | Secret used to encrypt stored OAuth tokens. Must be at least 32 characters. |
-| `OPENPOST_STORAGE_DRIVER` | No | `local` | Media storage driver. Valid values: `local`, `s3`. |
+| `OPENPOST_STORAGE_DRIVER` | Required as `s3` in cloud mode | `local` | Media storage driver. Valid values: `local`, `s3`. |
 | `OPENPOST_MEDIA_PATH` | No | `./media` | Local directory for uploaded media. |
 | `OPENPOST_MEDIA_URL` | No, but required for Threads production use | `/media` | Public base URL for media files. |
-| `OPENPOST_S3_ENDPOINT` | Required for S3-compatible storage | empty | S3-compatible API endpoint. Use your provider endpoint for R2 or other S3-compatible services. |
-| `OPENPOST_S3_REGION` | Required for S3-compatible storage | empty | S3 region. R2 commonly uses `auto`. |
-| `OPENPOST_S3_BUCKET` | Required for S3-compatible storage | empty | Bucket name for uploaded media. |
-| `OPENPOST_S3_ACCESS_KEY_ID` | Required for S3-compatible storage | empty | S3 access key ID. |
-| `OPENPOST_S3_SECRET_ACCESS_KEY` | Required for S3-compatible storage | empty | S3 secret access key. |
-| `OPENPOST_S3_PUBLIC_BASE_URL` | Recommended for S3-compatible storage | empty | Public media base URL for provider fetches and preview links. |
+| `OPENPOST_S3_ENDPOINT` | Required for R2 or non-AWS S3-compatible storage | empty | S3-compatible API endpoint. Native AWS S3 can leave this empty. |
+| `OPENPOST_S3_REGION` | Required for S3-compatible storage and cloud mode | empty | S3 region. R2 commonly uses `auto`. |
+| `OPENPOST_S3_BUCKET` | Required for S3-compatible storage and cloud mode | empty | Bucket name for uploaded media. |
+| `OPENPOST_S3_ACCESS_KEY_ID` | Required for S3-compatible storage and cloud mode | empty | S3 access key ID. |
+| `OPENPOST_S3_SECRET_ACCESS_KEY` | Required for S3-compatible storage and cloud mode | empty | S3 secret access key. |
+| `OPENPOST_S3_PUBLIC_BASE_URL` | Required in cloud mode | empty | Public media base URL for provider fetches and preview links. |
 | `OPENPOST_S3_FORCE_PATH_STYLE` | No | `false` | Force path-style S3 addressing for compatible providers that require it. |
 | `OPENPOST_ENV` | No | empty | Optional deployment label. Secret validation is enforced regardless of environment mode. |
 
