@@ -64,6 +64,7 @@ All notable changes to this project are documented in this file.
 - Added a backend OpenAPI generator command so docs builds regenerate the checked-in Huma spec from the same route registrar used by the server.
 - Added hosted pricing handoff from landing-page plan CTAs through registration, onboarding, and the app billing checkout flow.
 - Added platform-specific preview cards for planned Instagram, Facebook, YouTube, and TikTok compose views.
+- Added a compact settings section navigator with stable anchors for billing, security, tokens, schedules, and workspace defaults.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

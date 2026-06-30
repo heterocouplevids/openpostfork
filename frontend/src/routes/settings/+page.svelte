@@ -248,6 +248,17 @@
 			limits: ['10 workspaces', '15 social accounts', '2,500 scheduled posts/month', '25 GB media']
 		}
 	];
+	const settingsSections = [
+		{ id: 'workspace', label: 'Workspace' },
+		{ id: 'billing', label: 'Billing' },
+		{ id: 'security', label: 'Security' },
+		{ id: 'tokens', label: 'Tokens & MCP' },
+		{ id: 'date-time', label: 'Date & Time' },
+		{ id: 'media-cleanup', label: 'Media Cleanup' },
+		{ id: 'posting-schedule', label: 'Posting Schedule' },
+		{ id: 'natural-posting', label: 'Natural Posting' },
+		{ id: 'slot-defaults', label: 'Slot Defaults' }
+	];
 	const billingMetricLabels: Record<string, string> = {
 		scheduled_posts_monthly: 'Scheduled posts',
 		published_posts_monthly: 'Published posts',
@@ -901,7 +912,26 @@
 	loadingMessage="Loading workspace..."
 >
 	<div class="space-y-8">
-		<section class="space-y-4">
+		<nav
+			aria-label="Settings sections"
+			data-testid="settings-section-nav"
+			class="sticky top-0 z-10 -mx-4 border-y bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:top-2 md:mx-0 md:rounded-lg md:border"
+		>
+			<div
+				class="flex [scrollbar-width:none] gap-2 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+			>
+				{#each settingsSections as section (section.id)}
+					<a
+						href={`#${section.id}`}
+						class="shrink-0 rounded-md border bg-background px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+					>
+						{section.label}
+					</a>
+				{/each}
+			</div>
+		</nav>
+
+		<section id="workspace" class="scroll-mt-24 space-y-4">
 			<h2 class="mb-4 text-lg font-semibold">Workspace</h2>
 			<div class="flex items-center gap-4">
 				<span class="text-sm font-medium">Current Workspace</span>
@@ -921,7 +951,7 @@
 			</div>
 		</section>
 
-		<section class="rounded-lg border p-6">
+		<section id="billing" class="scroll-mt-24 rounded-lg border p-6">
 			<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
 					<h2 class="flex items-center gap-2 text-lg font-semibold">
@@ -1052,7 +1082,7 @@
 			{/if}
 		</section>
 
-		<section class="rounded-lg border p-6">
+		<section id="security" class="scroll-mt-24 rounded-lg border p-6">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ShieldCheckIcon class="h-5 w-5 text-muted-foreground" />
 				Account Security
@@ -1247,7 +1277,7 @@
 			{/if}
 		</section>
 
-		<section class="rounded-lg border p-6">
+		<section id="tokens" class="scroll-mt-24 rounded-lg border p-6">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<TerminalIcon class="h-5 w-5 text-muted-foreground" />
 				CLI Devices & API Tokens
@@ -1434,7 +1464,7 @@
 			</div>
 		</section>
 
-		<section class="space-y-4">
+		<section id="date-time" class="scroll-mt-24 space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
 				Date & Time
@@ -1488,7 +1518,7 @@
 			</div>
 		</section>
 
-		<section class="space-y-4">
+		<section id="media-cleanup" class="scroll-mt-24 space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ImageIcon class="h-5 w-5 text-muted-foreground" />
 				Media Cleanup
@@ -1517,7 +1547,7 @@
 			</div>
 		</section>
 
-		<section class="rounded-lg border p-6">
+		<section id="posting-schedule" class="scroll-mt-24 rounded-lg border p-6">
 			<div class="mb-4 flex items-center justify-between">
 				<h2 class="flex items-center gap-2 text-lg font-semibold">
 					<CalendarIcon class="h-5 w-5 text-muted-foreground" />
@@ -1676,7 +1706,7 @@
 			{/if}
 		</section>
 
-		<section class="space-y-4">
+		<section id="natural-posting" class="scroll-mt-24 space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
 				Natural Posting
@@ -1734,7 +1764,7 @@
 			</div>
 		</section>
 
-		<section class="space-y-4">
+		<section id="slot-defaults" class="scroll-mt-24 space-y-4">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
 				Time Slot Defaults

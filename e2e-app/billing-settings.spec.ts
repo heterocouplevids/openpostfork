@@ -26,6 +26,10 @@ test('settings shows billing plan controls for an authenticated workspace', asyn
 	}, auth.token);
 	await page.goto('/settings');
 
+	await expect(page.getByTestId('settings-section-nav')).toBeVisible();
+	await expect(
+		page.getByTestId('settings-section-nav').getByRole('link', { name: 'Billing' })
+	).toHaveAttribute('href', '#billing');
 	await expect(page.getByRole('heading', { name: 'Billing' })).toBeVisible();
 	await expect(page.getByText('No active plan')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Customer Portal' })).toBeVisible();
