@@ -208,6 +208,9 @@ func main() {
 	cliAuthHandler := handlers.NewCLIAuthHandler(cliAuthService, authenticator, cfg.PublicURL)
 	cliAuthHandler.RegisterRoutes(api)
 
+	mcpHandler := handlers.NewMCPHandler(db, authenticator)
+	mcpHandler.RegisterRoutes(e)
+
 	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator)
 	workspaceHandler.CreateWorkspace(api)
 	workspaceHandler.ListWorkspaces(api)
