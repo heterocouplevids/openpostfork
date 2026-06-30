@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { onMount, tick, type Snippet } from 'svelte';
-	import { client, type SocialAccount, type Workspace, getToken } from '$lib/api/client';
+	import { page } from '$app/state';
+	import {
+		client,
+		type Publication,
+		type SocialAccount,
+		type Workspace,
+		getToken
+	} from '$lib/api/client';
 	import { getApiBase } from '$lib/stores/instance.svelte';
 	import { getAuthenticatedMediaByID } from '$lib/media-url';
 	import { isSupportedMediaFile, uploadMediaFile } from '$lib/media-upload-client';
@@ -52,6 +59,7 @@
 	interface InitialPost {
 		id: string;
 		workspace_id: string;
+		publication_id?: string;
 		content: string;
 		thread_draft?: string | null;
 		status: string;
@@ -88,6 +96,10 @@
 	let posts = $state<PostItem[]>([makeEmptyPost()]);
 	let activePostIndex = $state(0);
 	let draftId = $state<string | null>(null);
+	let publicationId = $state('');
+	let linkedPublication = $state<Publication | null>(null);
+	let loadingLinkedPublication = $state(false);
+	let lastLoadedPublicationId = '';
 	let lastInitializedPostId = $state<string | null>(null);
 	let isSaving = $state(false);
 	let isSubmitting = $state(false);
@@ -367,9 +379,14 @@
 		const selectedAccountsSnapshot = [...selectedAccountIds].sort();
 		return JSON.stringify({
 			draft: getDraftSnapshot(posts),
+			publicationId: publicationId.trim(),
 			selectedAccounts: selectedAccountsSnapshot,
 			variants: variantEntries
 		});
+	}
+
+	function getPublicationIDForPayload(): string {
+		return publicationId.trim();
 	}
 
 	function getVariantPost(accountId: string, postKey: string): VariantPost | null {
@@ -509,6 +526,7 @@
 	async function initializeFromPost(post: InitialPost | undefined) {
 		if (!post) {
 			draftId = null;
+			publicationId = page.url.searchParams.get('publication') ?? '';
 			lastInitializedPostId = null;
 			posts = [makeEmptyPost()];
 			activePostIndex = 0;
@@ -531,6 +549,7 @@
 		}
 
 		draftId = post.id;
+		publicationId = post.publication_id ?? '';
 		lastInitializedPostId = post.id;
 		selectedWorkspaceId = post.workspace_id;
 		selectedAccountIds = post.destinations?.map((d) => d.social_account_id) ?? [];
@@ -629,6 +648,16 @@
 	});
 
 	$effect(() => {
+		const id = getPublicationIDForPayload();
+		if (!id) {
+			linkedPublication = null;
+			lastLoadedPublicationId = '';
+			return;
+		}
+		loadLinkedPublication(id);
+	});
+
+	$effect(() => {
 		const text = ui.promptText;
 		if (text && !initialPost && !loadingWorkspaces) {
 			posts = [{ ...makeEmptyPost(), content: text }];
@@ -661,6 +690,37 @@
 	// --------------------------------------------------------------------------
 	// Data loading
 	// --------------------------------------------------------------------------
+	async function loadLinkedPublication(id: string) {
+		if (!id || id === lastLoadedPublicationId) return;
+		lastLoadedPublicationId = id;
+		loadingLinkedPublication = true;
+		try {
+			const { data, error: err } = await client.GET('/publications/{id}', {
+				params: { path: { id } }
+			});
+			if (err) throw err;
+			linkedPublication = data ?? null;
+			if (data && !isEditMode && !hasAnyContent(posts)) {
+				posts = posts.map((post, index) =>
+					index === 0
+						? {
+								...post,
+								content: data.source_content,
+								mediaIds: data.media_ids?.filter(Boolean) ?? []
+							}
+						: post
+				);
+				activePostIndex = 0;
+				scheduleAutoSave();
+			}
+		} catch (e) {
+			console.error('Failed to load linked publication:', e);
+			linkedPublication = null;
+		} finally {
+			loadingLinkedPublication = false;
+		}
+	}
+
 	async function loadAccounts(
 		workspaceId: string,
 		preferredAccountIds: string[] | undefined = undefined
@@ -772,6 +832,13 @@
 		scheduleAutoSave();
 	}
 
+	function clearPublication() {
+		publicationId = '';
+		linkedPublication = null;
+		lastLoadedPublicationId = '';
+		scheduleAutoSave();
+	}
+
 	// --------------------------------------------------------------------------
 	// Draft saving
 	// --------------------------------------------------------------------------
@@ -812,6 +879,7 @@
 				social_account_ids: selectedAccountIds,
 				media_ids: draftMediaIds,
 				random_delay_minutes: defaultDelay,
+				...(getPublicationIDForPayload() ? { publication_id: getPublicationIDForPayload() } : {}),
 				...(threadDraft ? { thread_draft: threadDraft } : {})
 			};
 			if (draftId) {
@@ -822,6 +890,7 @@
 						scheduled_at: '',
 						social_account_ids: selectedAccountIds,
 						media_ids: draftMediaIds,
+						publication_id: getPublicationIDForPayload(),
 						random_delay_minutes: defaultDelay,
 						...(threadDraft ? { thread_draft: threadDraft } : {})
 					}
@@ -903,6 +972,9 @@
 						workspace_id: selectedWorkspaceId,
 						social_account_ids: selectedAccountIds,
 						scheduled_at: scheduledAt,
+						...(getPublicationIDForPayload()
+							? { publication_id: getPublicationIDForPayload() }
+							: {}),
 						random_delay_minutes: randomDelay,
 						posts: validPosts.map((p) => ({
 							content: p.content,
@@ -930,6 +1002,7 @@
 							scheduled_at: scheduledAt,
 							social_account_ids: selectedAccountIds,
 							media_ids: posts[0].mediaIds,
+							publication_id: getPublicationIDForPayload(),
 							random_delay_minutes: randomDelay,
 							...(clearThreadDraft !== undefined ? { thread_draft: clearThreadDraft } : {})
 						}
@@ -943,6 +1016,9 @@
 							social_account_ids: selectedAccountIds,
 							scheduled_at: scheduledAt,
 							media_ids: posts[0].mediaIds,
+							...(getPublicationIDForPayload()
+								? { publication_id: getPublicationIDForPayload() }
+								: {}),
 							random_delay_minutes: randomDelay
 						}
 					});
@@ -964,6 +1040,8 @@
 				posts = [makeEmptyPost()];
 				activePostIndex = 0;
 				draftId = null;
+				publicationId = '';
+				linkedPublication = null;
 				lastSavedSnapshot = '';
 				variants = new Map();
 				activeVariantAccountId = null;
@@ -1813,6 +1891,31 @@
 			class="mx-3 mt-2 rounded-md border border-green-500/20 bg-green-500/10 px-3 py-2 text-sm text-green-600 md:mx-4 md:mt-3"
 		>
 			{success}
+		</div>
+	{/if}
+	{#if publicationId}
+		<div
+			class="mx-3 mt-2 flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2 md:mx-4 md:mt-3"
+		>
+			<div class="flex min-w-0 items-center gap-2">
+				<Link2Icon class="h-4 w-4 shrink-0 text-muted-foreground" />
+				<div class="min-w-0">
+					<div class="text-xs font-medium text-muted-foreground">Source publication</div>
+					<div class="truncate text-sm">
+						{#if loadingLinkedPublication}
+							Loading source...
+						{:else if linkedPublication}
+							{linkedPublication.title}
+						{:else}
+							{publicationId}
+						{/if}
+					</div>
+				</div>
+			</div>
+			<Button variant="ghost" size="sm" class="gap-1.5" onclick={clearPublication}>
+				<UnlinkIcon class="h-3.5 w-3.5" />
+				Clear
+			</Button>
 		</div>
 	{/if}
 	{#if mediaCapabilityWarnings.length > 0}

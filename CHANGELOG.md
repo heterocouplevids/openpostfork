@@ -58,6 +58,7 @@ All notable changes to this project are documented in this file.
 - Added authenticated publication API endpoints for creating, listing, reading, and updating source publications with media attachments.
 - Linked source publications to post creation/update, thread creation, CLI API structs, and MCP draft/schedule workflows through `publication_id`.
 - Added CLI publication commands plus `--publication` linking for post and thread workflows.
+- Added a web Publications page for source ideas, source media, status changes, and handoff into the composer.
 - Added user-facing MCP docs and reorganized the docs navigation around user docs, self-hosting docs, and developer docs.
 - Added a backend OpenAPI generator command so docs builds regenerate the checked-in Huma spec from the same route registrar used by the server.
 
@@ -71,6 +72,7 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 - Made app Playwright E2E runs start a freshly built Go server by default instead of silently reusing stale local servers.
+- Removed duplicate Huma route registration from the Go binary startup path so app E2E runs and production boot no longer panic on repeated operation IDs.
 - Wrapped the docs API reference OpenAPI renderer in client-only rendering so VitePress builds no longer emit a nonfatal SSR TypeError.
 
 ## [1.0.16] - 2026-06-23

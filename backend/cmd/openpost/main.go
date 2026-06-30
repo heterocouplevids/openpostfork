@@ -169,27 +169,6 @@ func main() {
 	e.GET("/robots.txt", robotsHandler)
 	e.HEAD("/robots.txt", robotsHandler)
 
-	authHandler := handlers.NewAuthHandler(db, authService, authenticator, tokenEncryptor, mfaService, cfg.DisableRegistrations)
-	authHandler.Register(api)
-	authHandler.Login(api)
-	authHandler.VerifyTOTPLogin(api)
-	authHandler.BeginPasskeyLogin(api)
-	authHandler.FinishPasskeyLogin(api)
-	authHandler.Me(api)
-	authHandler.SecurityStatus(api)
-	authHandler.BeginTOTPSetup(api)
-	authHandler.ConfirmTOTPSetup(api)
-	authHandler.DisableTOTP(api)
-	authHandler.BeginPasskeyRegistration(api)
-	authHandler.FinishPasskeyRegistration(api)
-	authHandler.RemovePasskey(api)
-
-	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService, authenticator)
-	apiTokenHandler.RegisterRoutes(api)
-
-	cliAuthHandler := handlers.NewCLIAuthHandler(cliAuthService, authenticator, cfg.PublicURL)
-	cliAuthHandler.RegisterRoutes(api)
-
 	mastodonAppService := mastodonapps.NewService(db, tokenEncryptor, mastodonapps.Options{
 		RedirectURI: cfg.MastodonRedirectURI,
 		Website:     cfg.PublicURL,

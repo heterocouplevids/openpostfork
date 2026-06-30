@@ -18,6 +18,7 @@
 	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
 	import ScrollTextIcon from 'lucide-svelte/icons/scroll-text';
+	import NotebookTextIcon from 'lucide-svelte/icons/notebook-text';
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import { toggleMode } from 'mode-watcher';
@@ -337,7 +338,7 @@
 			<Sidebar.GroupContent class="max-h-64 overflow-y-auto">
 				{#if loadingDrafts}
 					<div class="space-y-2 px-2 py-2">
-						{#each Array(4) as _}
+						{#each Array(4) as _, index (index)}
 							<div class="flex items-center gap-2 px-2 py-1.5">
 								<Skeleton class="h-3.5 w-3.5 rounded-sm" />
 								<Skeleton class="h-3.5 w-full" />
@@ -449,6 +450,10 @@
 							<DropdownMenu.Item onclick={() => goto('/prompts')}>
 								<LightbulbIcon class="mr-2 size-4 text-muted-foreground" />
 								<span>{m.sidebar_prompts()}</span>
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => goto('/publications')}>
+								<NotebookTextIcon class="mr-2 size-4 text-muted-foreground" />
+								<span>{m.sidebar_publications()}</span>
 							</DropdownMenu.Item>
 							<DropdownMenu.Item onclick={() => goto('/settings')}>
 								<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
