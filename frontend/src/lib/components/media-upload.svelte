@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getToken } from '$lib/api/client';
 	import { getApiBase } from '$lib/stores/instance.svelte';
+	import { isSupportedMediaFile, uploadMediaFile } from '$lib/media-upload-client';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import {
@@ -50,7 +51,7 @@
 
 	async function handleFiles(files: FileList | File[]) {
 		for (const file of Array.from(files)) {
-			if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) continue;
+			if (!isSupportedMediaFile(file)) continue;
 
 			const item: MediaItem = {
 				clientId: `media-${uploadSeq++}`,
@@ -64,30 +65,13 @@
 			items = [...items, item];
 
 			try {
-				const formData = new FormData();
-				formData.append('file', file);
-				formData.append('workspace_id', workspaceId);
-				if (item.altText) {
-					formData.append('alt_text', item.altText);
-				}
-
-				const token = getToken();
-				const resp = await fetch(`${getApiBase()}/media/upload`, {
-					method: 'POST',
-					headers: token ? { Authorization: `Bearer ${token}` } : {},
-					body: formData
-				});
-
-				if (!resp.ok) {
-					throw new Error(`Upload failed (${resp.status})`);
-				}
-
-				const data = await resp.json();
+				const data = await uploadMediaFile({ workspaceId, file, altText: item.altText });
 				const idx = items.findIndex((m) => m.clientId === item.clientId);
 				if (idx !== -1) {
 					items = items.map((m, i) => (i === idx ? { ...m, id: data.id, status: 'ready' } : m));
 				}
-			} catch {
+			} catch (error) {
+				console.error('Failed to upload media', error);
 				const idx = items.findIndex((m) => m.clientId === item.clientId);
 				if (idx !== -1) {
 					items = items.map((m, i) => (i === idx ? { ...m, status: 'error' } : m));

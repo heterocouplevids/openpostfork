@@ -48,4 +48,6 @@ Direct upload flow:
 
 OpenPost reserves a pending media record before issuing the presigned URL, then finalizes the upload by reading the stored object, computing metadata and the SHA-256 dedupe hash, creating thumbnails when possible, recording media-upload usage, and marking the media ready. Local filesystem deployments should keep using the existing multipart upload endpoint.
 
+The web app uses the direct upload session flow automatically when the server supports it. Local filesystem deployments and older servers fall back to multipart uploads.
+
 Provider media-state tracking is still part of the production-readiness roadmap.

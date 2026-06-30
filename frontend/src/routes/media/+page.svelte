@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { client, type Workspace, getToken } from '$lib/api/client';
-	import { getApiBase } from '$lib/stores/instance.svelte';
+	import { client, type Workspace } from '$lib/api/client';
 	import { getAuthenticatedMediaURL } from '$lib/media-url';
+	import { isSupportedMediaFile, uploadMediaFiles } from '$lib/media-upload-client';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -233,81 +233,35 @@
 		if (!selectedWorkspaceId) return;
 		uploadLoading = true;
 		uploadError = '';
-		uploadProgress = 'Uploading...';
 
 		const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-		if (!fileInput?.files?.length) {
+		const batchFileInput = document.getElementById('batch-file-upload') as HTMLInputElement;
+		const selectedFiles = fileInput?.files?.length
+			? Array.from(fileInput.files)
+			: Array.from(batchFileInput?.files ?? []);
+		const files = selectedFiles.filter(isSupportedMediaFile);
+		if (files.length === 0) {
 			uploadError = 'Please select a file';
 			uploadLoading = false;
 			return;
 		}
-
-		const file = fileInput.files[0];
-		const formData = new FormData();
-		formData.append('workspace_id', selectedWorkspaceId);
-		formData.append('file', file);
-
-		try {
-			const token = getToken();
-			const response = await fetch(`${getApiBase()}/media/upload`, {
-				method: 'POST',
-				headers: token ? { Authorization: `Bearer ${token}` } : {},
-				body: formData
-			});
-
-			if (!response.ok) {
-				const errData = await response.json();
-				throw new Error(errData.error || 'Upload failed');
-			}
-
-			uploadDialogOpen = false;
-			fileInput.value = '';
-			toastMessage = 'File uploaded successfully';
-			await loadMedia();
-		} catch (e) {
-			uploadError = (e as Error).message;
-		} finally {
-			uploadLoading = false;
-			uploadProgress = '';
-		}
-	}
-
-	async function handleBatchUpload() {
-		if (!selectedWorkspaceId) return;
-		uploadLoading = true;
-		uploadError = '';
-		uploadProgress = 'Uploading...';
-
-		const fileInput = document.getElementById('batch-file-upload') as HTMLInputElement;
-		if (!fileInput?.files?.length) {
-			uploadError = 'Please select files';
+		if (files.length > 10) {
+			uploadError = 'Max 10 files at once';
 			uploadLoading = false;
 			return;
 		}
 
-		const formData = new FormData();
-		formData.append('workspace_id', selectedWorkspaceId);
-		for (const file of fileInput.files) {
-			formData.append('files', file);
-		}
-
 		try {
-			const token = getToken();
-			const response = await fetch(`${getApiBase()}/media/batch-upload`, {
-				method: 'POST',
-				headers: token ? { Authorization: `Bearer ${token}` } : {},
-				body: formData
+			uploadProgress = files.length === 1 ? 'Uploading...' : `Uploading 0 of ${files.length}...`;
+			const uploaded = await uploadMediaFiles(selectedWorkspaceId, files, (done, total) => {
+				uploadProgress = total === 1 ? 'Finalizing...' : `Uploaded ${done} of ${total} files...`;
 			});
 
-			if (!response.ok) {
-				const errData = await response.json();
-				throw new Error(errData.error || 'Upload failed');
-			}
-
-			const result = await response.json();
 			uploadDialogOpen = false;
 			fileInput.value = '';
-			toastMessage = `Uploaded ${result.uploaded?.length || 0} files`;
+			if (batchFileInput) batchFileInput.value = '';
+			toastMessage =
+				uploaded.length === 1 ? 'File uploaded successfully' : `Uploaded ${uploaded.length} files`;
 			await loadMedia();
 		} catch (e) {
 			uploadError = (e as Error).message;

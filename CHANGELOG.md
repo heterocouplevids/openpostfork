@@ -47,6 +47,7 @@ All notable changes to this project are documented in this file.
 - Added MCP prompt templates for common agentic scheduling workflows: planning a social post, adapting platform renditions, and reviewing the publishing queue.
 - Added Apps SDK-friendly MCP tool invocation metadata and output schemas so ChatGPT-style clients can render progress states and validate structured tool results.
 - Added direct browser-to-S3 media upload sessions with pending media reservations, presigned PUT targets, completion finalization, dedupe, and quota accounting.
+- Wired web media uploads through direct S3 upload sessions with automatic multipart fallback for local/self-hosted storage.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

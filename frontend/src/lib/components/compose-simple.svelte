@@ -3,6 +3,7 @@
 	import { client, type SocialAccount, type Workspace, getToken } from '$lib/api/client';
 	import { getApiBase } from '$lib/stores/instance.svelte';
 	import { getAuthenticatedMediaByID } from '$lib/media-url';
+	import { isSupportedMediaFile, uploadMediaFile } from '$lib/media-upload-client';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Calendar } from '$lib/components/ui/calendar';
@@ -1018,37 +1019,23 @@
 		isUploading = true;
 		try {
 			for (const file of Array.from(files)) {
-				if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) continue;
+				if (!isSupportedMediaFile(file)) continue;
 				const targetPost = posts[targetPostIndex];
 				if (!targetPost) break;
 				if (getEditorMediaIdsForPost(targetPost).length >= 4) break;
 
-				const formData = new FormData();
-				formData.append('file', file);
-				formData.append('workspace_id', selectedWorkspaceId);
-
-				const token = getToken();
-				const resp = await fetch(`${getApiBase()}/media/upload`, {
-					method: 'POST',
-					headers: token ? { Authorization: `Bearer ${token}` } : {},
-					body: formData
-				});
-
-				const data = await resp.json();
-				if (resp.ok) {
-					if (data.mime_type) {
-						const nextMimeTypes = new Map(mediaMimeTypes);
-						nextMimeTypes.set(data.id, data.mime_type);
-						mediaMimeTypes = nextMimeTypes;
-					}
-					addMediaToPost(targetPostIndex, data.id);
-					scheduleAutoSave();
-				} else {
-					error = data.error || 'Failed to upload media';
+				const data = await uploadMediaFile({ workspaceId: selectedWorkspaceId, file });
+				if (data.mime_type) {
+					const nextMimeTypes = new Map(mediaMimeTypes);
+					nextMimeTypes.set(data.id, data.mime_type);
+					mediaMimeTypes = nextMimeTypes;
 				}
+				addMediaToPost(targetPostIndex, data.id);
+				scheduleAutoSave();
 			}
 		} catch (e) {
 			console.error('Failed to upload media:', e);
+			error = (e as Error).message || 'Failed to upload media';
 		} finally {
 			isUploading = false;
 		}
