@@ -67,6 +67,7 @@ All notable changes to this project are documented in this file.
 - Added a compact settings section navigator with stable anchors for billing, security, tokens, schedules, and workspace defaults.
 - Added dedicated docs overview pages that separate user-facing web/CLI/MCP docs, self-hosting operations docs, and developer implementation docs.
 - Added marketing SEO pages for free social post tools and publishing tips, including interactive character counting, thread splitting, and platform previews.
+- Added static marketing-site `robots.txt` and `sitemap.xml` routes for the landing, tools, and tips pages.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

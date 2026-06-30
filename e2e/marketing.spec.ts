@@ -67,3 +67,17 @@ test('marketing tips pages are reachable SEO articles', async ({ page }) => {
 	await expect(page).toHaveTitle(/Cross-Post Without Looking Spammy/);
 	await expect(page.getByRole('heading', { name: /Cross-posting works/ })).toBeVisible();
 });
+
+test('marketing SEO routes expose crawlable resources', async ({ request }) => {
+	const robots = await request.get('/robots.txt');
+	expect(robots.ok()).toBeTruthy();
+	const robotsText = await robots.text();
+	expect(robotsText).toContain('Sitemap: https://openpost.social/sitemap.xml');
+
+	const sitemap = await request.get('/sitemap.xml');
+	expect(sitemap.ok()).toBeTruthy();
+	const xml = await sitemap.text();
+	expect(xml).toContain('<loc>https://openpost.social/</loc>');
+	expect(xml).toContain('<loc>https://openpost.social/tools</loc>');
+	expect(xml).toContain('<loc>https://openpost.social/tips/best-times-to-post</loc>');
+});
