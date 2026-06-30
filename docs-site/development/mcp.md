@@ -55,13 +55,14 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - `list_workspaces`: returns the workspaces available to the authenticated user.
 - `list_provider_catalog`: returns provider launch status so assistants know which platforms are available, need server configuration, or are still planned.
 - `list_accounts`: returns active social accounts for a workspace.
-- `create_draft`: creates a draft post in a workspace, optionally assigned to destination accounts.
+- `list_media`: returns recent workspace media attachments so assistants can reuse existing assets.
+- `create_draft`: creates a draft post in a workspace, optionally assigned to destination accounts and media attachments.
 - `list_drafts`: returns editable draft posts for a workspace so an assistant can inspect existing work before creating more drafts.
-- `update_draft`: updates a draft's source content and optionally replaces destination accounts.
+- `update_draft`: updates a draft's source content and optionally replaces destination accounts or source media.
 - `set_post_renditions`: creates or updates destination-specific copy for draft and scheduled posts. Renditions can only target accounts already attached as post destinations.
-- `schedule_post`: creates a scheduled post with destination accounts and queues the `publish_post` job.
-- `schedule_draft`: schedules an existing draft and queues the `publish_post` job without duplicating the post.
-- `get_post_status`: returns the post status, scheduled run time, and per-destination status.
+- `schedule_post`: creates a scheduled post with destination accounts and optional media, then queues the `publish_post` job.
+- `schedule_draft`: schedules an existing draft and queues the `publish_post` job without duplicating the post. It can optionally replace source media before scheduling.
+- `get_post_status`: returns the post status, scheduled run time, source media, and per-destination status.
 - `list_scheduled_posts`: returns upcoming scheduled posts for queue inspection.
 - `cancel_post`: cancels a queued scheduled post and returns it to drafts.
 - `suggest_next_slot`: returns the next free configured posting slot for a workspace.
@@ -94,3 +95,4 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Records API-token client ID, name, scope, and token prefix for MCP tool calls when a request uses a dedicated CLI/MCP token, so Settings can attribute activity to ChatGPT, Claude, CI, or another configured client.
 - Returns structured content so assistants can inspect workspace, account, post, destination, media, and suggested slot IDs without parsing prose.
 - Returns provider catalog structured content so assistants can avoid trying to connect or schedule to planned providers before adapters exist.
+- Lets assistants attach workspace-owned source media to drafts and scheduled posts through `media_ids`, while preserving destination-specific media overrides through `set_post_renditions`.

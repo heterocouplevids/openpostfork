@@ -30,6 +30,7 @@ const (
 	mcpToolWorkspaces    = "list_workspaces"
 	mcpToolProviders     = "list_provider_catalog"
 	mcpToolAccounts      = "list_accounts"
+	mcpToolListMedia     = "list_media"
 	mcpToolCreateDraft   = "create_draft"
 	mcpToolListDrafts    = "list_drafts"
 	mcpToolUpdateDraft   = "update_draft"
@@ -254,6 +255,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 			mcpListWorkspacesTool(),
 			mcpListProviderCatalogTool(),
 			mcpListAccountsTool(),
+			mcpListMediaTool(),
 			mcpCreateDraftTool(),
 			mcpListDraftsTool(),
 			mcpUpdateDraftTool(),
@@ -363,8 +365,9 @@ Workflow:
 1. If workspace_id is missing, call list_workspaces and ask which workspace to use.
 2. Call list_provider_catalog to understand which requested platforms are available, need server configuration, or are still planned.
 3. Call list_accounts for the selected workspace and pick destination accounts matching these platform hints: %s.
-4. Create one concise draft with create_draft. Do not schedule it until the user approves timing and destinations.
-5. Explain what you created and suggest the next scheduling step.
+4. Call list_media if the idea needs existing media, or upload_media_from_url if the user supplied a public media URL.
+5. Create one concise draft with create_draft, attaching media_ids when relevant. Do not schedule it until the user approves timing and destinations.
+6. Explain what you created and suggest the next scheduling step.
 
 workspace_id: %s
 `, promptArg(args, "idea", "(missing idea)"), promptArg(args, "platforms", "any connected platforms"), promptArg(args, "workspace_id", "(choose with list_workspaces)")))
@@ -457,11 +460,41 @@ func mcpListAccountsTool() map[string]any {
 	}, true, false)
 }
 
+func mcpListMediaTool() map[string]any {
+	return mcpToolDescriptor(map[string]any{
+		"name":        mcpToolListMedia,
+		"title":       "List media",
+		"description": "List recent media attachments in an OpenPost workspace so assistants can reuse existing assets.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Workspace ID returned by list_workspaces.",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"minimum":     1,
+					"maximum":     100,
+					"description": "Maximum media items to return. Defaults to 20.",
+				},
+				"filter": map[string]any{
+					"type":        "string",
+					"enum":        []string{"all", "favorites", "used", "unused"},
+					"description": "Optional media filter. Defaults to all.",
+				},
+			},
+			"required":             []string{"workspace_id"},
+			"additionalProperties": false,
+		},
+	}, true, false)
+}
+
 func mcpCreateDraftTool() map[string]any {
 	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolCreateDraft,
 		"title":       "Create draft",
-		"description": "Create an OpenPost draft in a workspace, optionally assigning destination social accounts.",
+		"description": "Create an OpenPost draft in a workspace, optionally assigning destination social accounts and media.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -476,6 +509,11 @@ func mcpCreateDraftTool() map[string]any {
 				"social_account_ids": map[string]any{
 					"type":        "array",
 					"description": "Optional destination account IDs returned by list_accounts.",
+					"items":       map[string]any{"type": "string"},
+				},
+				"media_ids": map[string]any{
+					"type":        "array",
+					"description": "Optional media attachment IDs returned by list_media or upload_media_from_url.",
 					"items":       map[string]any{"type": "string"},
 				},
 			},
@@ -514,7 +552,7 @@ func mcpUpdateDraftTool() map[string]any {
 	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolUpdateDraft,
 		"title":       "Update draft",
-		"description": "Update an editable draft's source content and optionally replace its destination accounts.",
+		"description": "Update an editable draft's source content, destination accounts, or attached media.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -533,6 +571,11 @@ func mcpUpdateDraftTool() map[string]any {
 				"social_account_ids": map[string]any{
 					"type":        "array",
 					"description": "Optional replacement destination account IDs returned by list_accounts. Pass an empty array to clear destinations.",
+					"items":       map[string]any{"type": "string"},
+				},
+				"media_ids": map[string]any{
+					"type":        "array",
+					"description": "Optional replacement source media IDs returned by list_media or upload_media_from_url. Pass an empty array to clear media.",
 					"items":       map[string]any{"type": "string"},
 				},
 			},
@@ -617,6 +660,11 @@ func mcpSchedulePostTool() map[string]any {
 					"items":       map[string]any{"type": "string"},
 					"minItems":    1,
 				},
+				"media_ids": map[string]any{
+					"type":        "array",
+					"description": "Optional media attachment IDs returned by list_media or upload_media_from_url.",
+					"items":       map[string]any{"type": "string"},
+				},
 			},
 			"required":             []string{"workspace_id", "content", "scheduled_at", "social_account_ids"},
 			"additionalProperties": false,
@@ -650,6 +698,11 @@ func mcpScheduleDraftTool() map[string]any {
 					"description": "Optional replacement destination account IDs returned by list_accounts. If omitted, the draft's current destinations are used.",
 					"items":       map[string]any{"type": "string"},
 					"minItems":    1,
+				},
+				"media_ids": map[string]any{
+					"type":        "array",
+					"description": "Optional replacement source media IDs returned by list_media or upload_media_from_url. If omitted, existing draft media is used.",
+					"items":       map[string]any{"type": "string"},
 				},
 				"random_delay_minutes": map[string]any{
 					"type":        "integer",
@@ -828,39 +881,29 @@ type mcpToolStatus struct {
 	Invoked  string
 }
 
+var mcpToolStatuses = map[string]mcpToolStatus{
+	mcpToolWorkspaces:    {Invoking: "Loading workspaces", Invoked: "Workspaces loaded"},
+	mcpToolProviders:     {Invoking: "Loading providers", Invoked: "Providers loaded"},
+	mcpToolAccounts:      {Invoking: "Loading accounts", Invoked: "Accounts loaded"},
+	mcpToolListMedia:     {Invoking: "Loading media", Invoked: "Media loaded"},
+	mcpToolCreateDraft:   {Invoking: "Creating draft", Invoked: "Draft created"},
+	mcpToolListDrafts:    {Invoking: "Loading drafts", Invoked: "Drafts loaded"},
+	mcpToolUpdateDraft:   {Invoking: "Updating draft", Invoked: "Draft updated"},
+	mcpToolRenditions:    {Invoking: "Updating renditions", Invoked: "Renditions updated"},
+	mcpToolSchedulePost:  {Invoking: "Scheduling post", Invoked: "Post scheduled"},
+	mcpToolScheduleDraft: {Invoking: "Scheduling draft", Invoked: "Draft scheduled"},
+	mcpToolGetPost:       {Invoking: "Loading post status", Invoked: "Post status loaded"},
+	mcpToolListPosts:     {Invoking: "Loading queue", Invoked: "Queue loaded"},
+	mcpToolCancelPost:    {Invoking: "Canceling post", Invoked: "Post canceled"},
+	mcpToolSuggestSlot:   {Invoking: "Finding next slot", Invoked: "Next slot found"},
+	mcpToolUploadURL:     {Invoking: "Uploading media", Invoked: "Media uploaded"},
+}
+
 func mcpToolInvocationStatus(toolName string) mcpToolStatus {
-	switch toolName {
-	case mcpToolWorkspaces:
-		return mcpToolStatus{Invoking: "Loading workspaces", Invoked: "Workspaces loaded"}
-	case mcpToolProviders:
-		return mcpToolStatus{Invoking: "Loading providers", Invoked: "Providers loaded"}
-	case mcpToolAccounts:
-		return mcpToolStatus{Invoking: "Loading accounts", Invoked: "Accounts loaded"}
-	case mcpToolCreateDraft:
-		return mcpToolStatus{Invoking: "Creating draft", Invoked: "Draft created"}
-	case mcpToolListDrafts:
-		return mcpToolStatus{Invoking: "Loading drafts", Invoked: "Drafts loaded"}
-	case mcpToolUpdateDraft:
-		return mcpToolStatus{Invoking: "Updating draft", Invoked: "Draft updated"}
-	case mcpToolRenditions:
-		return mcpToolStatus{Invoking: "Updating renditions", Invoked: "Renditions updated"}
-	case mcpToolSchedulePost:
-		return mcpToolStatus{Invoking: "Scheduling post", Invoked: "Post scheduled"}
-	case mcpToolScheduleDraft:
-		return mcpToolStatus{Invoking: "Scheduling draft", Invoked: "Draft scheduled"}
-	case mcpToolGetPost:
-		return mcpToolStatus{Invoking: "Loading post status", Invoked: "Post status loaded"}
-	case mcpToolListPosts:
-		return mcpToolStatus{Invoking: "Loading queue", Invoked: "Queue loaded"}
-	case mcpToolCancelPost:
-		return mcpToolStatus{Invoking: "Canceling post", Invoked: "Post canceled"}
-	case mcpToolSuggestSlot:
-		return mcpToolStatus{Invoking: "Finding next slot", Invoked: "Next slot found"}
-	case mcpToolUploadURL:
-		return mcpToolStatus{Invoking: "Uploading media", Invoked: "Media uploaded"}
-	default:
-		return mcpToolStatus{Invoking: "Running tool", Invoked: "Tool complete"}
+	if status, ok := mcpToolStatuses[toolName]; ok {
+		return status
 	}
+	return mcpToolStatus{Invoking: "Running tool", Invoked: "Tool complete"}
 }
 
 func mcpToolOutputSchema(toolName string) map[string]any {
@@ -877,6 +920,10 @@ func mcpToolOutputSchema(toolName string) map[string]any {
 		return mcpStructuredOutputSchema(map[string]any{
 			"accounts": mcpArraySchema(mcpOpenObjectSchema()),
 		}, "accounts")
+	case mcpToolListMedia:
+		return mcpStructuredOutputSchema(map[string]any{
+			"media": mcpArraySchema(mcpOpenObjectSchema()),
+		}, "media")
 	case mcpToolCreateDraft, mcpToolUpdateDraft, mcpToolSchedulePost, mcpToolScheduleDraft, mcpToolGetPost, mcpToolCancelPost:
 		return mcpStructuredOutputSchema(map[string]any{
 			"post": mcpOpenObjectSchema(),
@@ -949,8 +996,8 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 	switch params.Name {
 	case mcpToolWorkspaces, mcpToolProviders:
 		result, rpcErr = h.callReadOnlyGlobalTool(ctx, principal.UserID, params.Name)
-	case mcpToolAccounts:
-		result, rpcErr = h.listAccounts(ctx, principal.UserID, params.Arguments)
+	case mcpToolAccounts, mcpToolListMedia:
+		result, rpcErr = h.callReadOnlyWorkspaceTool(ctx, principal.UserID, params.Name, params.Arguments)
 	case mcpToolCreateDraft:
 		result, rpcErr = h.createDraft(ctx, principal.UserID, params.Arguments)
 	case mcpToolListDrafts:
@@ -978,6 +1025,17 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 	}
 	h.recordToolCall(ctx, principal, params.Name, workspaceIDFromMCPArguments(params.Arguments), time.Since(start), rpcErr)
 	return result, rpcErr
+}
+
+func (h *MCPHandler) callReadOnlyWorkspaceTool(ctx context.Context, userID, toolName string, args map[string]any) (any, *mcpError) {
+	switch toolName {
+	case mcpToolAccounts:
+		return h.listAccounts(ctx, userID, args)
+	case mcpToolListMedia:
+		return h.listMedia(ctx, userID, args)
+	default:
+		return nil, &mcpError{Code: -32602, Message: "unknown tool"}
+	}
 }
 
 func (h *MCPHandler) callReadOnlyGlobalTool(ctx context.Context, userID, toolName string) (any, *mcpError) {
@@ -1205,6 +1263,7 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 		WorkspaceID      string   `json:"workspace_id"`
 		Content          string   `json:"content"`
 		SocialAccountIDs []string `json:"social_account_ids"`
+		MediaIDs         []string `json:"media_ids"`
 	}
 	if err := decodeMCPArguments(args, &input); err != nil {
 		return nil, &mcpError{Code: -32602, Message: "invalid create_draft arguments"}
@@ -1216,6 +1275,13 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 		return nil, &mcpError{Code: -32602, Message: "content is required"}
 	}
 	if rpcErr := h.ensureActiveAccounts(ctx, input.WorkspaceID, input.SocialAccountIDs); rpcErr != nil {
+		return nil, rpcErr
+	}
+	mediaIDs, rpcErr := normalizeMCPIDs(input.MediaIDs, "media_ids")
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, input.WorkspaceID, mediaIDs); rpcErr != nil {
 		return nil, rpcErr
 	}
 
@@ -1247,27 +1313,17 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 				return err
 			}
 		}
-		return nil
+		return insertMCPPostMedia(txCtx, tx, post.ID, mediaIDs)
 	})
 	if err != nil {
 		return nil, &mcpError{Code: -32603, Message: "failed to create draft"}
 	}
 
-	return map[string]any{
-		"content": []mcpContent{{
-			Type: "text",
-			Text: "Draft created: " + post.ID,
-		}},
-		"structuredContent": map[string]any{
-			"post": map[string]any{
-				"id":                 post.ID,
-				"workspace_id":       post.WorkspaceID,
-				"status":             post.Status,
-				"social_account_ids": input.SocialAccountIDs,
-				"created_at":         post.CreatedAt.Format(time.RFC3339),
-			},
-		},
-	}, nil
+	postStatus, rpcErr := h.loadMCPPostStatus(ctx, post.ID)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	return mcpPostToolResult("Draft created: "+post.ID, postStatus), nil
 }
 
 type mcpListDraftsInput struct {
@@ -1329,10 +1385,11 @@ type mcpUpdateDraftInput struct {
 	PostID           string    `json:"post_id"`
 	Content          *string   `json:"content"`
 	SocialAccountIDs *[]string `json:"social_account_ids"`
+	MediaIDs         *[]string `json:"media_ids"`
 }
 
 func (h *MCPHandler) updateDraft(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
-	input, post, accountIDs, rpcErr := h.validateUpdateDraftInput(ctx, userID, args)
+	input, post, accountIDs, mediaIDs, rpcErr := h.validateUpdateDraftInput(ctx, userID, args)
 	if rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -1356,6 +1413,11 @@ func (h *MCPHandler) updateDraft(ctx context.Context, userID string, args map[st
 				return err
 			}
 		}
+		if input.MediaIDs != nil {
+			if err := replaceMCPPostMedia(txCtx, tx, post.ID, mediaIDs); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -1369,26 +1431,30 @@ func (h *MCPHandler) updateDraft(ctx context.Context, userID string, args map[st
 	return mcpPostToolResult("Draft updated: "+post.ID, postStatus), nil
 }
 
-func (h *MCPHandler) validateUpdateDraftInput(ctx context.Context, userID string, args map[string]any) (mcpUpdateDraftInput, *models.Post, []string, *mcpError) {
+func (h *MCPHandler) validateUpdateDraftInput(ctx context.Context, userID string, args map[string]any) (mcpUpdateDraftInput, *models.Post, []string, []string, *mcpError) {
 	var input mcpUpdateDraftInput
 	if err := decodeMCPArguments(args, &input); err != nil {
-		return input, nil, nil, &mcpError{Code: -32602, Message: "invalid update_draft arguments"}
+		return input, nil, nil, nil, &mcpError{Code: -32602, Message: "invalid update_draft arguments"}
 	}
 	post, rpcErr := h.accessibleMCPDraft(ctx, userID, input.WorkspaceID, input.PostID, "update_draft can only edit draft posts")
 	if rpcErr != nil {
-		return input, nil, nil, rpcErr
+		return input, nil, nil, nil, rpcErr
 	}
-	if input.Content == nil && input.SocialAccountIDs == nil {
-		return input, nil, nil, &mcpError{Code: -32602, Message: "content or social_account_ids is required"}
+	if input.Content == nil && input.SocialAccountIDs == nil && input.MediaIDs == nil {
+		return input, nil, nil, nil, &mcpError{Code: -32602, Message: "content, social_account_ids, or media_ids is required"}
 	}
 	if input.Content != nil && strings.TrimSpace(*input.Content) == "" {
-		return input, nil, nil, &mcpError{Code: -32602, Message: "content is required"}
+		return input, nil, nil, nil, &mcpError{Code: -32602, Message: "content is required"}
 	}
 	accountIDs, rpcErr := h.normalizeMCPOptionalDestinationAccounts(ctx, input.WorkspaceID, input.SocialAccountIDs)
 	if rpcErr != nil {
-		return input, nil, nil, rpcErr
+		return input, nil, nil, nil, rpcErr
 	}
-	return input, post, accountIDs, nil
+	mediaIDs, rpcErr := h.normalizeMCPOptionalMediaIDs(ctx, input.WorkspaceID, input.MediaIDs)
+	if rpcErr != nil {
+		return input, nil, nil, nil, rpcErr
+	}
+	return input, post, accountIDs, mediaIDs, nil
 }
 
 type mcpPostRenditionInput struct {
@@ -1621,6 +1687,18 @@ type mcpPostDestination struct {
 	ErrorMessage    string `json:"error_message,omitempty"`
 }
 
+type mcpPostMedia struct {
+	MediaID          string `json:"media_id"`
+	DisplayOrder     int    `json:"display_order"`
+	URL              string `json:"url"`
+	ThumbnailURL     string `json:"thumbnail_url"`
+	MimeType         string `json:"mime_type"`
+	OriginalFilename string `json:"original_filename"`
+	AltText          string `json:"alt_text,omitempty"`
+	Width            int    `json:"width,omitempty"`
+	Height           int    `json:"height,omitempty"`
+}
+
 type mcpPostStatus struct {
 	ID                 string               `json:"id"`
 	WorkspaceID        string               `json:"workspace_id"`
@@ -1630,6 +1708,8 @@ type mcpPostStatus struct {
 	ActualRunAt        string               `json:"actual_run_at,omitempty"`
 	RandomDelayMinutes int                  `json:"random_delay_minutes"`
 	CreatedAt          string               `json:"created_at"`
+	MediaIDs           []string             `json:"media_ids"`
+	Media              []mcpPostMedia       `json:"media"`
 	Destinations       []mcpPostDestination `json:"destinations"`
 }
 
@@ -1638,44 +1718,52 @@ type mcpSchedulePostInput struct {
 	Content          string   `json:"content"`
 	ScheduledAt      string   `json:"scheduled_at"`
 	SocialAccountIDs []string `json:"social_account_ids"`
+	MediaIDs         []string `json:"media_ids"`
 }
 
-func (h *MCPHandler) validateSchedulePostInput(ctx context.Context, userID string, args map[string]any) (mcpSchedulePostInput, []string, time.Time, *mcpError) {
+func (h *MCPHandler) validateSchedulePostInput(ctx context.Context, userID string, args map[string]any) (mcpSchedulePostInput, []string, []string, time.Time, *mcpError) {
 	var input mcpSchedulePostInput
 	if err := decodeMCPArguments(args, &input); err != nil {
-		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "invalid schedule_post arguments"}
+		return input, nil, nil, time.Time{}, &mcpError{Code: -32602, Message: "invalid schedule_post arguments"}
 	}
 	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
-		return input, nil, time.Time{}, rpcErr
+		return input, nil, nil, time.Time{}, rpcErr
 	}
 	if strings.TrimSpace(input.Content) == "" {
-		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "content is required"}
+		return input, nil, nil, time.Time{}, &mcpError{Code: -32602, Message: "content is required"}
 	}
 	accountIDs, rpcErr := normalizeMCPIDs(input.SocialAccountIDs, "social_account_ids")
 	if rpcErr != nil {
-		return input, nil, time.Time{}, rpcErr
+		return input, nil, nil, time.Time{}, rpcErr
 	}
 	if len(accountIDs) == 0 {
-		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "social_account_ids must contain at least one account"}
+		return input, nil, nil, time.Time{}, &mcpError{Code: -32602, Message: "social_account_ids must contain at least one account"}
 	}
 	if rpcErr := h.ensureActiveAccounts(ctx, input.WorkspaceID, accountIDs); rpcErr != nil {
-		return input, nil, time.Time{}, rpcErr
+		return input, nil, nil, time.Time{}, rpcErr
+	}
+	mediaIDs, rpcErr := normalizeMCPIDs(input.MediaIDs, "media_ids")
+	if rpcErr != nil {
+		return input, nil, nil, time.Time{}, rpcErr
+	}
+	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, input.WorkspaceID, mediaIDs); rpcErr != nil {
+		return input, nil, nil, time.Time{}, rpcErr
 	}
 	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
 	if err != nil {
-		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at must be an RFC3339 timestamp"}
+		return input, nil, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at must be an RFC3339 timestamp"}
 	}
 	if scheduledAt.IsZero() {
-		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at is required"}
+		return input, nil, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at is required"}
 	}
 	if rpcErr := h.checkScheduledPostQuota(ctx, input.WorkspaceID, 1, scheduledAt); rpcErr != nil {
-		return input, nil, time.Time{}, rpcErr
+		return input, nil, nil, time.Time{}, rpcErr
 	}
-	return input, accountIDs, scheduledAt, nil
+	return input, accountIDs, mediaIDs, scheduledAt, nil
 }
 
 func (h *MCPHandler) schedulePost(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
-	input, accountIDs, scheduledAt, rpcErr := h.validateSchedulePostInput(ctx, userID, args)
+	input, accountIDs, mediaIDs, scheduledAt, rpcErr := h.validateSchedulePostInput(ctx, userID, args)
 	if rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -1719,6 +1807,9 @@ func (h *MCPHandler) schedulePost(ctx context.Context, userID string, args map[s
 		if _, err := tx.NewInsert().Model(&destinations).Exec(txCtx); err != nil {
 			return err
 		}
+		if err := insertMCPPostMedia(txCtx, tx, post.ID, mediaIDs); err != nil {
+			return err
+		}
 		if _, err := tx.NewInsert().Model(job).Exec(txCtx); err != nil {
 			return err
 		}
@@ -1743,11 +1834,12 @@ type mcpScheduleDraftInput struct {
 	PostID             string    `json:"post_id"`
 	ScheduledAt        string    `json:"scheduled_at"`
 	SocialAccountIDs   *[]string `json:"social_account_ids"`
+	MediaIDs           *[]string `json:"media_ids"`
 	RandomDelayMinutes *int      `json:"random_delay_minutes"`
 }
 
 func (h *MCPHandler) scheduleDraft(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
-	input, post, accountIDs, scheduledAt, jobRunAt, rpcErr := h.validateScheduleDraftInput(ctx, userID, args)
+	input, post, accountIDs, mediaIDs, scheduledAt, jobRunAt, rpcErr := h.validateScheduleDraftInput(ctx, userID, args)
 	if rpcErr != nil {
 		return nil, rpcErr
 	}
@@ -1783,6 +1875,11 @@ func (h *MCPHandler) scheduleDraft(ctx context.Context, userID string, args map[
 				return err
 			}
 		}
+		if input.MediaIDs != nil {
+			if err := replaceMCPPostMedia(txCtx, tx, post.ID, mediaIDs); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.NewDelete().
 			Model(&models.Job{}).
 			Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, post.ID).
@@ -1808,28 +1905,32 @@ func (h *MCPHandler) scheduleDraft(ctx context.Context, userID string, args map[
 	return mcpPostToolResult("Draft scheduled: "+post.ID, postStatus), nil
 }
 
-func (h *MCPHandler) validateScheduleDraftInput(ctx context.Context, userID string, args map[string]any) (mcpScheduleDraftInput, *models.Post, []string, time.Time, time.Time, *mcpError) {
+func (h *MCPHandler) validateScheduleDraftInput(ctx context.Context, userID string, args map[string]any) (mcpScheduleDraftInput, *models.Post, []string, []string, time.Time, time.Time, *mcpError) {
 	input, scheduledAt, rpcErr := decodeMCPScheduleDraftArguments(args)
 	if rpcErr != nil {
-		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
 	}
 	post, rpcErr := h.accessibleMCPDraft(ctx, userID, input.WorkspaceID, input.PostID, "schedule_draft can only schedule draft posts")
 	if rpcErr != nil {
-		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
 	}
 	randomDelayMinutes, rpcErr := resolveMCPScheduleDraftRandomDelay(post.RandomDelayMinutes, input.RandomDelayMinutes)
 	if rpcErr != nil {
-		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
 	}
 	accountIDs, rpcErr := h.resolveScheduleDraftAccountIDs(ctx, input, post.ID)
 	if rpcErr != nil {
-		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
+	}
+	mediaIDs, rpcErr := h.normalizeMCPOptionalMediaIDs(ctx, input.WorkspaceID, input.MediaIDs)
+	if rpcErr != nil {
+		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
 	}
 	if rpcErr := h.checkScheduledPostQuota(ctx, input.WorkspaceID, 1, scheduledAt); rpcErr != nil {
-		return input, nil, nil, time.Time{}, time.Time{}, rpcErr
+		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
 	}
 	post.RandomDelayMinutes = randomDelayMinutes
-	return input, post, accountIDs, scheduledAt, applyRandomDelay(scheduledAt, randomDelayMinutes), nil
+	return input, post, accountIDs, mediaIDs, scheduledAt, applyRandomDelay(scheduledAt, randomDelayMinutes), nil
 }
 
 func decodeMCPScheduleDraftArguments(args map[string]any) (mcpScheduleDraftInput, time.Time, *mcpError) {
@@ -2110,14 +2211,127 @@ func (h *MCPHandler) suggestNextSlot(ctx context.Context, userID string, args ma
 }
 
 type mcpMedia struct {
-	ID        string `json:"id"`
-	MimeType  string `json:"mime_type"`
-	URL       string `json:"url"`
-	Size      int64  `json:"size"`
-	Deduped   bool   `json:"deduped"`
-	Filename  string `json:"filename"`
-	AltText   string `json:"alt_text,omitempty"`
-	SourceURL string `json:"source_url"`
+	ID               string `json:"id"`
+	WorkspaceID      string `json:"workspace_id,omitempty"`
+	MimeType         string `json:"mime_type"`
+	URL              string `json:"url"`
+	ThumbnailURL     string `json:"thumbnail_url,omitempty"`
+	Size             int64  `json:"size"`
+	Deduped          bool   `json:"deduped"`
+	Filename         string `json:"filename"`
+	OriginalFilename string `json:"original_filename,omitempty"`
+	AltText          string `json:"alt_text,omitempty"`
+	SourceURL        string `json:"source_url,omitempty"`
+	Width            int    `json:"width,omitempty"`
+	Height           int    `json:"height,omitempty"`
+	IsFavorite       bool   `json:"is_favorite,omitempty"`
+	CreatedAt        string `json:"created_at,omitempty"`
+	ProcessingStatus string `json:"processing_status,omitempty"`
+	UsageCount       int    `json:"usage_count,omitempty"`
+	CanDelete        bool   `json:"can_delete"`
+}
+
+type mcpListMediaInput struct {
+	WorkspaceID string `json:"workspace_id"`
+	Limit       int    `json:"limit"`
+	Filter      string `json:"filter"`
+}
+
+func (h *MCPHandler) listMedia(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	var input mcpListMediaInput
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return nil, &mcpError{Code: -32602, Message: "invalid list_media arguments"}
+	}
+	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
+		return nil, rpcErr
+	}
+	limit := input.Limit
+	if limit == 0 {
+		limit = 20
+	}
+	if limit < 1 || limit > 100 {
+		return nil, &mcpError{Code: -32602, Message: "limit must be between 1 and 100"}
+	}
+
+	var rows []models.MediaAttachment
+	query := h.db.NewSelect().
+		Model(&rows).
+		Where("workspace_id = ?", input.WorkspaceID)
+	switch strings.TrimSpace(input.Filter) {
+	case "", "all":
+	case "favorites":
+		query = query.Where("is_favorite = ?", true)
+	case "used":
+		query = query.Where("id IN (SELECT media_id FROM post_media)")
+	case "unused":
+		query = query.Where("id NOT IN (SELECT media_id FROM post_media)")
+	default:
+		return nil, &mcpError{Code: -32602, Message: "filter must be one of all, favorites, used, or unused"}
+	}
+
+	err := query.Order("created_at DESC").Limit(limit).Scan(ctx, &rows)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, &mcpError{Code: -32603, Message: "failed to list media"}
+	}
+	mediaHandler := &MediaHandler{db: h.db}
+	media := make([]mcpMedia, 0, len(rows))
+	for _, row := range rows {
+		usage, err := mediaHandler.mediaUsageSummary(ctx, row.WorkspaceID, row.ID)
+		if err != nil {
+			return nil, &mcpError{Code: -32603, Message: "failed to check media usage"}
+		}
+		media = append(media, mcpMediaFromAttachment(row, usage.Total, usage.Blocking == 0))
+	}
+
+	text := fmt.Sprintf("Found %d media items.", len(media))
+	if len(media) == 0 {
+		text = "No media attachments found."
+	}
+	return map[string]any{
+		"content": []mcpContent{{
+			Type: "text",
+			Text: text,
+		}},
+		"structuredContent": map[string]any{
+			"media": media,
+		},
+	}, nil
+}
+
+func mcpMediaFromAttachment(media models.MediaAttachment, usageCount int, canDelete bool) mcpMedia {
+	thumbnailURL := "/media/" + media.ID + "/thumb"
+	if mcpHasSmallThumbnail(media.ThumbnailsJSON) {
+		thumbnailURL = "/media/" + media.ID + "/thumb/sm"
+	}
+	return mcpMedia{
+		ID:               media.ID,
+		WorkspaceID:      media.WorkspaceID,
+		MimeType:         media.MimeType,
+		URL:              "/media/" + media.ID,
+		ThumbnailURL:     thumbnailURL,
+		Size:             media.Size,
+		Filename:         media.OriginalFilename,
+		OriginalFilename: media.OriginalFilename,
+		AltText:          media.AltText,
+		Width:            media.Width,
+		Height:           media.Height,
+		IsFavorite:       media.IsFavorite,
+		CreatedAt:        media.CreatedAt.Format(time.RFC3339),
+		ProcessingStatus: media.ProcessingStatus,
+		UsageCount:       usageCount,
+		CanDelete:        canDelete,
+	}
+}
+
+func mcpHasSmallThumbnail(raw string) bool {
+	if strings.TrimSpace(raw) == "" {
+		return false
+	}
+	var thumbnails Thumbnails
+	if err := json.Unmarshal([]byte(raw), &thumbnails); err != nil {
+		return false
+	}
+	return thumbnails.SM != ""
 }
 
 func (h *MCPHandler) uploadMediaFromURL(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
@@ -2342,6 +2556,20 @@ func (h *MCPHandler) normalizeMCPOptionalDestinationAccounts(ctx context.Context
 	return normalized, nil
 }
 
+func (h *MCPHandler) normalizeMCPOptionalMediaIDs(ctx context.Context, workspaceID string, mediaIDs *[]string) ([]string, *mcpError) {
+	if mediaIDs == nil {
+		return nil, nil
+	}
+	normalized, rpcErr := normalizeMCPIDs(*mediaIDs, "media_ids")
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, workspaceID, normalized); rpcErr != nil {
+		return nil, rpcErr
+	}
+	return normalized, nil
+}
+
 func (h *MCPHandler) loadMCPPostStatus(ctx context.Context, postID string) (mcpPostStatus, *mcpError) {
 	var post models.Post
 	if err := h.db.NewSelect().Model(&post).Where("id = ?", postID).Scan(ctx); err != nil {
@@ -2377,6 +2605,15 @@ func (h *MCPHandler) loadMCPPostStatus(ctx context.Context, postID string) (mcpP
 		})
 	}
 
+	media, rpcErr := h.loadMCPPostMedia(ctx, post.ID)
+	if rpcErr != nil {
+		return mcpPostStatus{}, rpcErr
+	}
+	mediaIDs := make([]string, 0, len(media))
+	for _, item := range media {
+		mediaIDs = append(mediaIDs, item.MediaID)
+	}
+
 	status := mcpPostStatus{
 		ID:                 post.ID,
 		WorkspaceID:        post.WorkspaceID,
@@ -2384,6 +2621,8 @@ func (h *MCPHandler) loadMCPPostStatus(ctx context.Context, postID string) (mcpP
 		Status:             post.Status,
 		RandomDelayMinutes: post.RandomDelayMinutes,
 		CreatedAt:          post.CreatedAt.Format(time.RFC3339),
+		MediaIDs:           mediaIDs,
+		Media:              media,
 		Destinations:       destinations,
 	}
 	if !post.ScheduledAt.IsZero() {
@@ -2393,6 +2632,48 @@ func (h *MCPHandler) loadMCPPostStatus(ctx context.Context, postID string) (mcpP
 		status.ActualRunAt = post.ActualRunAt.Format(time.RFC3339)
 	}
 	return status, nil
+}
+
+func (h *MCPHandler) loadMCPPostMedia(ctx context.Context, postID string) ([]mcpPostMedia, *mcpError) {
+	var rows []struct {
+		MediaID          string `bun:"media_id"`
+		DisplayOrder     int    `bun:"display_order"`
+		MimeType         string `bun:"mime_type"`
+		OriginalFilename string `bun:"original_filename"`
+		AltText          string `bun:"alt_text"`
+		Width            int    `bun:"width"`
+		Height           int    `bun:"height"`
+		ThumbnailsJSON   string `bun:"thumbnails"`
+	}
+	err := h.db.NewSelect().
+		TableExpr("post_media AS pm").
+		ColumnExpr("pm.media_id, pm.display_order, ma.mime_type, ma.original_filename, ma.alt_text, ma.width, ma.height, ma.thumbnails").
+		Join("JOIN media_attachments AS ma ON ma.id = pm.media_id").
+		Where("pm.post_id = ?", postID).
+		Order("pm.display_order ASC").
+		Scan(ctx, &rows)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, &mcpError{Code: -32603, Message: "failed to load post media"}
+	}
+	media := make([]mcpPostMedia, 0, len(rows))
+	for _, row := range rows {
+		thumbnailURL := "/media/" + row.MediaID + "/thumb"
+		if mcpHasSmallThumbnail(row.ThumbnailsJSON) {
+			thumbnailURL = "/media/" + row.MediaID + "/thumb/sm"
+		}
+		media = append(media, mcpPostMedia{
+			MediaID:          row.MediaID,
+			DisplayOrder:     row.DisplayOrder,
+			URL:              "/media/" + row.MediaID,
+			ThumbnailURL:     thumbnailURL,
+			MimeType:         row.MimeType,
+			OriginalFilename: row.OriginalFilename,
+			AltText:          row.AltText,
+			Width:            row.Width,
+			Height:           row.Height,
+		})
+	}
+	return media, nil
 }
 
 func mcpPostToolResult(text string, post mcpPostStatus) map[string]any {
@@ -2458,6 +2739,32 @@ func replaceMCPPostDestinations(ctx context.Context, tx bun.Tx, postID string, a
 	}
 	_, err := tx.NewInsert().Model(&destinations).Exec(ctx)
 	return err
+}
+
+func insertMCPPostMedia(ctx context.Context, tx bun.Tx, postID string, mediaIDs []string) error {
+	if len(mediaIDs) == 0 {
+		return nil
+	}
+	attachments := make([]models.PostMedia, 0, len(mediaIDs))
+	for i, mediaID := range mediaIDs {
+		attachments = append(attachments, models.PostMedia{
+			PostID:       postID,
+			MediaID:      mediaID,
+			DisplayOrder: i,
+		})
+	}
+	_, err := tx.NewInsert().Model(&attachments).Exec(ctx)
+	return err
+}
+
+func replaceMCPPostMedia(ctx context.Context, tx bun.Tx, postID string, mediaIDs []string) error {
+	if _, err := tx.NewDelete().
+		Model(&models.PostMedia{}).
+		Where("post_id = ?", postID).
+		Exec(ctx); err != nil {
+		return err
+	}
+	return insertMCPPostMedia(ctx, tx, postID, mediaIDs)
 }
 
 func pruneMCPPostVariants(ctx context.Context, tx bun.Tx, postID string, accountIDs []string) error {

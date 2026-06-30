@@ -50,6 +50,7 @@ All notable changes to this project are documented in this file.
 - Wired web media uploads through direct S3 upload sessions with automatic multipart fallback for local/self-hosted storage.
 - Added provider launch-status metadata to account-provider discovery, including planned Instagram, Facebook, YouTube, and TikTok entries for web, CLI, MCP, and ChatGPT App clients.
 - Added MCP `list_provider_catalog` so assistant clients can inspect available, unconfigured, and planned social providers before choosing destinations.
+- Added MCP `list_media` plus source `media_ids` support on draft and scheduling tools so assistant clients can reuse existing workspace media or attach uploaded assets to posts.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
