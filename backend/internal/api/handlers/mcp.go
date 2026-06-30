@@ -782,16 +782,118 @@ func mcpUploadMediaFromURLTool() map[string]any {
 
 func mcpToolDescriptor(tool map[string]any, readOnly, openWorld bool) map[string]any {
 	securitySchemes := []map[string]any{mcpOAuthSecurityScheme()}
+	toolName, _ := tool["name"].(string)
 	tool["securitySchemes"] = securitySchemes
+	tool["outputSchema"] = mcpToolOutputSchema(toolName)
 	tool["annotations"] = map[string]any{
 		"readOnlyHint":    readOnly,
 		"destructiveHint": false,
 		"openWorldHint":   openWorld,
 	}
+	status := mcpToolInvocationStatus(toolName)
 	tool["_meta"] = map[string]any{
-		"securitySchemes": securitySchemes,
+		"securitySchemes":                securitySchemes,
+		"openai/toolInvocation/invoking": status.Invoking,
+		"openai/toolInvocation/invoked":  status.Invoked,
 	}
 	return tool
+}
+
+type mcpToolStatus struct {
+	Invoking string
+	Invoked  string
+}
+
+func mcpToolInvocationStatus(toolName string) mcpToolStatus {
+	switch toolName {
+	case mcpToolWorkspaces:
+		return mcpToolStatus{Invoking: "Loading workspaces", Invoked: "Workspaces loaded"}
+	case mcpToolAccounts:
+		return mcpToolStatus{Invoking: "Loading accounts", Invoked: "Accounts loaded"}
+	case mcpToolCreateDraft:
+		return mcpToolStatus{Invoking: "Creating draft", Invoked: "Draft created"}
+	case mcpToolListDrafts:
+		return mcpToolStatus{Invoking: "Loading drafts", Invoked: "Drafts loaded"}
+	case mcpToolUpdateDraft:
+		return mcpToolStatus{Invoking: "Updating draft", Invoked: "Draft updated"}
+	case mcpToolRenditions:
+		return mcpToolStatus{Invoking: "Updating renditions", Invoked: "Renditions updated"}
+	case mcpToolSchedulePost:
+		return mcpToolStatus{Invoking: "Scheduling post", Invoked: "Post scheduled"}
+	case mcpToolScheduleDraft:
+		return mcpToolStatus{Invoking: "Scheduling draft", Invoked: "Draft scheduled"}
+	case mcpToolGetPost:
+		return mcpToolStatus{Invoking: "Loading post status", Invoked: "Post status loaded"}
+	case mcpToolListPosts:
+		return mcpToolStatus{Invoking: "Loading queue", Invoked: "Queue loaded"}
+	case mcpToolCancelPost:
+		return mcpToolStatus{Invoking: "Canceling post", Invoked: "Post canceled"}
+	case mcpToolSuggestSlot:
+		return mcpToolStatus{Invoking: "Finding next slot", Invoked: "Next slot found"}
+	case mcpToolUploadURL:
+		return mcpToolStatus{Invoking: "Uploading media", Invoked: "Media uploaded"}
+	default:
+		return mcpToolStatus{Invoking: "Running tool", Invoked: "Tool complete"}
+	}
+}
+
+func mcpToolOutputSchema(toolName string) map[string]any {
+	switch toolName {
+	case mcpToolWorkspaces:
+		return mcpStructuredOutputSchema(map[string]any{
+			"workspaces": mcpArraySchema(mcpOpenObjectSchema()),
+		}, "workspaces")
+	case mcpToolAccounts:
+		return mcpStructuredOutputSchema(map[string]any{
+			"accounts": mcpArraySchema(mcpOpenObjectSchema()),
+		}, "accounts")
+	case mcpToolCreateDraft, mcpToolUpdateDraft, mcpToolSchedulePost, mcpToolScheduleDraft, mcpToolGetPost, mcpToolCancelPost:
+		return mcpStructuredOutputSchema(map[string]any{
+			"post": mcpOpenObjectSchema(),
+		}, "post")
+	case mcpToolListDrafts, mcpToolListPosts:
+		return mcpStructuredOutputSchema(map[string]any{
+			"posts": mcpArraySchema(mcpOpenObjectSchema()),
+		}, "posts")
+	case mcpToolRenditions:
+		return mcpStructuredOutputSchema(map[string]any{
+			"post_id":    map[string]any{"type": "string"},
+			"renditions": mcpArraySchema(mcpOpenObjectSchema()),
+		}, "post_id", "renditions")
+	case mcpToolSuggestSlot:
+		return mcpStructuredOutputSchema(map[string]any{
+			"suggestion": mcpOpenObjectSchema(),
+		}, "suggestion")
+	case mcpToolUploadURL:
+		return mcpStructuredOutputSchema(map[string]any{
+			"media": mcpOpenObjectSchema(),
+		}, "media")
+	default:
+		return mcpStructuredOutputSchema(map[string]any{})
+	}
+}
+
+func mcpStructuredOutputSchema(properties map[string]any, required ...string) map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"properties":           properties,
+		"required":             required,
+		"additionalProperties": false,
+	}
+}
+
+func mcpArraySchema(items map[string]any) map[string]any {
+	return map[string]any{
+		"type":  "array",
+		"items": items,
+	}
+}
+
+func mcpOpenObjectSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": true,
+	}
 }
 
 func mcpOAuthSecurityScheme() map[string]any {

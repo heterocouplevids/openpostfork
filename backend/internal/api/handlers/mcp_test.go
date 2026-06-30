@@ -258,8 +258,24 @@ func TestMCPToolsList(t *testing.T) {
 	require.Equal(t, "suggest_next_slot", tools[11].(map[string]any)["name"])
 	require.Equal(t, "upload_media_from_url", tools[12].(map[string]any)["name"])
 
+	requiredOutputKeys := map[string][]any{
+		mcpToolWorkspaces:    {"workspaces"},
+		mcpToolAccounts:      {"accounts"},
+		mcpToolCreateDraft:   {"post"},
+		mcpToolListDrafts:    {"posts"},
+		mcpToolUpdateDraft:   {"post"},
+		mcpToolRenditions:    {"post_id", "renditions"},
+		mcpToolSchedulePost:  {"post"},
+		mcpToolScheduleDraft: {"post"},
+		mcpToolGetPost:       {"post"},
+		mcpToolListPosts:     {"posts"},
+		mcpToolCancelPost:    {"post"},
+		mcpToolSuggestSlot:   {"suggestion"},
+		mcpToolUploadURL:     {"media"},
+	}
 	for _, tool := range tools {
 		descriptor := tool.(map[string]any)
+		toolName := descriptor["name"].(string)
 		securitySchemes := descriptor["securitySchemes"].([]any)
 		require.Len(t, securitySchemes, 1)
 		scheme := securitySchemes[0].(map[string]any)
@@ -267,6 +283,17 @@ func TestMCPToolsList(t *testing.T) {
 		require.Equal(t, []any{"mcp:full"}, scheme["scopes"])
 		meta := descriptor["_meta"].(map[string]any)
 		require.Equal(t, descriptor["securitySchemes"], meta["securitySchemes"])
+		require.NotEmpty(t, meta["openai/toolInvocation/invoking"])
+		require.NotEmpty(t, meta["openai/toolInvocation/invoked"])
+		require.LessOrEqual(t, len(meta["openai/toolInvocation/invoking"].(string)), 64)
+		require.LessOrEqual(t, len(meta["openai/toolInvocation/invoked"].(string)), 64)
+		outputSchema := descriptor["outputSchema"].(map[string]any)
+		require.Equal(t, "object", outputSchema["type"])
+		require.ElementsMatch(t, requiredOutputKeys[toolName], outputSchema["required"])
+		properties := outputSchema["properties"].(map[string]any)
+		for _, key := range requiredOutputKeys[toolName] {
+			require.Contains(t, properties, key)
+		}
 	}
 	annotations := tools[0].(map[string]any)["annotations"].(map[string]any)
 	require.Equal(t, true, annotations["readOnlyHint"])

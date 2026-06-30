@@ -22,7 +22,8 @@ GET /.well-known/oauth-authorization-server
 
 Tool descriptors include OAuth security schemes, mirrored `_meta.securitySchemes`,
 and tool annotations so clients can distinguish read-only tools from actions that
-write OpenPost state or reach external URLs.
+write OpenPost state or reach external URLs. They also include short Apps SDK
+invocation status labels and output schemas for the returned `structuredContent`.
 
 OAuth-aware clients can start account linking at the browser authorization page,
 then exchange the returned code for an MCP-scoped bearer token:
@@ -80,6 +81,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Provides a browser approval page at `/oauth/authorize` and a form-encoded `/oauth/token` code exchange that mints `mcp:full` API tokens.
 - Validates client metadata redirect URIs for URL-based client IDs, accepts ChatGPT fallback redirects for predefined clients, and binds OAuth-issued MCP tokens to the `/mcp` resource audience.
 - Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. Fine-grained per-session scopes are still planned.
+- Adds Apps SDK-friendly `_meta["openai/toolInvocation/invoking"]`, `_meta["openai/toolInvocation/invoked"]`, and `outputSchema` metadata to every tool descriptor.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Advertises MCP prompt templates for common agentic scheduling workflows: planning a post, adapting platform renditions, and reviewing the publishing queue.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.

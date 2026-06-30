@@ -45,6 +45,7 @@ All notable changes to this project are documented in this file.
 - Added MCP client attribution for tool-call activity by storing API-token client ID, name, scope, and token prefix and surfacing the client label in Settings.
 - Added MCP OAuth authorization-code + PKCE account linking for ChatGPT-style clients, including authorization-server metadata, browser approval, client metadata redirect validation, and audience-bound MCP tokens.
 - Added MCP prompt templates for common agentic scheduling workflows: planning a social post, adapting platform renditions, and reviewing the publishing queue.
+- Added Apps SDK-friendly MCP tool invocation metadata and output schemas so ChatGPT-style clients can render progress states and validate structured tool results.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
