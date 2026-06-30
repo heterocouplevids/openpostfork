@@ -51,6 +51,7 @@ jobs:
           pnpm --filter @openpost/web build
           pnpm --filter @openpost/site check
           pnpm --filter @openpost/site build
+          pnpm run test:e2e
 
           cd cli
           go mod download

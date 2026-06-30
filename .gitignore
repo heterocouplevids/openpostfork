@@ -60,6 +60,8 @@ docs-site/.vitepress/.temp/
 # Logs
 *.log
 /logs/
+test-results/
+playwright-report/
 
 # Android signing
 *.jks
