@@ -28,6 +28,11 @@ test('marketing page presents the cloud product and demo slot', async ({ page })
 		page.getByRole('heading', { name: 'Managed social infrastructure without enterprise theatre.' })
 	).toBeVisible();
 	await expect(page.getByRole('link', { name: 'View GitHub' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Tools' }).first()).toHaveAttribute('href', '/tools');
+	await expect(page.getByRole('link', { name: 'Tips' }).first()).toHaveAttribute(
+		'href',
+		'/tips/best-times-to-post'
+	);
 });
 
 test('marketing page has no horizontal overflow', async ({ page }) => {
@@ -35,4 +40,30 @@ test('marketing page has no horizontal overflow', async ({ page }) => {
 
 	const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 	expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('marketing tools page counts, splits, and previews source copy', async ({ page }) => {
+	await page.goto('/tools');
+
+	await expect(page).toHaveTitle(/Free Social Post Tools/);
+	await expect(
+		page.getByRole('heading', { name: 'Check the post before it hits the queue.' })
+	).toBeVisible();
+
+	const input = page.getByTestId('post-tool-input');
+	await input.fill('OpenPost ships a focused publication workflow for social releases.');
+
+	await expect(page.getByTestId('remaining-X')).toContainText('214 left');
+	await expect(page.getByTestId('thread-parts')).toContainText('1/1');
+	await expect(page.getByText('OpenPost ships a focused publication workflow')).toHaveCount(5);
+});
+
+test('marketing tips pages are reachable SEO articles', async ({ page }) => {
+	await page.goto('/tips/best-times-to-post');
+	await expect(page).toHaveTitle(/Best Times to Post/);
+	await expect(page.getByRole('heading', { name: /Best times to post/ })).toBeVisible();
+
+	await page.goto('/tips/cross-posting-without-looking-spammy');
+	await expect(page).toHaveTitle(/Cross-Post Without Looking Spammy/);
+	await expect(page.getByRole('heading', { name: /Cross-posting works/ })).toBeVisible();
 });

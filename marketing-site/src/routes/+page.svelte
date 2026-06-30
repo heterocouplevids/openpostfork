@@ -142,6 +142,8 @@
 		<a href="#features">Features</a>
 		<a href="#demo">Demo</a>
 		<a href="#pricing">Pricing</a>
+		<a href="/tools">Tools</a>
+		<a href="/tips/best-times-to-post">Tips</a>
 	</nav>
 	<a class="login" href={appUrl}>Login</a>
 </header>
@@ -351,6 +353,8 @@
 	<nav aria-label="Footer navigation">
 		<a href={appUrl}>App</a>
 		<a href={docsUrl}>Docs</a>
+		<a href="/tools">Tools</a>
+		<a href="/tips/best-times-to-post">Tips</a>
 		<a href={githubUrl}>GitHub</a>
 	</nav>
 </footer>
