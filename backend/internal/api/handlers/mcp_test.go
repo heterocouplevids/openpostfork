@@ -103,6 +103,7 @@ func newMCPTestServerWithEntitlement(t *testing.T, entitlement entitlements.Serv
 	e := echo.New()
 	handler := NewMCPHandler(db, testAuthenticator{}, entitlement)
 	handler.SetMediaStorage(mediastore.NewLocalStorage(t.TempDir(), "/media"))
+	handler.SetPublicURL("https://app.openpost.test")
 	handler.RegisterRoutes(e)
 	return &mcpTestServer{echo: e, db: db, handler: handler}
 }
@@ -139,6 +140,29 @@ func TestMCPRejectsMissingAuthorization(t *testing.T) {
 	})
 
 	require.Equal(t, http.StatusUnauthorized, resp.Code)
+	require.Contains(t, resp.Header().Get("WWW-Authenticate"), `resource_metadata="https://app.openpost.test/.well-known/oauth-protected-resource"`)
+	require.Contains(t, resp.Header().Get("WWW-Authenticate"), `scope="mcp:full"`)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	meta := out["_meta"].(map[string]any)
+	require.Equal(t, resp.Header().Get("WWW-Authenticate"), meta["mcp/www_authenticate"])
+}
+
+func TestMCPProtectedResourceMetadata(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	rec := httptest.NewRecorder()
+	srv.echo.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
+	require.Equal(t, "https://app.openpost.test/mcp", out["resource"])
+	require.Equal(t, []any{"https://app.openpost.test"}, out["authorization_servers"])
+	require.Equal(t, []any{"mcp:full"}, out["scopes_supported"])
+	require.Equal(t, []any{"header"}, out["bearer_methods_supported"])
 }
 
 func TestMCPToolsList(t *testing.T) {
@@ -165,6 +189,21 @@ func TestMCPToolsList(t *testing.T) {
 	require.Equal(t, "cancel_post", tools[5].(map[string]any)["name"])
 	require.Equal(t, "suggest_next_slot", tools[6].(map[string]any)["name"])
 	require.Equal(t, "upload_media_from_url", tools[7].(map[string]any)["name"])
+
+	for _, tool := range tools {
+		descriptor := tool.(map[string]any)
+		securitySchemes := descriptor["securitySchemes"].([]any)
+		require.Len(t, securitySchemes, 1)
+		scheme := securitySchemes[0].(map[string]any)
+		require.Equal(t, "oauth2", scheme["type"])
+		require.Equal(t, []any{"mcp:full"}, scheme["scopes"])
+		meta := descriptor["_meta"].(map[string]any)
+		require.Equal(t, descriptor["securitySchemes"], meta["securitySchemes"])
+	}
+	annotations := tools[0].(map[string]any)["annotations"].(map[string]any)
+	require.Equal(t, true, annotations["readOnlyHint"])
+	require.Equal(t, false, annotations["destructiveHint"])
+	require.Equal(t, false, annotations["openWorldHint"])
 }
 
 func TestMCPCallListWorkspaces(t *testing.T) {

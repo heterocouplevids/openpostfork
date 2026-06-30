@@ -73,7 +73,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Add a local `openpost-mcp` stdio binary for desktop/self-hosted clients. The CLI now includes a stdio proxy that loads the active OpenPost profile/token and forwards frames to `/mcp`.
 - Reuse CLI/API client behavior where possible, but keep MCP stdout strict.
 - Start with safe semantic tools: list workspaces, list accounts, create draft, upload media from URL, schedule post, cancel post, get post status, suggest next slot. The remote MCP foundation now supports workspace/account listing, draft creation, guarded URL media upload, quota-checked scheduling, post status reads, scheduled-post cancellation, and next-slot suggestions.
-- Require auth for remote MCP, scope sessions, log tool calls, and expose revocation in settings. Tool-call logging is now persisted in `mcp_tool_calls` and recent calls are visible in settings; session scoping and dedicated MCP token revocation are still next.
+- Require auth for remote MCP, scope sessions, log tool calls, and expose revocation in settings. Tool-call logging is now persisted in `mcp_tool_calls`, recent calls are visible in settings, and Apps SDK-facing protected-resource/tool security metadata is in place; the OAuth authorization-server flow, session scoping, and dedicated MCP token revocation are still next.
 
 ### 7. Marketing, SEO, And Docs
 
@@ -99,4 +99,4 @@ This is the implementation map for turning OpenPost into a production-ready self
 5. Add entitlement interfaces and self-host defaults. Done for the service contract and workspace creation boundary.
 6. Add usage tables and API boundary checks. Monthly usage counters, social-account quota enforcement, media quota enforcement, scheduled-post quota enforcement, and publishing-worker usage accounting are in place; team and hard publish-worker enforcement are next.
 7. Add Playwright coverage around the core app flows.
-8. Start MCP with authenticated remote metadata and safe read/create/schedule tools. Remote auth, workspace listing, account listing, guarded URL media upload, draft creation, scheduled posting, status reads, scheduled-post cancellation, next-slot suggestions, and settings-visible tool-call activity are in place.
+8. Start MCP with authenticated remote metadata and safe read/create/schedule tools. Remote auth, protected-resource metadata, tool security descriptors, workspace listing, account listing, guarded URL media upload, draft creation, scheduled posting, status reads, scheduled-post cancellation, next-slot suggestions, and settings-visible tool-call activity are in place.

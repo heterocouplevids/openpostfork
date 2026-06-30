@@ -6,11 +6,22 @@ OpenPost exposes an authenticated MCP foundation at:
 POST /mcp
 ```
 
-The endpoint is JSON-RPC over HTTP and requires:
+The endpoint is JSON-RPC over HTTP and requires a bearer token:
 
 ```http
 Authorization: Bearer <jwt-or-api-token>
 ```
+
+For ChatGPT Apps and other OAuth-aware MCP clients, OpenPost also publishes
+protected-resource metadata:
+
+```txt
+GET /.well-known/oauth-protected-resource
+```
+
+Tool descriptors include OAuth security schemes, mirrored `_meta.securitySchemes`,
+and tool annotations so clients can distinguish read-only tools from actions that
+write OpenPost state or reach external URLs.
 
 Desktop MCP clients can use the local stdio proxy from the CLI module:
 
@@ -43,6 +54,8 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 ## Current scope
 
 - Uses the same Bearer authentication path as the CLI and API tokens.
+- Publishes MCP protected-resource metadata and returns `WWW-Authenticate` plus `_meta["mcp/www_authenticate"]` challenges for unauthenticated MCP requests.
+- Advertises the `mcp:full` OAuth scope in every MCP tool descriptor. A dedicated OAuth authorization-server flow for ChatGPT account linking is still planned.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
 - Rejects media URL fetches that resolve to private, loopback, link-local, multicast, or otherwise local addresses.

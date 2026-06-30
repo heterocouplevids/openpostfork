@@ -32,6 +32,7 @@ All notable changes to this project are documented in this file.
 - Added MCP `upload_media_from_url` with shared media ingestion, upload quota accounting, dedupe, and private/local-address SSRF protection.
 - Added persistent MCP tool-call auditing with user/workspace scope, status, error message, duration, and migration coverage.
 - Added an authenticated MCP activity API and settings panel so users can inspect recent assistant/CLI tool calls, failures, durations, and workspace scope.
+- Added Apps SDK-facing MCP protected-resource metadata, OAuth scope descriptors, and bearer challenges for ChatGPT/App client account-linking readiness.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

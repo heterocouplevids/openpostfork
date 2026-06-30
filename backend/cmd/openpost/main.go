@@ -231,6 +231,7 @@ func main() {
 
 	mcpHandler := handlers.NewMCPHandler(db, authenticator, entitlementService)
 	mcpHandler.SetMediaStorage(storage)
+	mcpHandler.SetPublicURL(cfg.PublicURL)
 	mcpHandler.RegisterRoutes(e)
 	handlers.NewMCPActivityHandler(db, authenticator).RegisterRoutes(api)
 

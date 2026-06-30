@@ -33,6 +33,7 @@ const (
 	mcpToolCancelPost   = "cancel_post"
 	mcpToolSuggestSlot  = "suggest_next_slot"
 	mcpToolUploadURL    = "upload_media_from_url"
+	mcpScopeFull        = "mcp:full"
 	maxRemoteMediaBytes = 50 * 1024 * 1024
 )
 
@@ -44,6 +45,7 @@ type MCPHandler struct {
 	mediaStorage      mediastore.BlobStorage
 	mediaURLHTTP      *http.Client
 	mediaURLValidator func(context.Context, *url.URL) error
+	publicURL         string
 }
 
 func NewMCPHandler(db *bun.DB, authenticator middleware.Authenticator, entitlement ...entitlements.Service) *MCPHandler {
@@ -77,8 +79,13 @@ func (h *MCPHandler) SetMediaURLValidator(validator func(context.Context, *url.U
 	h.mediaURLValidator = validator
 }
 
+func (h *MCPHandler) SetPublicURL(publicURL string) {
+	h.publicURL = strings.TrimRight(publicURL, "/")
+}
+
 func (h *MCPHandler) RegisterRoutes(e *echo.Echo) {
 	e.POST("/mcp", h.handle)
+	e.GET("/.well-known/oauth-protected-resource", h.protectedResourceMetadata)
 }
 
 type mcpRequest struct {
@@ -108,7 +115,14 @@ type mcpContent struct {
 func (h *MCPHandler) handle(c echo.Context) error {
 	principal, err := h.authenticate(c.Request())
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		challenge := h.mcpWWWAuthenticate()
+		c.Response().Header().Set("WWW-Authenticate", challenge)
+		return c.JSON(http.StatusUnauthorized, map[string]any{
+			"error": "unauthorized",
+			"_meta": map[string]any{
+				"mcp/www_authenticate": challenge,
+			},
+		})
 	}
 
 	var req mcpRequest
@@ -134,6 +148,47 @@ func (h *MCPHandler) handle(c echo.Context) error {
 		resp.Result = result
 	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *MCPHandler) protectedResourceMetadata(c echo.Context) error {
+	baseURL := h.externalBaseURL(c.Request())
+	resource := baseURL + "/mcp"
+	return c.JSON(http.StatusOK, map[string]any{
+		"resource":                 resource,
+		"authorization_servers":    []string{baseURL},
+		"scopes_supported":         []string{mcpScopeFull},
+		"bearer_methods_supported": []string{"header"},
+		"resource_name":            "OpenPost MCP",
+	})
+}
+
+func (h *MCPHandler) externalBaseURL(r *http.Request) string {
+	if h.publicURL != "" {
+		return h.publicURL
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+		scheme = strings.Split(forwardedProto, ",")[0]
+	}
+	host := r.Host
+	if forwardedHost := r.Header.Get("X-Forwarded-Host"); forwardedHost != "" {
+		host = strings.Split(forwardedHost, ",")[0]
+	}
+	return strings.TrimRight(scheme+"://"+strings.TrimSpace(host), "/")
+}
+
+func (h *MCPHandler) mcpWWWAuthenticate() string {
+	return fmt.Sprintf(`Bearer realm="OpenPost MCP", resource_metadata="%s/.well-known/oauth-protected-resource", scope="%s"`, h.publicURLOrPlaceholder(), mcpScopeFull)
+}
+
+func (h *MCPHandler) publicURLOrPlaceholder() string {
+	if h.publicURL != "" {
+		return h.publicURL
+	}
+	return "http://localhost:8080"
 }
 
 func (h *MCPHandler) authenticate(r *http.Request) (*middleware.Principal, error) {
@@ -177,7 +232,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 }
 
 func mcpListWorkspacesTool() map[string]any {
-	return map[string]any{
+	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolWorkspaces,
 		"title":       "List workspaces",
 		"description": "List OpenPost workspaces available to the authenticated user.",
@@ -186,11 +241,11 @@ func mcpListWorkspacesTool() map[string]any {
 			"properties":           map[string]any{},
 			"additionalProperties": false,
 		},
-	}
+	}, true, false)
 }
 
 func mcpListAccountsTool() map[string]any {
-	return map[string]any{
+	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolAccounts,
 		"title":       "List social accounts",
 		"description": "List active social accounts connected to an OpenPost workspace.",
@@ -205,11 +260,11 @@ func mcpListAccountsTool() map[string]any {
 			"required":             []string{"workspace_id"},
 			"additionalProperties": false,
 		},
-	}
+	}, true, false)
 }
 
 func mcpCreateDraftTool() map[string]any {
-	return map[string]any{
+	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolCreateDraft,
 		"title":       "Create draft",
 		"description": "Create an OpenPost draft in a workspace, optionally assigning destination social accounts.",
@@ -233,11 +288,11 @@ func mcpCreateDraftTool() map[string]any {
 			"required":             []string{"workspace_id", "content"},
 			"additionalProperties": false,
 		},
-	}
+	}, false, false)
 }
 
 func mcpSchedulePostTool() map[string]any {
-	return map[string]any{
+	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolSchedulePost,
 		"title":       "Schedule post",
 		"description": "Create a scheduled OpenPost post and queue it for publishing.",
@@ -267,11 +322,11 @@ func mcpSchedulePostTool() map[string]any {
 			"required":             []string{"workspace_id", "content", "scheduled_at", "social_account_ids"},
 			"additionalProperties": false,
 		},
-	}
+	}, false, true)
 }
 
 func mcpGetPostStatusTool() map[string]any {
-	return map[string]any{
+	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolGetPost,
 		"title":       "Get post status",
 		"description": "Read the current OpenPost status and destination status for a post.",
@@ -290,11 +345,11 @@ func mcpGetPostStatusTool() map[string]any {
 			"required":             []string{"workspace_id", "post_id"},
 			"additionalProperties": false,
 		},
-	}
+	}, true, false)
 }
 
 func mcpCancelPostTool() map[string]any {
-	return map[string]any{
+	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolCancelPost,
 		"title":       "Cancel scheduled post",
 		"description": "Cancel a queued scheduled post and leave it as an editable draft.",
@@ -313,11 +368,11 @@ func mcpCancelPostTool() map[string]any {
 			"required":             []string{"workspace_id", "post_id"},
 			"additionalProperties": false,
 		},
-	}
+	}, false, true)
 }
 
 func mcpSuggestNextSlotTool() map[string]any {
-	return map[string]any{
+	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolSuggestSlot,
 		"title":       "Suggest next slot",
 		"description": "Suggest the next free configured posting slot for a workspace.",
@@ -341,11 +396,11 @@ func mcpSuggestNextSlotTool() map[string]any {
 			"required":             []string{"workspace_id"},
 			"additionalProperties": false,
 		},
-	}
+	}, true, false)
 }
 
 func mcpUploadMediaFromURLTool() map[string]any {
-	return map[string]any{
+	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolUploadURL,
 		"title":       "Upload media from URL",
 		"description": "Fetch a public media URL and store it in an OpenPost workspace.",
@@ -373,6 +428,27 @@ func mcpUploadMediaFromURLTool() map[string]any {
 			"required":             []string{"workspace_id", "url"},
 			"additionalProperties": false,
 		},
+	}, false, true)
+}
+
+func mcpToolDescriptor(tool map[string]any, readOnly, openWorld bool) map[string]any {
+	securitySchemes := []map[string]any{mcpOAuthSecurityScheme()}
+	tool["securitySchemes"] = securitySchemes
+	tool["annotations"] = map[string]any{
+		"readOnlyHint":    readOnly,
+		"destructiveHint": false,
+		"openWorldHint":   openWorld,
+	}
+	tool["_meta"] = map[string]any{
+		"securitySchemes": securitySchemes,
+	}
+	return tool
+}
+
+func mcpOAuthSecurityScheme() map[string]any {
+	return map[string]any{
+		"type":   "oauth2",
+		"scopes": []string{mcpScopeFull},
 	}
 }
 
