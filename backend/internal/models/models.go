@@ -250,6 +250,25 @@ type XOAuthRequestToken struct {
 	CreatedAt     time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+type OAuthAccountSelection struct {
+	bun.BaseModel `bun:"table:oauth_account_selections"`
+
+	ID              string    `bun:",pk" json:"id"`
+	UserID          string    `bun:",notnull" json:"user_id"`
+	WorkspaceID     string    `bun:",notnull" json:"workspace_id"`
+	Platform        string    `bun:",notnull" json:"platform"`
+	InstanceURL     string    `json:"instance_url"`
+	AccessTokenEnc  []byte    `bun:"access_token_encrypted,notnull" json:"-"`
+	RefreshTokenEnc []byte    `bun:"refresh_token_encrypted" json:"-"`
+	TokenType       string    `json:"token_type"`
+	TokenExpiresAt  time.Time `json:"token_expires_at"`
+	TokenExtraJSON  string    `bun:"token_extra_json,notnull,default:'{}'" json:"-"`
+	OptionsJSON     string    `bun:"options_json,notnull,default:'[]'" json:"-"`
+	ExpiresAt       time.Time `bun:",notnull" json:"expires_at"`
+	ConsumedAt      time.Time `bun:",nullzero" json:"consumed_at"`
+	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 // Publication is the user's canonical unit of intent: one idea, launch,
 // update, or announcement that can produce platform-specific posts.
 type Publication struct {

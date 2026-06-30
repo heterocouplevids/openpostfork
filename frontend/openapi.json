@@ -50,6 +50,10 @@
 						"readOnly": true,
 						"type": "string"
 					},
+					"account_avatar_url": {
+						"description": "Account avatar URL",
+						"type": "string"
+					},
 					"account_id": {
 						"description": "Platform-specific account ID",
 						"type": "string"
@@ -89,10 +93,80 @@
 					"platform",
 					"account_id",
 					"account_username",
+					"account_avatar_url",
 					"instance_url",
 					"is_active",
 					"thread_replies_supported"
 				],
+				"type": "object"
+			},
+			"AccountSelectionOption": {
+				"additionalProperties": false,
+				"properties": {
+					"avatar_url": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"display_name": {
+						"type": "string"
+					},
+					"extra": {
+						"additionalProperties": {
+							"type": "string"
+						},
+						"type": "object"
+					},
+					"id": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string"
+					},
+					"username": {
+						"type": "string"
+					}
+				},
+				"required": ["id"],
+				"type": "object"
+			},
+			"AccountSelectionResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/AccountSelectionResponse.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"expires_at": {
+						"description": "When this pending selection expires",
+						"format": "date-time",
+						"type": "string"
+					},
+					"id": {
+						"description": "Pending OAuth account-selection ID",
+						"type": "string"
+					},
+					"options": {
+						"description": "Selectable accounts, pages, or channels",
+						"items": {
+							"$ref": "#/components/schemas/AccountSelectionOption"
+						},
+						"type": ["array", "null"]
+					},
+					"platform": {
+						"description": "Social platform key",
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Workspace ID this connection belongs to",
+						"type": "string"
+					}
+				},
+				"required": ["id", "platform", "workspace_id", "expires_at", "options"],
 				"type": "object"
 			},
 			"AddSetAccountsInputBody": {
@@ -396,6 +470,24 @@
 					}
 				},
 				"required": ["ok"],
+				"type": "object"
+			},
+			"CompleteAccountSelectionInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CompleteAccountSelectionInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"selection_id": {
+						"description": "Selected account, page, or channel ID",
+						"type": "string"
+					}
+				},
+				"required": ["selection_id"],
 				"type": "object"
 			},
 			"CompleteMediaUploadSessionInputBody": {
@@ -3597,6 +3689,168 @@
 					}
 				},
 				"summary": "List configured account providers",
+				"tags": ["Accounts"]
+			}
+		},
+		"/accounts/selections/{connection_id}": {
+			"get": {
+				"operationId": "get-account-selection",
+				"parameters": [
+					{
+						"description": "Pending OAuth account-selection ID",
+						"in": "path",
+						"name": "connection_id",
+						"required": true,
+						"schema": {
+							"description": "Pending OAuth account-selection ID",
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AccountSelectionResponse"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Get pending OAuth account-selection options",
+				"tags": ["Accounts"]
+			}
+		},
+		"/accounts/selections/{connection_id}/complete": {
+			"post": {
+				"operationId": "complete-account-selection",
+				"parameters": [
+					{
+						"description": "Pending OAuth account-selection ID",
+						"in": "path",
+						"name": "connection_id",
+						"required": true,
+						"schema": {
+							"description": "Pending OAuth account-selection ID",
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CompleteAccountSelectionInputBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AccountResponse"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Complete OAuth account selection and save the selected account",
 				"tags": ["Accounts"]
 			}
 		},

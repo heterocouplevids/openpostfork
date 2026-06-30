@@ -19,13 +19,23 @@ The provider discovery API returns current and planned providers so clients can 
 | YouTube   | Shorts, video publishing, scheduling, agent workflows.                                      |
 | TikTok    | Short-form video publishing, scheduling, agent workflows.                                   |
 
+## Account-selection requirement
+
+Some planned providers cannot be modeled as a single OAuth user profile:
+
+- Facebook should connect a selected Page and save the Page token.
+- Instagram should connect the selected Instagram Business account behind a Facebook Page.
+- YouTube should connect the selected channel.
+
+These adapters must implement the backend account-selection flow before they move from `planned` to connectable. TikTok is expected to be closer to a direct OAuth account, but still needs provider-specific media validation and posting settings before launch.
+
 ## Implementation contract
 
 Every provider still needs to implement the shared backend adapter before it becomes connectable:
 
 - OAuth or app-password account connection.
 - Token refresh behavior, when the provider supports refresh.
-- Profile lookup for stable account identity.
+- Profile lookup for stable account identity, or account-selection support for page/channel providers.
 - Media upload rules and validation.
 - Publish behavior, including reply/thread semantics where available.
 - Documentation for callbacks, app review requirements, media limits, and known API caveats.

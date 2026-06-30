@@ -59,6 +59,27 @@ type UserProfile struct {
 	DisplayName string
 }
 
+// AccountSelectionOption is a user-visible account, page, or channel that can
+// be selected after a provider OAuth flow. It must not contain access tokens or
+// other secrets because options are stored as pending OAuth metadata.
+type AccountSelectionOption struct {
+	ID          string            `json:"id"`
+	Username    string            `json:"username,omitempty"`
+	DisplayName string            `json:"display_name,omitempty"`
+	AvatarURL   string            `json:"avatar_url,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Kind        string            `json:"kind,omitempty"`
+	Extra       map[string]string `json:"extra,omitempty"`
+}
+
+type SelectedAccount struct {
+	AccountID        string
+	AccountUsername  string
+	AccountAvatarURL string
+	InstanceURL      string
+	Token            *TokenResult
+}
+
 // TokenResult is a platform-agnostic token response.
 type TokenResult struct {
 	AccessToken  string            `json:"access_token"`
@@ -120,4 +141,12 @@ type Adapter interface {
 	// For Bluesky this is JSON {"uri":"...","cid":"..."} for threading support.
 	// For LinkedIn this is the activity URN for the first post, or comment ID for replies.
 	Publish(ctx context.Context, accessToken, accountID string, req *PublishRequest) (string, error)
+}
+
+// AccountSelectionAdapter is implemented by OAuth providers that need a second
+// account-selection step after authorization, such as Facebook Pages,
+// Instagram Business accounts, and YouTube channels.
+type AccountSelectionAdapter interface {
+	ListAccountSelections(ctx context.Context, token *TokenResult) ([]AccountSelectionOption, error)
+	SelectAccount(ctx context.Context, token *TokenResult, selectionID string) (*SelectedAccount, error)
 }

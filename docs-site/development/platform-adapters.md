@@ -10,10 +10,26 @@ Provider integrations live under `backend/internal/platform/`.
 - `linkedin.go`
 - `threads.go`
 
+## Account selection
+
+Most current providers can save a connected account directly after OAuth profile lookup. Some larger platforms need a second step:
+
+- Facebook requires selecting a Page.
+- Instagram Business requires selecting the connected Instagram account behind a Facebook Page.
+- YouTube requires selecting a channel.
+
+Adapters for those providers should implement `platform.AccountSelectionAdapter` in addition to the base adapter. The OAuth callback stores encrypted pending tokens in `oauth_account_selections`, redirects with `status=selection_required`, and exposes:
+
+- `GET /api/v1/accounts/selections/{connection_id}` for non-secret account/page/channel options.
+- `POST /api/v1/accounts/selections/{connection_id}/complete` to resolve the selected option and save the final account through `AccountSaver`.
+
+Do not store page/channel access tokens in selection options. Keep secrets in the encrypted pending token row or fetch provider-specific page tokens during `SelectAccount`.
+
 ## Adding a new platform
 
 - [ ] Create `internal/platform/newplatform.go`
 - [ ] Implement the platform adapter interface
+- [ ] Implement `AccountSelectionAdapter` if OAuth needs page, account, or channel selection
 - [ ] Register the provider in backend startup
 - [ ] Add env vars to `.env.example`
 - [ ] Add the frontend connect flow

@@ -28,6 +28,17 @@ type AccountSaver struct {
 	entitlement entitlements.Service
 }
 
+type SaveAccountInput struct {
+	UserID           string
+	PlatformName     string
+	WorkspaceID      string
+	AccountID        string
+	AccountUsername  string
+	AccountAvatarURL string
+	InstanceURL      string
+	Token            *platform.TokenResult
+}
+
 // NewAccountSaver creates a new AccountSaver instance.
 func NewAccountSaver(db *bun.DB, crypto *crypto.TokenEncryptor, entitlement ...entitlements.Service) *AccountSaver {
 	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
@@ -53,70 +64,49 @@ func (s *AccountSaver) SetEntitlement(entitlement entitlements.Service) {
 //
 //nolint:gocyclo
 func (s *AccountSaver) SaveAccount(ctx context.Context, userID, platformName, workspaceID, accountID, accountUsername, instanceURL string, tokenResp *platform.TokenResult) (*models.SocialAccount, error) {
-	if s == nil || s.db == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
-	if userID == "" {
-		return nil, fmt.Errorf("user id is required")
-	}
-	if workspaceID == "" {
-		return nil, fmt.Errorf("workspace id is required")
-	}
-
-	memberCount, err := s.db.NewSelect().
-		Model((*models.WorkspaceMember)(nil)).
-		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
-		Count(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("validating workspace membership: %w", err)
-	}
-	if memberCount == 0 {
-		return nil, fmt.Errorf("workspace not accessible")
-	}
-
-	// For Threads, the account ID comes from the token response extra
-	if tokenResp.Extra != nil {
-		if uid, ok := tokenResp.Extra["user_id"]; ok && uid != "" {
-			accountID = uid
-		}
-	}
-	if err := s.checkSocialAccountQuota(ctx, workspaceID); err != nil {
-		return nil, err
-	}
-
-	encAccess, err := s.crypto.Encrypt(tokenResp.AccessToken)
-	if err != nil {
-		return nil, err
-	}
-
-	var encRefresh []byte
-	if tokenResp.RefreshToken != "" {
-		encRefresh, err = s.crypto.Encrypt(tokenResp.RefreshToken)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var expiresAt time.Time
-	if tokenResp.ExpiresIn > 0 {
-		expiresAt = time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
-	}
-
-	account := &models.SocialAccount{
-		ID:              uuid.New().String(),
+	return s.SaveAccountFromInput(ctx, SaveAccountInput{
+		UserID:          userID,
+		PlatformName:    platformName,
 		WorkspaceID:     workspaceID,
-		Slug:            "",
-		Platform:        platformName,
 		AccountID:       accountID,
 		AccountUsername: accountUsername,
 		InstanceURL:     instanceURL,
-		AccessTokenEnc:  encAccess,
-		RefreshTokenEnc: encRefresh,
-		TokenExpiresAt:  expiresAt,
-		IsActive:        true,
-		CreatedAt:       time.Now().UTC(),
+		Token:           tokenResp,
+	})
+}
+
+func (s *AccountSaver) SaveAccountFromInput(ctx context.Context, input SaveAccountInput) (*models.SocialAccount, error) {
+	if err := s.validateSaveAccountInput(ctx, input); err != nil {
+		return nil, err
 	}
-	account.Slug = s.uniqueSlug(ctx, workspaceID, defaultSlug(platformName, accountUsername, accountID, instanceURL))
+	input.AccountID = accountIDFromToken(input.AccountID, input.Token)
+
+	if err := s.checkSocialAccountQuota(ctx, input.WorkspaceID); err != nil {
+		return nil, err
+	}
+
+	encAccess, encRefresh, err := s.encryptAccountTokens(input.Token)
+	if err != nil {
+		return nil, err
+	}
+	expiresAt := tokenExpiresAt(input.Token)
+
+	account := &models.SocialAccount{
+		ID:               uuid.New().String(),
+		WorkspaceID:      input.WorkspaceID,
+		Slug:             "",
+		Platform:         input.PlatformName,
+		AccountID:        input.AccountID,
+		AccountUsername:  input.AccountUsername,
+		AccountAvatarURL: input.AccountAvatarURL,
+		InstanceURL:      input.InstanceURL,
+		AccessTokenEnc:   encAccess,
+		RefreshTokenEnc:  encRefresh,
+		TokenExpiresAt:   expiresAt,
+		IsActive:         true,
+		CreatedAt:        time.Now().UTC(),
+	}
+	account.Slug = s.uniqueSlug(ctx, input.WorkspaceID, defaultSlug(input.PlatformName, input.AccountUsername, input.AccountID, input.InstanceURL))
 
 	if _, err := s.db.NewInsert().Model(account).Exec(ctx); err != nil {
 		return nil, err
@@ -127,6 +117,66 @@ func (s *AccountSaver) SaveAccount(ctx context.Context, userID, platformName, wo
 	}
 
 	return account, nil
+}
+
+func (s *AccountSaver) validateSaveAccountInput(ctx context.Context, input SaveAccountInput) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if input.UserID == "" {
+		return fmt.Errorf("user id is required")
+	}
+	if input.WorkspaceID == "" {
+		return fmt.Errorf("workspace id is required")
+	}
+	if input.Token == nil {
+		return fmt.Errorf("token response is required")
+	}
+
+	memberCount, err := s.db.NewSelect().
+		Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, input.UserID).
+		Count(ctx)
+	if err != nil {
+		return fmt.Errorf("validating workspace membership: %w", err)
+	}
+	if memberCount == 0 {
+		return fmt.Errorf("workspace not accessible")
+	}
+	return nil
+}
+
+func (s *AccountSaver) encryptAccountTokens(token *platform.TokenResult) ([]byte, []byte, error) {
+	encAccess, err := s.crypto.Encrypt(token.AccessToken)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var encRefresh []byte
+	if token.RefreshToken != "" {
+		encRefresh, err = s.crypto.Encrypt(token.RefreshToken)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return encAccess, encRefresh, nil
+}
+
+func accountIDFromToken(fallback string, token *platform.TokenResult) string {
+	if token.Extra == nil {
+		return fallback
+	}
+	if uid, ok := token.Extra["user_id"]; ok && uid != "" {
+		return uid
+	}
+	return fallback
+}
+
+func tokenExpiresAt(token *platform.TokenResult) time.Time {
+	if token.ExpiresIn <= 0 {
+		return time.Time{}
+	}
+	return time.Now().UTC().Add(time.Duration(token.ExpiresIn) * time.Second)
 }
 
 func (s *AccountSaver) checkSocialAccountQuota(ctx context.Context, workspaceID string) error {

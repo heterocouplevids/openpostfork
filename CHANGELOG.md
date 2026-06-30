@@ -77,6 +77,7 @@ All notable changes to this project are documented in this file.
 - Added Playwright docs E2E coverage that verifies the user-facing, self-hosting, and developer docs entry points stay distinct and reachable.
 - Added the docs E2E suite to CI and release preflight gates so docs audience separation stays verified automatically.
 - Added the app Playwright E2E suite to CI and release preflight gates for billing, MCP, provider, and publication workflows.
+- Added the backend OAuth account-selection foundation for page/channel providers, including encrypted pending selection storage and completion APIs for future Facebook, Instagram, and YouTube adapters.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

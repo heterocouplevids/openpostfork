@@ -95,5 +95,8 @@ marketing-site/.vite/
 marketing-site/public/assets/
 marketing-site/static/assets/
 
+# Local reference checkouts
+/references/postiz/
+
 # Wrangler
 .wrangler/

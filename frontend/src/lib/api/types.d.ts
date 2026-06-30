@@ -89,6 +89,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/selections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get pending OAuth account-selection options */
+        get: operations["get-account-selection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/selections/{connection_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete OAuth account selection and save the selected account */
+        post: operations["complete-account-selection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{account_id}": {
         parameters: {
             query?: never;
@@ -1122,6 +1156,8 @@ export interface components {
              * @example https://example.com/schemas/AccountResponse.json
              */
             readonly $schema?: string;
+            /** @description Account avatar URL */
+            account_avatar_url: string;
             /** @description Platform-specific account ID */
             account_id: string;
             /** @description Account username */
@@ -1138,6 +1174,38 @@ export interface components {
             slug: string;
             /** @description Whether this account supports thread replies in current server config */
             thread_replies_supported: boolean;
+        };
+        AccountSelectionOption: {
+            avatar_url?: string;
+            description?: string;
+            display_name?: string;
+            extra?: {
+                [key: string]: string;
+            };
+            id: string;
+            kind?: string;
+            username?: string;
+        };
+        AccountSelectionResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AccountSelectionResponse.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: date-time
+             * @description When this pending selection expires
+             */
+            expires_at: string;
+            /** @description Pending OAuth account-selection ID */
+            id: string;
+            /** @description Selectable accounts, pages, or channels */
+            options: components["schemas"]["AccountSelectionOption"][] | null;
+            /** @description Social platform key */
+            platform: string;
+            /** @description Workspace ID this connection belongs to */
+            workspace_id: string;
         };
         AddSetAccountsInputBody: {
             /**
@@ -1291,6 +1359,16 @@ export interface components {
              */
             readonly $schema?: string;
             ok: boolean;
+        };
+        CompleteAccountSelectionInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CompleteAccountSelectionInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Selected account, page, or channel ID */
+            selection_id: string;
         };
         CompleteMediaUploadSessionInputBody: {
             /**
@@ -3033,6 +3111,137 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-account-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pending OAuth account-selection ID */
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountSelectionResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "complete-account-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pending OAuth account-selection ID */
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteAccountSelectionInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

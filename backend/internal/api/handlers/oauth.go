@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -10,8 +11,10 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/google/uuid"
 
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
@@ -25,6 +28,8 @@ import (
 )
 
 const mastodonProvider = "mastodon"
+
+const pendingAccountSelectionTTL = 20 * time.Minute
 
 type OAuthHandler struct {
 	db                           *bun.DB
@@ -153,6 +158,7 @@ type AccountResponse struct {
 	Platform               string `json:"platform" doc:"Platform name"`
 	AccountID              string `json:"account_id" doc:"Platform-specific account ID"`
 	AccountUsername        string `json:"account_username" doc:"Account username"`
+	AccountAvatarURL       string `json:"account_avatar_url" doc:"Account avatar URL"`
 	InstanceURL            string `json:"instance_url" doc:"Instance URL (Mastodon/Bluesky)"`
 	IsActive               bool   `json:"is_active" doc:"Whether the account is active"`
 	ThreadRepliesSupported bool   `json:"thread_replies_supported" doc:"Whether this account supports thread replies in current server config"`
@@ -160,6 +166,33 @@ type AccountResponse struct {
 
 type ListAccountsOutput struct {
 	Body []AccountResponse
+}
+
+type GetAccountSelectionInput struct {
+	ConnectionID string `path:"connection_id" doc:"Pending OAuth account-selection ID"`
+}
+
+type AccountSelectionResponse struct {
+	ID          string                            `json:"id" doc:"Pending OAuth account-selection ID"`
+	Platform    string                            `json:"platform" doc:"Social platform key"`
+	WorkspaceID string                            `json:"workspace_id" doc:"Workspace ID this connection belongs to"`
+	ExpiresAt   time.Time                         `json:"expires_at" doc:"When this pending selection expires"`
+	Options     []platform.AccountSelectionOption `json:"options" doc:"Selectable accounts, pages, or channels"`
+}
+
+type GetAccountSelectionOutput struct {
+	Body AccountSelectionResponse
+}
+
+type CompleteAccountSelectionInput struct {
+	ConnectionID string `path:"connection_id" doc:"Pending OAuth account-selection ID"`
+	Body         struct {
+		SelectionID string `json:"selection_id" doc:"Selected account, page, or channel ID"`
+	}
+}
+
+type CompleteAccountSelectionOutput struct {
+	Body AccountResponse
 }
 
 type UpdateAccountInput struct {
@@ -613,15 +646,6 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			return h.redirectWithError(fmt.Sprintf("token exchange failed: %s", err.Error()))
 		}
 
-		profile, err := adapter.GetProfile(ctx, tokenResp.AccessToken)
-		if err != nil {
-			if input.Platform == mastodonProvider {
-				profile = &platform.UserProfile{ID: "mastodon-user", Username: ""}
-			} else {
-				return h.redirectWithError(fmt.Sprintf("failed to get profile: %s", err.Error()))
-			}
-		}
-
 		if ws, ok := extra["_workspace_id"]; ok {
 			workspaceID = ws
 		}
@@ -634,6 +658,19 @@ func (h *OAuthHandler) Callback(api huma.API) {
 			}
 			if uid, ok := tokenResp.Extra["_user_id"]; ok && uid != "" {
 				userID = uid
+			}
+		}
+
+		if selector, ok := adapter.(platform.AccountSelectionAdapter); ok {
+			return h.saveAccountSelectionAndRedirect(ctx, userID, input.Platform, workspaceID, mastodonInstanceURL(adapter), tokenResp, selector)
+		}
+
+		profile, err := adapter.GetProfile(ctx, tokenResp.AccessToken)
+		if err != nil {
+			if input.Platform == mastodonProvider {
+				profile = &platform.UserProfile{ID: "mastodon-user", Username: ""}
+			} else {
+				return h.redirectWithError(fmt.Sprintf("failed to get profile: %s", err.Error()))
 			}
 		}
 
@@ -658,6 +695,100 @@ func (h *OAuthHandler) redirectWithError(msg string) (*huma.StreamResponse, erro
 			ctx.SetHeader("Location", location)
 		},
 	}, nil
+}
+
+func (h *OAuthHandler) redirectWithAccountSelection(platformName, connectionID string) (*huma.StreamResponse, error) {
+	location := h.frontendURL + "/accounts/callback?status=selection_required&platform=" + url.QueryEscape(platformName) + "&connection_id=" + url.QueryEscape(connectionID)
+	return &huma.StreamResponse{
+		Body: func(ctx huma.Context) {
+			ctx.SetStatus(http.StatusTemporaryRedirect)
+			ctx.SetHeader("Location", location)
+		},
+	}, nil
+}
+
+func (h *OAuthHandler) saveAccountSelectionAndRedirect(ctx context.Context, userID, platformName, workspaceID, instanceURL string, tokenResp *platform.TokenResult, selector platform.AccountSelectionAdapter) (*huma.StreamResponse, error) {
+	if err := h.checkWorkspaceAccess(ctx, workspaceID, userID); err != nil {
+		return nil, err
+	}
+
+	options, err := selector.ListAccountSelections(ctx, tokenResp)
+	if err != nil {
+		return h.redirectWithError(fmt.Sprintf("failed to list selectable accounts: %s", err.Error()))
+	}
+	if len(options) == 0 {
+		return h.redirectWithError("no selectable accounts found for this provider")
+	}
+
+	pending, err := h.createPendingAccountSelection(ctx, userID, platformName, workspaceID, instanceURL, tokenResp, options)
+	if err != nil {
+		log.Printf("[Callback] Failed to save pending account selection: %v", err)
+		return nil, huma.Error500InternalServerError("failed to save pending account selection")
+	}
+
+	log.Printf("[Callback] Pending account selection created: ID=%s platform=%s", pending.ID, platformName)
+	return h.redirectWithAccountSelection(platformName, pending.ID)
+}
+
+func (h *OAuthHandler) createPendingAccountSelection(ctx context.Context, userID, platformName, workspaceID, instanceURL string, tokenResp *platform.TokenResult, options []platform.AccountSelectionOption) (*models.OAuthAccountSelection, error) {
+	if h.crypto == nil {
+		return nil, fmt.Errorf("token encryptor is not configured")
+	}
+	if tokenResp == nil {
+		return nil, fmt.Errorf("token response is required")
+	}
+
+	encAccess, err := h.crypto.Encrypt(tokenResp.AccessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	var encRefresh []byte
+	if tokenResp.RefreshToken != "" {
+		encRefresh, err = h.crypto.Encrypt(tokenResp.RefreshToken)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	optionsJSON, err := json.Marshal(options)
+	if err != nil {
+		return nil, err
+	}
+
+	extra := tokenResp.Extra
+	if extra == nil {
+		extra = map[string]string{}
+	}
+	extraJSON, err := json.Marshal(extra)
+	if err != nil {
+		return nil, err
+	}
+
+	var tokenExpiresAt time.Time
+	if tokenResp.ExpiresIn > 0 {
+		tokenExpiresAt = time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	}
+
+	pending := &models.OAuthAccountSelection{
+		ID:              uuid.NewString(),
+		UserID:          userID,
+		WorkspaceID:     workspaceID,
+		Platform:        platformName,
+		InstanceURL:     instanceURL,
+		AccessTokenEnc:  encAccess,
+		RefreshTokenEnc: encRefresh,
+		TokenType:       tokenResp.TokenType,
+		TokenExpiresAt:  tokenExpiresAt,
+		TokenExtraJSON:  string(extraJSON),
+		OptionsJSON:     string(optionsJSON),
+		ExpiresAt:       time.Now().UTC().Add(pendingAccountSelectionTTL),
+		CreatedAt:       time.Now().UTC(),
+	}
+	if _, err := h.db.NewInsert().Model(pending).Exec(ctx); err != nil {
+		return nil, err
+	}
+	return pending, nil
 }
 
 func (h *OAuthHandler) saveAccountAndRedirect(ctx context.Context, userID, platformName, workspaceID, accountID, accountUsername, instanceURL string, tokenResp *platform.TokenResult) (*huma.StreamResponse, error) {
@@ -784,6 +915,191 @@ func (h *OAuthHandler) BlueskyLogin(api huma.API) {
 	})
 }
 
+func (h *OAuthHandler) GetAccountSelection(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-account-selection",
+		Method:      http.MethodGet,
+		Path:        "/accounts/selections/{connection_id}",
+		Summary:     "Get pending OAuth account-selection options",
+		Tags:        []string{tagAccounts},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{403, 404},
+	}, func(ctx context.Context, input *GetAccountSelectionInput) (*GetAccountSelectionOutput, error) {
+		pending, err := h.loadPendingAccountSelection(ctx, input.ConnectionID, middleware.GetUserID(ctx))
+		if err != nil {
+			return nil, err
+		}
+
+		options, err := parseAccountSelectionOptions(pending.OptionsJSON)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to parse account selection options")
+		}
+
+		return &GetAccountSelectionOutput{Body: AccountSelectionResponse{
+			ID:          pending.ID,
+			Platform:    pending.Platform,
+			WorkspaceID: pending.WorkspaceID,
+			ExpiresAt:   pending.ExpiresAt,
+			Options:     options,
+		}}, nil
+	})
+}
+
+func (h *OAuthHandler) CompleteAccountSelection(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "complete-account-selection",
+		Method:      http.MethodPost,
+		Path:        "/accounts/selections/{connection_id}/complete",
+		Summary:     "Complete OAuth account selection and save the selected account",
+		Tags:        []string{tagAccounts},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 404},
+	}, func(ctx context.Context, input *CompleteAccountSelectionInput) (*CompleteAccountSelectionOutput, error) {
+		selectionID := strings.TrimSpace(input.Body.SelectionID)
+		if selectionID == "" {
+			return nil, huma.Error400BadRequest("selection_id is required")
+		}
+
+		userID := middleware.GetUserID(ctx)
+		pending, err := h.loadPendingAccountSelection(ctx, input.ConnectionID, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		adapter, err := h.getProvider(pending.Platform, "")
+		if err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
+		selector, ok := adapter.(platform.AccountSelectionAdapter)
+		if !ok {
+			return nil, huma.Error400BadRequest(fmt.Sprintf("%s does not support account selection", pending.Platform))
+		}
+
+		tokenResp, err := h.tokenResultFromPendingSelection(pending)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to decrypt pending account selection")
+		}
+
+		selected, err := selector.SelectAccount(ctx, tokenResp, selectionID)
+		if err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
+		if selected == nil {
+			return nil, huma.Error400BadRequest("selected account was not found")
+		}
+		if selected.Token == nil {
+			selected.Token = tokenResp
+		}
+
+		saver := h.accountSaver
+		if saver == nil {
+			saver = account_saver.NewAccountSaver(h.db, h.crypto)
+		}
+		account, err := saver.SaveAccountFromInput(ctx, account_saver.SaveAccountInput{
+			UserID:           userID,
+			PlatformName:     pending.Platform,
+			WorkspaceID:      pending.WorkspaceID,
+			AccountID:        selected.AccountID,
+			AccountUsername:  selected.AccountUsername,
+			AccountAvatarURL: selected.AccountAvatarURL,
+			InstanceURL:      firstNonEmpty(selected.InstanceURL, pending.InstanceURL),
+			Token:            selected.Token,
+		})
+		if err != nil {
+			log.Printf("[OAuth Selection] Failed to save selected account: %v", err)
+			return nil, huma.Error500InternalServerError("failed to save selected account")
+		}
+
+		if _, err := h.db.NewUpdate().
+			Model((*models.OAuthAccountSelection)(nil)).
+			Set("consumed_at = ?", time.Now().UTC()).
+			Where("id = ?", pending.ID).
+			Exec(ctx); err != nil {
+			log.Printf("[OAuth Selection] Failed to mark selection consumed: %v", err)
+			return nil, huma.Error500InternalServerError("failed to complete account selection")
+		}
+
+		return &CompleteAccountSelectionOutput{Body: accountResponse(*account, h.disableLinkedInThreadReplies)}, nil
+	})
+}
+
+func (h *OAuthHandler) loadPendingAccountSelection(ctx context.Context, connectionID, userID string) (*models.OAuthAccountSelection, error) {
+	var pending models.OAuthAccountSelection
+	err := h.db.NewSelect().
+		Model(&pending).
+		Where("id = ?", connectionID).
+		Where("user_id = ?", userID).
+		Where("consumed_at IS NULL").
+		Where("expires_at > ?", time.Now().UTC()).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, huma.Error404NotFound("account selection not found or expired")
+		}
+		return nil, huma.Error500InternalServerError("failed to fetch account selection")
+	}
+	if err := h.checkWorkspaceAccess(ctx, pending.WorkspaceID, userID); err != nil {
+		return nil, err
+	}
+	return &pending, nil
+}
+
+func (h *OAuthHandler) tokenResultFromPendingSelection(pending *models.OAuthAccountSelection) (*platform.TokenResult, error) {
+	if pending == nil {
+		return nil, fmt.Errorf("pending selection is required")
+	}
+	if h.crypto == nil {
+		return nil, fmt.Errorf("token encryptor is not configured")
+	}
+
+	accessToken, err := h.crypto.Decrypt(pending.AccessTokenEnc)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshToken := ""
+	if len(pending.RefreshTokenEnc) > 0 {
+		refreshToken, err = h.crypto.Decrypt(pending.RefreshTokenEnc)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	extra := map[string]string{}
+	if strings.TrimSpace(pending.TokenExtraJSON) != "" {
+		if err := json.Unmarshal([]byte(pending.TokenExtraJSON), &extra); err != nil {
+			return nil, err
+		}
+	}
+
+	expiresIn := 0
+	if !pending.TokenExpiresAt.IsZero() {
+		expiresIn = int(time.Until(pending.TokenExpiresAt).Seconds())
+		if expiresIn < 0 {
+			expiresIn = 0
+		}
+	}
+
+	return &platform.TokenResult{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    expiresIn,
+		TokenType:    pending.TokenType,
+		Extra:        extra,
+	}, nil
+}
+
+func parseAccountSelectionOptions(raw string) ([]platform.AccountSelectionOption, error) {
+	var options []platform.AccountSelectionOption
+	if strings.TrimSpace(raw) == "" {
+		return options, nil
+	}
+	if err := json.Unmarshal([]byte(raw), &options); err != nil {
+		return nil, err
+	}
+	return options, nil
+}
+
 func (h *OAuthHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
 	memberCount, err := h.db.NewSelect().
 		Model((*models.WorkspaceMember)(nil)).
@@ -844,6 +1160,7 @@ func (h *OAuthHandler) ListAccounts(api huma.API) {
 				Platform:               acc.Platform,
 				AccountID:              acc.AccountID,
 				AccountUsername:        acc.AccountUsername,
+				AccountAvatarURL:       acc.AccountAvatarURL,
 				InstanceURL:            acc.InstanceURL,
 				IsActive:               acc.IsActive,
 				ThreadRepliesSupported: threadRepliesSupported,
@@ -983,6 +1300,7 @@ func accountResponse(acc models.SocialAccount, disableLinkedInThreadReplies bool
 		Platform:               acc.Platform,
 		AccountID:              acc.AccountID,
 		AccountUsername:        acc.AccountUsername,
+		AccountAvatarURL:       acc.AccountAvatarURL,
 		InstanceURL:            acc.InstanceURL,
 		IsActive:               acc.IsActive,
 		ThreadRepliesSupported: threadRepliesSupported,
