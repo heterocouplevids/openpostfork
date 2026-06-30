@@ -668,40 +668,50 @@ type mcpPostStatus struct {
 	Destinations       []mcpPostDestination `json:"destinations"`
 }
 
-func (h *MCPHandler) schedulePost(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
-	var input struct {
-		WorkspaceID      string   `json:"workspace_id"`
-		Content          string   `json:"content"`
-		ScheduledAt      string   `json:"scheduled_at"`
-		SocialAccountIDs []string `json:"social_account_ids"`
-	}
+type mcpSchedulePostInput struct {
+	WorkspaceID      string   `json:"workspace_id"`
+	Content          string   `json:"content"`
+	ScheduledAt      string   `json:"scheduled_at"`
+	SocialAccountIDs []string `json:"social_account_ids"`
+}
+
+func (h *MCPHandler) validateSchedulePostInput(ctx context.Context, userID string, args map[string]any) (mcpSchedulePostInput, []string, time.Time, *mcpError) {
+	var input mcpSchedulePostInput
 	if err := decodeMCPArguments(args, &input); err != nil {
-		return nil, &mcpError{Code: -32602, Message: "invalid schedule_post arguments"}
+		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "invalid schedule_post arguments"}
 	}
 	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
-		return nil, rpcErr
+		return input, nil, time.Time{}, rpcErr
 	}
 	if strings.TrimSpace(input.Content) == "" {
-		return nil, &mcpError{Code: -32602, Message: "content is required"}
+		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "content is required"}
 	}
 	accountIDs, rpcErr := normalizeMCPIDs(input.SocialAccountIDs, "social_account_ids")
 	if rpcErr != nil {
-		return nil, rpcErr
+		return input, nil, time.Time{}, rpcErr
 	}
 	if len(accountIDs) == 0 {
-		return nil, &mcpError{Code: -32602, Message: "social_account_ids must contain at least one account"}
+		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "social_account_ids must contain at least one account"}
 	}
 	if rpcErr := h.ensureActiveAccounts(ctx, input.WorkspaceID, accountIDs); rpcErr != nil {
-		return nil, rpcErr
+		return input, nil, time.Time{}, rpcErr
 	}
 	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
 	if err != nil {
-		return nil, &mcpError{Code: -32602, Message: "scheduled_at must be an RFC3339 timestamp"}
+		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at must be an RFC3339 timestamp"}
 	}
 	if scheduledAt.IsZero() {
-		return nil, &mcpError{Code: -32602, Message: "scheduled_at is required"}
+		return input, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at is required"}
 	}
 	if rpcErr := h.checkScheduledPostQuota(ctx, input.WorkspaceID, 1, scheduledAt); rpcErr != nil {
+		return input, nil, time.Time{}, rpcErr
+	}
+	return input, accountIDs, scheduledAt, nil
+}
+
+func (h *MCPHandler) schedulePost(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	input, accountIDs, scheduledAt, rpcErr := h.validateSchedulePostInput(ctx, userID, args)
+	if rpcErr != nil {
 		return nil, rpcErr
 	}
 
@@ -825,29 +835,38 @@ type mcpSlotSuggestion struct {
 	Message     string                   `json:"message"`
 }
 
-func (h *MCPHandler) suggestNextSlot(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
-	var input struct {
-		WorkspaceID string `json:"workspace_id"`
-		SetID       string `json:"set_id"`
-		After       string `json:"after"`
+type mcpSuggestNextSlotInput struct {
+	WorkspaceID string `json:"workspace_id"`
+	SetID       string `json:"set_id"`
+	After       string `json:"after"`
+}
+
+func (h *MCPHandler) loadMCPWorkspace(ctx context.Context, workspaceID string) (models.Workspace, *mcpError) {
+	var workspace models.Workspace
+	err := h.db.NewSelect().
+		Model(&workspace).
+		Where("id = ?", workspaceID).
+		Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return workspace, &mcpError{Code: -32602, Message: "workspace not found"}
+		}
+		return workspace, &mcpError{Code: -32603, Message: "failed to load workspace"}
 	}
+	return workspace, nil
+}
+
+func (h *MCPHandler) suggestNextSlot(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	var input mcpSuggestNextSlotInput
 	if err := decodeMCPArguments(args, &input); err != nil {
 		return nil, &mcpError{Code: -32602, Message: "invalid suggest_next_slot arguments"}
 	}
 	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
 		return nil, rpcErr
 	}
-
-	var workspace models.Workspace
-	err := h.db.NewSelect().
-		Model(&workspace).
-		Where("id = ?", input.WorkspaceID).
-		Scan(ctx)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, &mcpError{Code: -32602, Message: "workspace not found"}
-		}
-		return nil, &mcpError{Code: -32603, Message: "failed to load workspace"}
+	workspace, rpcErr := h.loadMCPWorkspace(ctx, input.WorkspaceID)
+	if rpcErr != nil {
+		return nil, rpcErr
 	}
 
 	loc, err := time.LoadLocation(workspace.Timezone)
@@ -996,46 +1015,47 @@ func (h *MCPHandler) fetchRemoteMedia(ctx context.Context, rawURL, requestedFile
 		return nil, "", "", nil, rpcErr
 	}
 
-	client := h.mediaURLHTTP
-	if client == nil {
-		client = &http.Client{
-			Timeout: 30 * time.Second,
-			CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-				if err := h.defaultValidateMediaURL(req.Context(), req.URL); err != nil {
-					return err
-				}
-				return nil
-			},
-		}
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, remote.String(), nil)
 	if err != nil {
 		return nil, "", "", nil, &mcpError{Code: -32602, Message: "invalid url"}
 	}
 	req.Header.Set("User-Agent", "openpost-mcp-media/0.1.0")
-	resp, err := client.Do(req)
+	resp, err := h.remoteMediaHTTPClient().Do(req)
 	if err != nil {
 		return nil, "", "", nil, &mcpError{Code: -32602, Message: "failed to fetch media url"}
 	}
 	defer func() { _ = resp.Body.Close() }()
+	finalURL, content, rpcErr := h.readRemoteMediaResponse(ctx, resp)
+	if rpcErr != nil {
+		return nil, "", "", nil, rpcErr
+	}
+
+	filename := remoteMediaFilename(requestedFilename, finalURL)
+	return finalURL, filename, resp.Header.Get("Content-Type"), content, nil
+}
+
+func (h *MCPHandler) readRemoteMediaResponse(ctx context.Context, resp *http.Response) (*url.URL, []byte, *mcpError) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", "", nil, &mcpError{Code: -32602, Message: fmt.Sprintf("media url returned HTTP %d", resp.StatusCode)}
+		return nil, nil, &mcpError{Code: -32602, Message: fmt.Sprintf("media url returned HTTP %d", resp.StatusCode)}
 	}
 	finalURL := resp.Request.URL
 	if rpcErr := h.validateMediaURL(ctx, finalURL); rpcErr != nil {
-		return nil, "", "", nil, rpcErr
+		return nil, nil, rpcErr
 	}
 	content, err := io.ReadAll(io.LimitReader(resp.Body, maxRemoteMediaBytes+1))
 	if err != nil {
-		return nil, "", "", nil, &mcpError{Code: -32603, Message: "failed to read remote media"}
+		return nil, nil, &mcpError{Code: -32603, Message: "failed to read remote media"}
 	}
 	if len(content) == 0 {
-		return nil, "", "", nil, &mcpError{Code: -32602, Message: "remote media is empty"}
+		return nil, nil, &mcpError{Code: -32602, Message: "remote media is empty"}
 	}
 	if len(content) > maxRemoteMediaBytes {
-		return nil, "", "", nil, &mcpError{Code: -32602, Message: "file size exceeds 50MB limit"}
+		return nil, nil, &mcpError{Code: -32602, Message: "file size exceeds 50MB limit"}
 	}
+	return finalURL, content, nil
+}
 
+func remoteMediaFilename(requestedFilename string, finalURL *url.URL) string {
 	filename := cleanRemoteMediaFilename(requestedFilename)
 	if filename == "" {
 		filename = cleanRemoteMediaFilename(path.Base(finalURL.Path))
@@ -1043,7 +1063,19 @@ func (h *MCPHandler) fetchRemoteMedia(ctx context.Context, rawURL, requestedFile
 	if filename == "" || filename == "." || filename == "/" {
 		filename = "remote-media"
 	}
-	return finalURL, filename, resp.Header.Get("Content-Type"), content, nil
+	return filename
+}
+
+func (h *MCPHandler) remoteMediaHTTPClient() *http.Client {
+	if h.mediaURLHTTP != nil {
+		return h.mediaURLHTTP
+	}
+	return &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+			return h.defaultValidateMediaURL(req.Context(), req.URL)
+		},
+	}
 }
 
 func (h *MCPHandler) validateMediaURL(ctx context.Context, remote *url.URL) *mcpError {

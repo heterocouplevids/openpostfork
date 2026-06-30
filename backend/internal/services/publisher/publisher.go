@@ -165,7 +165,7 @@ func (s *Service) publishSinglePost(ctx context.Context, post *models.Post) erro
 		s.finalizePost(ctx, post)
 		return nil
 	}
-	if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitPublishedPostsMonthly, 1); err != nil {
+	if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitPublishedPostsMonthly); err != nil {
 		s.markDestinationsFailed(ctx, dests, err)
 		s.finalizePost(ctx, post)
 		return err
@@ -208,35 +208,19 @@ func (s *Service) publishThread(ctx context.Context, posts []*models.Post) error
 	for i, post := range posts {
 		log.Printf("[Publisher] Publishing thread post %d/%d: %s", i+1, len(posts), post.ID)
 
-		var dests []models.PostDestination
-		if err := s.db.NewSelect().Model(&dests).
-			Where("post_id = ? AND status IN ('pending', 'failed')", post.ID).
-			Scan(ctx); err != nil {
+		dests, err := s.loadThreadDestinations(ctx, post.ID)
+		if err != nil {
 			log.Printf("[Publisher] Failed to fetch destinations for post %s: %v", post.ID, err)
 			s.finalizePost(ctx, post)
 			continue
 		}
 
 		if i > 0 {
-			var filteredDests []models.PostDestination
-			for _, dest := range dests {
-				if successfulAccounts[dest.SocialAccountID] {
-					filteredDests = append(filteredDests, dest)
-				} else {
-					if _, dbErr := s.db.NewUpdate().Model(&dest).
-						Set("status = ?", "failed").
-						Set("error_message = ?", "previous post in thread failed for this account").
-						Where("id = ?", dest.ID).
-						Exec(ctx); dbErr != nil {
-						log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
-					}
-				}
-			}
-			dests = filteredDests
+			dests = s.filterThreadDestinationsAfterPreviousPost(ctx, dests, successfulAccounts)
 		}
 
 		if len(dests) > 0 {
-			if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitPublishedPostsMonthly, 1); err != nil {
+			if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitPublishedPostsMonthly); err != nil {
 				if firstError == nil {
 					firstError = err
 				}
@@ -247,38 +231,7 @@ func (s *Service) publishThread(ctx context.Context, posts []*models.Post) error
 			}
 		}
 
-		var successfulInThisPost []string
-		for _, dest := range dests {
-			if err := s.publishToDestination(ctx, post, &dest); err != nil {
-				if errors.Is(err, errLinkedInThreadReplySkipped) {
-					if _, dbErr := s.db.NewUpdate().Model(&dest).
-						Set("status = ?", "success").
-						Set("error_message = ?", "").
-						Where("id = ?", dest.ID).
-						Exec(ctx); dbErr != nil {
-						log.Printf("[Publisher] Failed to update skipped LinkedIn destination %s status: %v", dest.ID, dbErr)
-					}
-					successfulInThisPost = append(successfulInThisPost, dest.SocialAccountID)
-					continue
-				}
-				log.Printf("[Publisher] Thread post %s failed at destination %s: %v", post.ID, dest.ID, err)
-				if _, dbErr := s.db.NewUpdate().Model(&dest).
-					Set("status = ?", "failed").
-					Set("error_message = ?", err.Error()).
-					Where("id = ?", dest.ID).
-					Exec(ctx); dbErr != nil {
-					log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
-				}
-			} else {
-				if _, dbErr := s.db.NewUpdate().Model(&dest).
-					Set("status = ?", "success").
-					Where("id = ?", dest.ID).
-					Exec(ctx); dbErr != nil {
-					log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
-				}
-				successfulInThisPost = append(successfulInThisPost, dest.SocialAccountID)
-			}
-		}
+		successfulInThisPost := s.publishThreadDestinations(ctx, post, dests)
 
 		successfulAccounts = make(map[string]bool)
 		for _, accountID := range successfulInThisPost {
@@ -289,6 +242,51 @@ func (s *Service) publishThread(ctx context.Context, posts []*models.Post) error
 	}
 
 	return firstError
+}
+
+func (s *Service) loadThreadDestinations(ctx context.Context, postID string) ([]models.PostDestination, error) {
+	var dests []models.PostDestination
+	err := s.db.NewSelect().Model(&dests).
+		Where("post_id = ? AND status IN ('pending', 'failed')", postID).
+		Scan(ctx)
+	return dests, err
+}
+
+func (s *Service) filterThreadDestinationsAfterPreviousPost(ctx context.Context, dests []models.PostDestination, successfulAccounts map[string]bool) []models.PostDestination {
+	filteredDests := make([]models.PostDestination, 0, len(dests))
+	for _, dest := range dests {
+		if successfulAccounts[dest.SocialAccountID] {
+			filteredDests = append(filteredDests, dest)
+			continue
+		}
+		if _, dbErr := s.db.NewUpdate().Model(&dest).
+			Set("status = ?", "failed").
+			Set("error_message = ?", "previous post in thread failed for this account").
+			Where("id = ?", dest.ID).
+			Exec(ctx); dbErr != nil {
+			log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+		}
+	}
+	return filteredDests
+}
+
+func (s *Service) publishThreadDestinations(ctx context.Context, post *models.Post, dests []models.PostDestination) []string {
+	var successfulInThisPost []string
+	for _, dest := range dests {
+		if err := s.publishToDestination(ctx, post, &dest); err != nil {
+			if errors.Is(err, errLinkedInThreadReplySkipped) {
+				s.markDestinationSuccess(ctx, dest, true)
+				successfulInThisPost = append(successfulInThisPost, dest.SocialAccountID)
+				continue
+			}
+			log.Printf("[Publisher] Thread post %s failed at destination %s: %v", post.ID, dest.ID, err)
+			s.markDestinationFailed(ctx, dest, err)
+			continue
+		}
+		s.markDestinationSuccess(ctx, dest, false)
+		successfulInThisPost = append(successfulInThisPost, dest.SocialAccountID)
+	}
+	return successfulInThisPost
 }
 
 func (s *Service) finalizePost(ctx context.Context, post *models.Post) {
@@ -428,7 +426,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		}
 	}
 
-	if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitProviderWriteCallsMonthly, 1); err != nil {
+	if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitProviderWriteCallsMonthly); err != nil {
 		return err
 	}
 	s.recordProviderWriteCall(ctx, post.WorkspaceID)
@@ -440,7 +438,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 			if refreshErr != nil {
 				return fmt.Errorf("%s token refresh failed after expiry: %w", account.Platform, refreshErr)
 			}
-			if quotaErr := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitProviderWriteCallsMonthly, 1); quotaErr != nil {
+			if quotaErr := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitProviderWriteCallsMonthly); quotaErr != nil {
 				return quotaErr
 			}
 			s.recordProviderWriteCall(ctx, post.WorkspaceID)
@@ -467,17 +465,33 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 
 func (s *Service) markDestinationsFailed(ctx context.Context, dests []models.PostDestination, cause error) {
 	for _, dest := range dests {
-		if _, dbErr := s.db.NewUpdate().Model(&dest).
-			Set("status = ?", "failed").
-			Set("error_message = ?", cause.Error()).
-			Where("id = ?", dest.ID).
-			Exec(ctx); dbErr != nil {
-			log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
-		}
+		s.markDestinationFailed(ctx, dest, cause)
 	}
 }
 
-func (s *Service) checkMonthlyQuota(ctx context.Context, workspaceID string, limit entitlements.LimitKey, amount int64) error {
+func (s *Service) markDestinationSuccess(ctx context.Context, dest models.PostDestination, clearError bool) {
+	query := s.db.NewUpdate().Model(&dest).
+		Set("status = ?", "success").
+		Where("id = ?", dest.ID)
+	if clearError {
+		query = query.Set("error_message = ?", "")
+	}
+	if _, dbErr := query.Exec(ctx); dbErr != nil {
+		log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+	}
+}
+
+func (s *Service) markDestinationFailed(ctx context.Context, dest models.PostDestination, cause error) {
+	if _, dbErr := s.db.NewUpdate().Model(&dest).
+		Set("status = ?", "failed").
+		Set("error_message = ?", cause.Error()).
+		Where("id = ?", dest.ID).
+		Exec(ctx); dbErr != nil {
+		log.Printf("[Publisher] Failed to update destination %s status: %v", dest.ID, dbErr)
+	}
+}
+
+func (s *Service) checkMonthlyQuota(ctx context.Context, workspaceID string, limit entitlements.LimitKey) error {
 	if s.quota == nil || s.usage == nil || workspaceID == "" {
 		return nil
 	}
@@ -489,7 +503,7 @@ func (s *Service) checkMonthlyQuota(ctx context.Context, workspaceID string, lim
 		WorkspaceID: workspaceID,
 		Limit:       limit,
 		Current:     current,
-		Amount:      amount,
+		Amount:      1,
 	})
 	if err != nil {
 		return fmt.Errorf("checking quota for %s: %w", limit, err)

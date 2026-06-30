@@ -366,9 +366,7 @@ func (s *Service) verifyStandardWebhook(body []byte, headers WebhookHeaders) err
 	expected := mac.Sum(nil)
 
 	for _, candidate := range strings.Fields(headers.Signature) {
-		if strings.HasPrefix(candidate, "v1,") {
-			candidate = strings.TrimPrefix(candidate, "v1,")
-		}
+		candidate = strings.TrimPrefix(candidate, "v1,")
 		got, err := base64.StdEncoding.DecodeString(candidate)
 		if err != nil {
 			continue
@@ -452,7 +450,7 @@ func subscriptionFromPolarEvent(event polarEvent) (*models.BillingSubscription, 
 
 	entitlementSnapshot := entitlementSnapshotJSON(data, planID)
 	currentPeriodEnd := parseOptionalTime(data.CurrentPeriodEnd)
-	rawPayload, _ := json.Marshal(json.RawMessage(event.Data))
+	rawPayload, _ := json.Marshal(event.Data)
 	now := time.Now().UTC()
 	return &models.BillingSubscription{
 		WorkspaceID:            workspaceID,

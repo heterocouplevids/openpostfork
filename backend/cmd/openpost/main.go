@@ -232,6 +232,7 @@ func main() {
 	mcpHandler := handlers.NewMCPHandler(db, authenticator, entitlementService)
 	mcpHandler.SetMediaStorage(storage)
 	mcpHandler.RegisterRoutes(e)
+	handlers.NewMCPActivityHandler(db, authenticator).RegisterRoutes(api)
 
 	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator, entitlementService)
 	workspaceHandler.CreateWorkspace(api)

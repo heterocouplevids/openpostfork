@@ -533,6 +533,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recent MCP tool calls */
+        get: operations["list-mcp-activity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media": {
         parameters: {
             query?: never;
@@ -1693,6 +1710,25 @@ export interface components {
             email: string;
             /** @description User password */
             password: string;
+        };
+        MCPActivityItem: {
+            /** @description Call creation time */
+            created_at: string;
+            /**
+             * Format: int64
+             * @description Call duration in milliseconds
+             */
+            duration_ms: number;
+            /** @description Error text for failed calls */
+            error_message?: string;
+            /** @description Tool call ID */
+            id: string;
+            /** @description Tool call status */
+            status: string;
+            /** @description MCP tool name */
+            tool_name: string;
+            /** @description Workspace associated with the call, when provided */
+            workspace_id?: string;
         };
         MastodonServerInfo: {
             /** @description Mastodon instance URL */
@@ -4204,6 +4240,67 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-mcp-activity": {
+        parameters: {
+            query?: {
+                /** @description Optional workspace ID to filter activity */
+                workspace_id?: string;
+                /** @description Maximum number of recent calls to return. Defaults to 20 and caps at 100. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MCPActivityItem"][] | null;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

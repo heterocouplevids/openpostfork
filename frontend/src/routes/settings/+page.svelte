@@ -25,6 +25,7 @@
 	import TerminalIcon from 'lucide-svelte/icons/terminal';
 	import CreditCardIcon from 'lucide-svelte/icons/credit-card';
 	import ExternalLinkIcon from 'lucide-svelte/icons/external-link';
+	import ActivityIcon from 'lucide-svelte/icons/activity';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
 	import { getLocaleTag } from '$lib/i18n';
@@ -153,6 +154,9 @@
 	let securityStatus = $state<SecurityStatus | null>(null);
 	let apiTokens = $state<APITokenSummary[]>([]);
 	let apiTokensLoading = $state(true);
+	let mcpActivity = $state.raw<MCPActivityItem[]>([]);
+	let mcpActivityLoading = $state(true);
+	let mcpActivityError = $state('');
 	let apiTokenBusy = $state(false);
 	let apiTokenName = $state('OpenPost CLI');
 	let createdAPIToken = $state('');
@@ -170,6 +174,16 @@
 		expires_at?: string | null;
 		last_used_at?: string | null;
 		revoked_at?: string | null;
+		created_at: string;
+	}
+
+	interface MCPActivityItem {
+		id: string;
+		workspace_id?: string;
+		tool_name: string;
+		status: string;
+		error_message?: string;
+		duration_ms: number;
 		created_at: string;
 	}
 
@@ -257,6 +271,23 @@
 			securityError = (e as Error).message;
 		} finally {
 			apiTokensLoading = false;
+		}
+	}
+
+	async function loadMCPActivity() {
+		mcpActivityLoading = true;
+		mcpActivityError = '';
+		try {
+			const { data, error: err } = await (client as any).GET('/mcp/activity', {
+				params: { query: { limit: 8 } }
+			});
+			if (err || !data) throw new Error(err?.detail || 'Failed to load MCP activity');
+			mcpActivity = data as MCPActivityItem[];
+		} catch (e) {
+			mcpActivityError = (e as Error).message;
+			mcpActivity = [];
+		} finally {
+			mcpActivityLoading = false;
 		}
 	}
 
@@ -785,6 +816,7 @@
 		if (authState.isAuthenticated) {
 			loadSecurityStatus();
 			loadAPITokens();
+			loadMCPActivity();
 		}
 	});
 
@@ -1251,6 +1283,85 @@
 					{/each}
 				</div>
 			{/if}
+
+			<div class="mt-6 border-t pt-6">
+				<div class="mb-4 flex items-center justify-between gap-3">
+					<div>
+						<h3 class="flex items-center gap-2 text-sm font-semibold">
+							<ActivityIcon class="h-4 w-4 text-muted-foreground" />
+							Recent MCP Activity
+						</h3>
+						<p class="mt-1 text-sm text-muted-foreground">
+							Recent tool calls from ChatGPT, Claude, the CLI proxy, and other MCP clients.
+						</p>
+					</div>
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={loadMCPActivity}
+						disabled={mcpActivityLoading}
+					>
+						{#if mcpActivityLoading}
+							<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+						{/if}
+						Refresh
+					</Button>
+				</div>
+
+				{#if mcpActivityError}
+					<div
+						data-testid="mcp-activity-error"
+						class="mb-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+					>
+						{mcpActivityError}
+					</div>
+				{/if}
+
+				{#if mcpActivityLoading}
+					<div class="space-y-2">
+						<Skeleton class="h-16 rounded-md" />
+						<Skeleton class="h-16 rounded-md" />
+					</div>
+				{:else if mcpActivity.length === 0}
+					<p
+						data-testid="mcp-activity-empty"
+						class="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground"
+					>
+						No MCP tool calls have been recorded yet.
+					</p>
+				{:else}
+					<div data-testid="mcp-activity-list" class="space-y-2">
+						{#each mcpActivity as call (call.id)}
+							<div class="rounded-md border px-3 py-3">
+								<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+									<div class="min-w-0">
+										<p class="truncate text-sm font-medium">{call.tool_name}</p>
+										<p class="mt-1 text-xs text-muted-foreground">
+											{new Date(call.created_at).toLocaleString()} · {call.duration_ms} ms
+											{#if call.workspace_id}
+												· Workspace <span class="font-mono">{call.workspace_id}</span>
+											{/if}
+										</p>
+									</div>
+									<span
+										class={[
+											'inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+											call.status === 'success'
+												? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700'
+												: 'border-destructive/30 bg-destructive/10 text-destructive'
+										]}
+									>
+										{call.status}
+									</span>
+								</div>
+								{#if call.error_message}
+									<p class="mt-2 text-xs text-destructive">{call.error_message}</p>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		</section>
 
 		<section class="space-y-4">

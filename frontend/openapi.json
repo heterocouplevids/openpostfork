@@ -1377,6 +1377,42 @@
 				"required": ["email", "password"],
 				"type": "object"
 			},
+			"MCPActivityItem": {
+				"additionalProperties": false,
+				"properties": {
+					"created_at": {
+						"description": "Call creation time",
+						"type": "string"
+					},
+					"duration_ms": {
+						"description": "Call duration in milliseconds",
+						"format": "int64",
+						"type": "integer"
+					},
+					"error_message": {
+						"description": "Error text for failed calls",
+						"type": "string"
+					},
+					"id": {
+						"description": "Tool call ID",
+						"type": "string"
+					},
+					"status": {
+						"description": "Tool call status",
+						"type": "string"
+					},
+					"tool_name": {
+						"description": "MCP tool name",
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Workspace associated with the call, when provided",
+						"type": "string"
+					}
+				},
+				"required": ["id", "tool_name", "status", "duration_ms", "created_at"],
+				"type": "object"
+			},
 			"MastodonServerInfo": {
 				"additionalProperties": false,
 				"properties": {
@@ -4936,6 +4972,91 @@
 				},
 				"summary": "List recent background jobs",
 				"tags": ["Jobs"]
+			}
+		},
+		"/mcp/activity": {
+			"get": {
+				"operationId": "list-mcp-activity",
+				"parameters": [
+					{
+						"description": "Optional workspace ID to filter activity",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"schema": {
+							"description": "Optional workspace ID to filter activity",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Maximum number of recent calls to return. Defaults to 20 and caps at 100.",
+						"explode": false,
+						"in": "query",
+						"name": "limit",
+						"schema": {
+							"description": "Maximum number of recent calls to return. Defaults to 20 and caps at 100.",
+							"format": "int64",
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": {
+										"$ref": "#/components/schemas/MCPActivityItem"
+									},
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "List recent MCP tool calls",
+				"tags": ["MCP"]
 			}
 		},
 		"/media": {

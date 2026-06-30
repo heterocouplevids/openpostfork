@@ -4,6 +4,7 @@ const (
 	tagAuth             = "Auth"
 	tagAccounts         = "Accounts"
 	tagMedia            = "Media"
+	tagMCP              = "MCP"
 	tagPostingSchedules = "Posting Schedules"
 	tagPosts            = "Posts"
 	tagPrompts          = "Prompts"

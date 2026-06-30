@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-test('settings shows billing plan controls for an authenticated workspace', async ({ page, request }) => {
+test('settings shows billing plan controls for an authenticated workspace', async ({
+	page,
+	request
+}) => {
 	const unique = Date.now().toString(36);
 	const email = `billing-${unique}@example.com`;
 	const password = 'password-1234';
@@ -30,4 +33,48 @@ test('settings shows billing plan controls for an authenticated workspace', asyn
 	await expect(page.getByRole('heading', { name: 'Starter' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Creator' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Pro' })).toBeVisible();
+});
+
+test('settings shows recent MCP activity for an authenticated user', async ({ page, request }) => {
+	const unique = Date.now().toString(36);
+	const email = `mcp-activity-${unique}@example.com`;
+	const password = 'password-1234';
+
+	const register = await request.post('/api/v1/auth/register', {
+		data: { email, password }
+	});
+	expect(register.ok()).toBeTruthy();
+	const auth = await register.json();
+	expect(auth.token).toBeTruthy();
+
+	const workspace = await request.post('/api/v1/workspaces', {
+		headers: { Authorization: `Bearer ${auth.token}` },
+		data: { name: 'MCP Activity E2E' }
+	});
+	expect(workspace.ok()).toBeTruthy();
+
+	const mcpCall = await request.post('/mcp', {
+		headers: { Authorization: `Bearer ${auth.token}` },
+		data: {
+			jsonrpc: '2.0',
+			id: 1,
+			method: 'tools/call',
+			params: {
+				name: 'list_workspaces',
+				arguments: {}
+			}
+		}
+	});
+	expect(mcpCall.ok()).toBeTruthy();
+	const mcpBody = await mcpCall.json();
+	expect(mcpBody.error).toBeFalsy();
+
+	await page.addInitScript((token) => {
+		window.localStorage.setItem('token', token);
+	}, auth.token);
+	await page.goto('/settings');
+
+	await expect(page.getByRole('heading', { name: 'Recent MCP Activity' })).toBeVisible();
+	await expect(page.getByTestId('mcp-activity-list')).toContainText('list_workspaces');
+	await expect(page.getByTestId('mcp-activity-list')).toContainText('success');
 });

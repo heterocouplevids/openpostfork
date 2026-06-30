@@ -46,8 +46,8 @@ func (s *Service) IncrementMonthly(ctx context.Context, workspaceID string, metr
 			Where("metric = ?", string(metric)).
 			Where("period_start = ?", periodStart).
 			Scan(txCtx)
-		switch {
-		case err == nil:
+		switch err {
+		case nil:
 			value = counter.Value + amount
 			_, err = tx.NewUpdate().
 				Model((*models.UsageCounter)(nil)).
@@ -58,7 +58,7 @@ func (s *Service) IncrementMonthly(ctx context.Context, workspaceID string, metr
 				Where("period_start = ?", periodStart).
 				Exec(txCtx)
 			return err
-		case err == sql.ErrNoRows:
+		case sql.ErrNoRows:
 			value = amount
 			counter = models.UsageCounter{
 				WorkspaceID: workspaceID,
