@@ -833,6 +833,10 @@ func mcpCreateDraftTool() map[string]any {
 					"type":        "string",
 					"description": "Draft post content.",
 				},
+				"publication_id": map[string]any{
+					"type":        "string",
+					"description": "Optional source publication ID returned by list_publications or create_publication.",
+				},
 				"social_account_ids": map[string]any{
 					"type":        "array",
 					"description": "Optional destination account IDs returned by list_accounts.",
@@ -975,6 +979,10 @@ func mcpSchedulePostTool() map[string]any {
 				"content": map[string]any{
 					"type":        "string",
 					"description": "Post content.",
+				},
+				"publication_id": map[string]any{
+					"type":        "string",
+					"description": "Optional source publication ID returned by list_publications or create_publication.",
 				},
 				"scheduled_at": map[string]any{
 					"type":        "string",
@@ -1984,6 +1992,7 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 	var input struct {
 		WorkspaceID      string   `json:"workspace_id"`
 		Content          string   `json:"content"`
+		PublicationID    string   `json:"publication_id"`
 		SocialAccountIDs []string `json:"social_account_ids"`
 		MediaIDs         []string `json:"media_ids"`
 	}
@@ -2006,15 +2015,20 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, input.WorkspaceID, mediaIDs); rpcErr != nil {
 		return nil, rpcErr
 	}
+	publicationID, rpcErr := h.normalizeMCPPublicationID(ctx, input.WorkspaceID, input.PublicationID)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
 
 	now := time.Now().UTC()
 	post := &models.Post{
-		ID:          newUUID(),
-		WorkspaceID: input.WorkspaceID,
-		CreatedByID: userID,
-		Content:     input.Content,
-		Status:      statusDraft,
-		CreatedAt:   now,
+		ID:            newUUID(),
+		WorkspaceID:   input.WorkspaceID,
+		CreatedByID:   userID,
+		PublicationID: publicationID,
+		Content:       input.Content,
+		Status:        statusDraft,
+		CreatedAt:     now,
 	}
 	destinations := make([]models.PostDestination, 0, len(input.SocialAccountIDs))
 	for _, accountID := range input.SocialAccountIDs {
@@ -2424,6 +2438,7 @@ type mcpPostMedia struct {
 type mcpPostStatus struct {
 	ID                 string               `json:"id"`
 	WorkspaceID        string               `json:"workspace_id"`
+	PublicationID      string               `json:"publication_id,omitempty"`
 	Content            string               `json:"content"`
 	Status             string               `json:"status"`
 	ScheduledAt        string               `json:"scheduled_at,omitempty"`
@@ -2438,6 +2453,7 @@ type mcpPostStatus struct {
 type mcpSchedulePostInput struct {
 	WorkspaceID      string   `json:"workspace_id"`
 	Content          string   `json:"content"`
+	PublicationID    string   `json:"publication_id"`
 	ScheduledAt      string   `json:"scheduled_at"`
 	SocialAccountIDs []string `json:"social_account_ids"`
 	MediaIDs         []string `json:"media_ids"`
@@ -2471,6 +2487,11 @@ func (h *MCPHandler) validateSchedulePostInput(ctx context.Context, userID strin
 	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, input.WorkspaceID, mediaIDs); rpcErr != nil {
 		return input, nil, nil, time.Time{}, rpcErr
 	}
+	publicationID, rpcErr := h.normalizeMCPPublicationID(ctx, input.WorkspaceID, input.PublicationID)
+	if rpcErr != nil {
+		return input, nil, nil, time.Time{}, rpcErr
+	}
+	input.PublicationID = publicationID
 	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
 	if err != nil {
 		return input, nil, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at must be an RFC3339 timestamp"}
@@ -2492,14 +2513,15 @@ func (h *MCPHandler) schedulePost(ctx context.Context, userID string, args map[s
 
 	now := time.Now().UTC()
 	post := &models.Post{
-		ID:          newUUID(),
-		WorkspaceID: input.WorkspaceID,
-		CreatedByID: userID,
-		Content:     input.Content,
-		Status:      statusScheduled,
-		ScheduledAt: scheduledAt,
-		ActualRunAt: scheduledAt,
-		CreatedAt:   now,
+		ID:            newUUID(),
+		WorkspaceID:   input.WorkspaceID,
+		CreatedByID:   userID,
+		PublicationID: input.PublicationID,
+		Content:       input.Content,
+		Status:        statusScheduled,
+		ScheduledAt:   scheduledAt,
+		ActualRunAt:   scheduledAt,
+		CreatedAt:     now,
 	}
 	destinations := make([]models.PostDestination, 0, len(accountIDs))
 	for _, accountID := range accountIDs {
@@ -3339,6 +3361,7 @@ func (h *MCPHandler) loadMCPPostStatus(ctx context.Context, postID string) (mcpP
 	status := mcpPostStatus{
 		ID:                 post.ID,
 		WorkspaceID:        post.WorkspaceID,
+		PublicationID:      post.PublicationID,
 		Content:            post.Content,
 		Status:             post.Status,
 		RandomDelayMinutes: post.RandomDelayMinutes,
@@ -3605,6 +3628,25 @@ func (h *MCPHandler) ensureMediaBelongsToWorkspace(ctx context.Context, workspac
 		return &mcpError{Code: -32602, Message: "one or more media_ids are invalid or outside this workspace"}
 	}
 	return nil
+}
+
+func (h *MCPHandler) normalizeMCPPublicationID(ctx context.Context, workspaceID, publicationID string) (string, *mcpError) {
+	publicationID = strings.TrimSpace(publicationID)
+	if publicationID == "" {
+		return "", nil
+	}
+	count, err := h.db.NewSelect().
+		Model((*models.Publication)(nil)).
+		Where("workspace_id = ?", workspaceID).
+		Where("id = ?", publicationID).
+		Count(ctx)
+	if err != nil {
+		return "", &mcpError{Code: -32603, Message: "failed to validate publication"}
+	}
+	if count == 0 {
+		return "", &mcpError{Code: -32602, Message: "publication_id is invalid or outside this workspace"}
+	}
+	return publicationID, nil
 }
 
 func normalizeMCPIDs(ids []string, field string) ([]string, *mcpError) {

@@ -143,6 +143,40 @@ func insertMCPTestMedia(t *testing.T, srv *mcpTestServer, media models.MediaAtta
 	require.NoError(t, err)
 }
 
+func insertMCPTestPublication(t *testing.T, srv *mcpTestServer, publication models.Publication) {
+	t.Helper()
+
+	if publication.ID == "" {
+		publication.ID = "pub-1"
+	}
+	if publication.WorkspaceID == "" {
+		publication.WorkspaceID = "ws-1"
+	}
+	if publication.CreatedByID == "" {
+		publication.CreatedByID = "user-1"
+	}
+	if publication.Title == "" {
+		publication.Title = publication.ID
+	}
+	if publication.SourceContent == "" {
+		publication.SourceContent = "Source content"
+	}
+	if publication.Status == "" {
+		publication.Status = models.PublicationStatusDraft
+	}
+	if publication.ReleasePlanJSON == "" {
+		publication.ReleasePlanJSON = "{}"
+	}
+	if publication.CreatedAt.IsZero() {
+		publication.CreatedAt = time.Date(2026, 6, 30, 15, 30, 0, 0, time.UTC)
+	}
+	if publication.UpdatedAt.IsZero() {
+		publication.UpdatedAt = publication.CreatedAt
+	}
+	_, err := srv.db.NewInsert().Model(&publication).Exec(context.Background())
+	require.NoError(t, err)
+}
+
 func (s *mcpTestServer) request(t *testing.T, token string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -946,6 +980,7 @@ func TestMCPCallCreateDraft(t *testing.T) {
 	t.Parallel()
 
 	srv := newMCPTestServer(t)
+	insertMCPTestPublication(t, srv, models.Publication{ID: "pub-draft"})
 	insertMCPTestMedia(t, srv, models.MediaAttachment{
 		ID:               "media-draft",
 		OriginalFilename: "draft.png",
@@ -960,6 +995,7 @@ func TestMCPCallCreateDraft(t *testing.T) {
 			"arguments": map[string]any{
 				"workspace_id":       "ws-1",
 				"content":            "Draft from an agent",
+				"publication_id":     "pub-draft",
 				"social_account_ids": []string{"account-1"},
 				"media_ids":          []string{"media-draft"},
 			},
@@ -974,6 +1010,7 @@ func TestMCPCallCreateDraft(t *testing.T) {
 	post := structured["post"].(map[string]any)
 	require.Equal(t, "draft", post["status"])
 	require.Equal(t, "ws-1", post["workspace_id"])
+	require.Equal(t, "pub-draft", post["publication_id"])
 	require.Equal(t, []any{"media-draft"}, post["media_ids"])
 	media := post["media"].([]any)
 	require.Len(t, media, 1)
@@ -986,6 +1023,7 @@ func TestMCPCallCreateDraft(t *testing.T) {
 	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("id = ?", postID).Scan(context.Background()))
 	require.Equal(t, "Draft from an agent", stored.Content)
 	require.Equal(t, "user-1", stored.CreatedByID)
+	require.Equal(t, "pub-draft", stored.PublicationID)
 	var destinationCount int
 	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("post_destinations").Where("post_id = ?", postID).Scan(context.Background(), &destinationCount))
 	require.Equal(t, 1, destinationCount)
@@ -993,6 +1031,40 @@ func TestMCPCallCreateDraft(t *testing.T) {
 	require.NoError(t, srv.db.NewSelect().Model(&postMedia).Where("post_id = ?", postID).Scan(context.Background()))
 	require.Equal(t, "media-draft", postMedia.MediaID)
 	require.Equal(t, 0, postMedia.DisplayOrder)
+}
+
+func TestMCPCallCreateDraftRejectsOutsidePublication(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	insertMCPTestPublication(t, srv, models.Publication{
+		ID:          "pub-other-workspace",
+		WorkspaceID: "ws-2",
+		CreatedByID: "other-user",
+	})
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-draft-outside-publication",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_draft",
+			"arguments": map[string]any{
+				"workspace_id":       "ws-1",
+				"content":            "Draft from an agent",
+				"publication_id":     "pub-other-workspace",
+				"social_account_ids": []string{"account-1"},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	rpcErr := out["error"].(map[string]any)
+	require.Contains(t, rpcErr["message"], "publication_id")
+	var count int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &count))
+	require.Equal(t, 0, count)
 }
 
 func TestMCPCallCreateDraftRejectsOutsideAccount(t *testing.T) {
@@ -1400,6 +1472,7 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 	t.Parallel()
 
 	srv := newMCPTestServer(t)
+	insertMCPTestPublication(t, srv, models.Publication{ID: "pub-schedule"})
 	insertMCPTestMedia(t, srv, models.MediaAttachment{
 		ID:               "media-schedule",
 		OriginalFilename: "schedule.png",
@@ -1415,6 +1488,7 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 			"arguments": map[string]any{
 				"workspace_id":       "ws-1",
 				"content":            "Ship agentic scheduling",
+				"publication_id":     "pub-schedule",
 				"scheduled_at":       scheduledAt,
 				"social_account_ids": []string{"account-1"},
 				"media_ids":          []string{"media-schedule"},
@@ -1431,6 +1505,7 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 	require.Equal(t, "scheduled", post["status"])
 	require.Equal(t, scheduledAt, post["scheduled_at"])
 	require.Equal(t, "Ship agentic scheduling", post["content"])
+	require.Equal(t, "pub-schedule", post["publication_id"])
 	destinations := post["destinations"].([]any)
 	require.Len(t, destinations, 1)
 	require.Equal(t, "account-1", destinations[0].(map[string]any)["social_account_id"])
@@ -1444,6 +1519,7 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 	require.NoError(t, srv.db.NewSelect().Model(&storedPost).Where("id = ?", postID).Scan(context.Background()))
 	require.Equal(t, statusScheduled, storedPost.Status)
 	require.Equal(t, "user-1", storedPost.CreatedByID)
+	require.Equal(t, "pub-schedule", storedPost.PublicationID)
 	require.Equal(t, time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC), storedPost.ScheduledAt)
 	require.Equal(t, storedPost.ScheduledAt, storedPost.ActualRunAt)
 

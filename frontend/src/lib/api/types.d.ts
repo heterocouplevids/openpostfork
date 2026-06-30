@@ -1429,6 +1429,8 @@ export interface components {
             content: string;
             /** @description Media attachment IDs to include */
             media_ids?: string[] | null;
+            /** @description Optional source publication ID this post was derived from */
+            publication_id?: string;
             /**
              * Format: int64
              * @description Random delay in minutes (±N) to add for natural posting
@@ -1551,6 +1553,8 @@ export interface components {
             readonly $schema?: string;
             /** @description Thread posts in order */
             posts: components["schemas"]["ThreadPostInput"][] | null;
+            /** @description Optional source publication ID this thread was derived from */
+            publication_id?: string;
             /**
              * Format: int64
              * @description Random delay in minutes (±N) to add for natural posting
@@ -2138,6 +2142,8 @@ export interface components {
             id: string;
             /** @description Attached media */
             media?: components["schemas"]["PostMediaResponse"][] | null;
+            /** @description Source publication ID */
+            publication_id?: string;
             /**
              * Format: int64
              * @description Random delay in minutes (±N)
@@ -2188,6 +2194,8 @@ export interface components {
             id: string;
             /** @description Attached media IDs */
             media_ids?: string[] | null;
+            /** @description Source publication ID */
+            publication_id?: string;
             /**
              * Format: int64
              * @description Random delay in minutes (±N)
@@ -2602,6 +2610,8 @@ export interface components {
             content?: string;
             /** @description Media attachment IDs to include (replace all) */
             media_ids?: string[] | null;
+            /** @description Source publication ID to link. Send an empty string to clear it. */
+            publication_id?: string;
             /**
              * Format: int64
              * @description Random delay in minutes (±N) to add for natural posting
@@ -2641,11 +2651,11 @@ export interface components {
              */
             utc_minute?: number;
         };
-        UpdatePublicationInputBody: {
+        UpdatePublicationBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/UpdatePublicationInputBody.json
+             * @example https://example.com/schemas/UpdatePublicationBody.json
              */
             readonly $schema?: string;
             /** @description Optional intended audience */
@@ -6605,7 +6615,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdatePublicationInputBody"];
+                "application/json": components["schemas"]["UpdatePublicationBody"];
             };
         };
         responses: {

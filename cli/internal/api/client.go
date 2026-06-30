@@ -481,6 +481,7 @@ type Post struct {
 	ID                 string            `json:"id"`
 	WorkspaceID        string            `json:"workspace_id"`
 	CreatedBy          string            `json:"created_by"`
+	PublicationID      string            `json:"publication_id,omitempty"`
 	Content            string            `json:"content"`
 	Status             string            `json:"status"`
 	ScheduledAt        string            `json:"scheduled_at"`
@@ -499,6 +500,7 @@ type CreatePostInput struct {
 	ScheduledAt        *time.Time `json:"scheduled_at,omitempty"`
 	SocialAccountIDs   []string   `json:"social_account_ids"`
 	MediaIDs           []string   `json:"media_ids,omitempty"`
+	PublicationID      string     `json:"publication_id,omitempty"`
 	RandomDelayMinutes int        `json:"random_delay_minutes,omitempty"`
 	ThreadDraft        *string    `json:"thread_draft,omitempty"`
 }
@@ -560,6 +562,7 @@ type UpdatePostInput struct {
 	ScheduledAt        *string  `json:"scheduled_at,omitempty"`
 	SocialAccountIDs   []string `json:"social_account_ids,omitempty"`
 	MediaIDs           []string `json:"media_ids,omitempty"`
+	PublicationID      *string  `json:"publication_id,omitempty"`
 	RandomDelayMinutes *int     `json:"random_delay_minutes,omitempty"`
 	ThreadDraft        *string  `json:"thread_draft,omitempty"`
 }
@@ -590,6 +593,7 @@ type CreateThreadInput struct {
 	Posts              []ThreadPostInput `json:"posts"`
 	ScheduledAt        *time.Time        `json:"scheduled_at,omitempty"`
 	SocialAccountIDs   []string          `json:"social_account_ids"`
+	PublicationID      string            `json:"publication_id,omitempty"`
 	RandomDelayMinutes int               `json:"random_delay_minutes,omitempty"`
 }
 

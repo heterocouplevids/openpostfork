@@ -325,7 +325,7 @@ func TestNextAvailableSlot_WireFormat(t *testing.T) {
 func TestCreatePost_WireFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"p_new","workspace_id":"ws_1","created_by":"u_1","content":"Hi","status":"draft","scheduled_at":"","created_at":"2026-06-15T10:00:00Z","random_delay_minutes":0}`))
+		_, _ = w.Write([]byte(`{"id":"p_new","workspace_id":"ws_1","created_by":"u_1","publication_id":"pub_1","content":"Hi","status":"draft","scheduled_at":"","created_at":"2026-06-15T10:00:00Z","random_delay_minutes":0}`))
 	}))
 	defer srv.Close()
 
@@ -343,6 +343,9 @@ func TestCreatePost_WireFormat(t *testing.T) {
 	}
 	if got.Content != "Hi" {
 		t.Errorf("expected content Hi, got %q", got.Content)
+	}
+	if got.PublicationID != "pub_1" {
+		t.Errorf("expected publication_id pub_1, got %q", got.PublicationID)
 	}
 }
 

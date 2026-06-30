@@ -678,6 +678,10 @@
 						},
 						"type": ["array", "null"]
 					},
+					"publication_id": {
+						"description": "Optional source publication ID this post was derived from",
+						"type": "string"
+					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N) to add for natural posting",
 						"format": "int64",
@@ -891,6 +895,10 @@
 						},
 						"minItems": 2,
 						"type": ["array", "null"]
+					},
+					"publication_id": {
+						"description": "Optional source publication ID this thread was derived from",
+						"type": "string"
 					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N) to add for natural posting",
@@ -2002,6 +2010,10 @@
 						},
 						"type": ["array", "null"]
 					},
+					"publication_id": {
+						"description": "Source publication ID",
+						"type": "string"
+					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N)",
 						"format": "int64",
@@ -2107,6 +2119,10 @@
 							"type": "string"
 						},
 						"type": ["array", "null"]
+					},
+					"publication_id": {
+						"description": "Source publication ID",
+						"type": "string"
 					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N)",
@@ -2932,6 +2948,10 @@
 						},
 						"type": ["array", "null"]
 					},
+					"publication_id": {
+						"description": "Source publication ID to link. Send an empty string to clear it.",
+						"type": "string"
+					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N) to add for natural posting",
 						"format": "int64",
@@ -2991,12 +3011,12 @@
 				},
 				"type": "object"
 			},
-			"UpdatePublicationInputBody": {
+			"UpdatePublicationBody": {
 				"additionalProperties": false,
 				"properties": {
 					"$schema": {
 						"description": "A URL to the JSON Schema for this object.",
-						"examples": ["https://example.com/schemas/UpdatePublicationInputBody.json"],
+						"examples": ["https://example.com/schemas/UpdatePublicationBody.json"],
 						"format": "uri",
 						"readOnly": true,
 						"type": "string"
@@ -7998,7 +8018,7 @@
 					"content": {
 						"application/json": {
 							"schema": {
-								"$ref": "#/components/schemas/UpdatePublicationInputBody"
+								"$ref": "#/components/schemas/UpdatePublicationBody"
 							}
 						}
 					},
