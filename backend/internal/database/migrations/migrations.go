@@ -6,12 +6,14 @@ import (
 	"embed"
 	"fmt"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect"
 )
 
 //go:embed *.sql
@@ -65,7 +67,7 @@ func RunMigrations(db *bun.DB) error {
 		migrations = append(migrations, migration{
 			version: version,
 			name:    entry.Name(),
-			sql:     string(content),
+			sql:     normalizeMigrationSQL(db.Dialect().Name(), string(content)),
 		})
 	}
 
@@ -85,6 +87,25 @@ func RunMigrations(db *bun.DB) error {
 	}
 
 	return nil
+}
+
+var (
+	postgresBlobTypeExpr         = regexp.MustCompile(`(?i)\bBLOB\b`)
+	postgresDateTimeTypeExpr     = regexp.MustCompile(`(?i)\bDATETIME\b`)
+	postgresBooleanIsActiveFalse = regexp.MustCompile(`\bis_active\s*=\s*0\b`)
+	postgresBooleanIsActiveTrue  = regexp.MustCompile(`\bis_active\s*=\s*1\b`)
+)
+
+func normalizeMigrationSQL(name dialect.Name, raw string) string {
+	if name != dialect.PG {
+		return raw
+	}
+
+	out := postgresBlobTypeExpr.ReplaceAllString(raw, "BYTEA")
+	out = postgresDateTimeTypeExpr.ReplaceAllString(out, "TIMESTAMPTZ")
+	out = postgresBooleanIsActiveFalse.ReplaceAllString(out, "is_active = FALSE")
+	out = postgresBooleanIsActiveTrue.ReplaceAllString(out, "is_active = TRUE")
+	return out
 }
 
 type migration struct {

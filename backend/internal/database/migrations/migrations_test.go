@@ -10,6 +10,7 @@ import (
 	"github.com/openpost/backend/internal/models"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 )
 
@@ -108,4 +109,39 @@ func TestRunMigrationsPromotesSingleExistingUserToInstanceAdmin(t *testing.T) {
 	err = db.NewSelect().Model(&user).Where("id = ?", "user-1").Scan(ctx)
 	require.NoError(t, err)
 	require.True(t, user.IsAdmin)
+}
+
+func TestNormalizeMigrationSQLLeavesSQLiteStatementsUnchanged(t *testing.T) {
+	t.Parallel()
+
+	raw := `
+ALTER TABLE users ADD COLUMN totp_secret_encrypted BLOB;
+ALTER TABLE users ADD COLUMN totp_enabled_at DATETIME;
+DELETE FROM social_accounts WHERE is_active = 0;
+CREATE UNIQUE INDEX social_accounts_active_idx ON social_accounts (workspace_id) WHERE is_active = 1;
+`
+
+	require.Equal(t, raw, normalizeMigrationSQL(dialect.SQLite, raw))
+}
+
+func TestNormalizeMigrationSQLMakesStatementsPostgresSafe(t *testing.T) {
+	t.Parallel()
+
+	raw := `
+ALTER TABLE users ADD COLUMN totp_secret_encrypted BLOB;
+ALTER TABLE users ADD COLUMN totp_enabled_at DATETIME;
+DELETE FROM social_accounts WHERE is_active = 0;
+CREATE UNIQUE INDEX social_accounts_active_idx ON social_accounts (workspace_id) WHERE is_active = 1 AND slug != '';
+`
+
+	got := normalizeMigrationSQL(dialect.PG, raw)
+
+	require.Contains(t, got, "totp_secret_encrypted BYTEA")
+	require.Contains(t, got, "totp_enabled_at TIMESTAMPTZ")
+	require.Contains(t, got, "is_active = FALSE")
+	require.Contains(t, got, "is_active = TRUE AND slug != ''")
+	require.NotContains(t, got, " BLOB")
+	require.NotContains(t, got, " DATETIME")
+	require.NotContains(t, got, "is_active = 0")
+	require.NotContains(t, got, "is_active = 1")
 }
