@@ -72,7 +72,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Keep the MCP server backend-owned, not frontend-owned.
 - Add a local `openpost-mcp` stdio binary for desktop/self-hosted clients.
 - Reuse CLI/API client behavior where possible, but keep MCP stdout strict.
-- Start with safe semantic tools: list workspaces, list accounts, create draft, upload media from URL, schedule post, cancel post, get post status, suggest next slot.
+- Start with safe semantic tools: list workspaces, list accounts, create draft, upload media from URL, schedule post, cancel post, get post status, suggest next slot. The remote MCP foundation now supports the first three.
 - Require auth for remote MCP, scope sessions, log tool calls, and expose revocation in settings.
 
 ### 7. Marketing, SEO, And Docs
@@ -99,4 +99,4 @@ This is the implementation map for turning OpenPost into a production-ready self
 5. Add entitlement interfaces and self-host defaults. Done for the service contract and workspace creation boundary.
 6. Add usage tables and API boundary checks. Monthly usage counters, social-account quota enforcement, media quota enforcement, and scheduled-post quota enforcement are in place; team and publishing-worker enforcement are next.
 7. Add Playwright coverage around the core app flows.
-8. Start MCP with authenticated remote metadata and safe read/create-draft tools.
+8. Start MCP with authenticated remote metadata and safe read/create-draft tools. Remote auth, workspace listing, account listing, and draft creation are in place.
