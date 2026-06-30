@@ -18,7 +18,7 @@ services:
       - OPENPOST_MEDIA_PATH=/data/media
       - OPENPOST_MEDIA_URL=https://openpost.example.com/media
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/ready"]
       interval: 30s
       timeout: 3s
       retries: 3

@@ -70,6 +70,7 @@ All notable changes to this project are documented in this file.
 - Added static marketing-site `robots.txt` and `sitemap.xml` routes for the landing, tools, and tips pages.
 - Added a cloud bootstrap entitlement so hosted users can create one workspace before checkout while paid workspace expansion uses active subscription snapshots.
 - Added a database-backed `/api/v1/ready` endpoint for deployment readiness checks while keeping `/api/v1/health` as a liveness probe.
+- Added `openpost instance health` for unauthenticated CLI liveness and readiness checks against the active instance.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

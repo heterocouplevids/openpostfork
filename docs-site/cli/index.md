@@ -14,6 +14,7 @@ Use it when you want to:
 ```sh
 openpost instance add local http://localhost:8080
 openpost instance use local
+openpost instance health
 openpost auth login http://localhost:8080
 openpost workspace use personal
 ```

@@ -30,6 +30,7 @@ Add an instance profile:
 ```sh
 openpost instance add local http://localhost:8080
 openpost instance use local
+openpost instance health
 ```
 
 Log in with the browser device flow:

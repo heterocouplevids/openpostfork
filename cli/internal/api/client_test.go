@@ -3,10 +3,45 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+func TestReadyChecksReadinessEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/ready" {
+			t.Fatalf("path = %s, want /api/v1/ready", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ready","database":"ok"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "")
+	got, err := c.Ready(context.Background())
+	if err != nil {
+		t.Fatalf("Ready returned error: %v", err)
+	}
+	if got.Status != "ready" || got.Database != "ok" {
+		t.Fatalf("readiness = %+v", got)
+	}
+}
+
+func TestReadyRejectsUnexpectedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"status":"starting","database":"ok"}`)
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "")
+	_, err := c.Ready(context.Background())
+	if err == nil {
+		t.Fatal("Ready returned nil error")
+	}
+}
 
 // TestListAccounts_WireFormat verifies that ListAccounts decodes a raw
 // JSON array from the server. The server's Huma output type is

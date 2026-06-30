@@ -185,6 +185,26 @@ func (c *Client) Health(ctx context.Context) error {
 	return nil
 }
 
+type Readiness struct {
+	Status   string `json:"status"`
+	Database string `json:"database"`
+}
+
+// Ready is the public /api/v1/ready dependency probe.
+func (c *Client) Ready(ctx context.Context) (*Readiness, error) {
+	var out Readiness
+	if err := c.GetJSON(ctx, "/api/v1/ready", &out); err != nil {
+		return nil, err
+	}
+	if out.Status != "ready" {
+		return nil, fmt.Errorf("readiness: unexpected status %q", out.Status)
+	}
+	if out.Database != "ok" {
+		return nil, fmt.Errorf("readiness: unexpected database status %q", out.Database)
+	}
+	return &out, nil
+}
+
 // Me fetches the authenticated user profile.
 func (c *Client) Me(ctx context.Context) (*Me, error) {
 	var m Me

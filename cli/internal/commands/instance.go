@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/openpost/cli/internal/api"
 	"github.com/openpost/cli/internal/config"
 )
 
@@ -17,6 +18,7 @@ func newInstanceCmd() *cobra.Command {
 	cmd.AddCommand(newInstanceListCmd())
 	cmd.AddCommand(newInstanceUseCmd())
 	cmd.AddCommand(newInstanceRemoveCmd())
+	cmd.AddCommand(newInstanceHealthCmd())
 	return cmd
 }
 
@@ -137,6 +139,49 @@ func newInstanceRemoveCmd() *cobra.Command {
 				return err
 			}
 			printerFrom(cfg).Printf("Removed profile %q.", args[0])
+			return nil
+		},
+	}
+}
+
+func newInstanceHealthCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "health",
+		Short: "Check the active instance liveness and readiness",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := runtimeFrom(cmd)
+			if err != nil {
+				return err
+			}
+			if cfg.Instance == "" {
+				return fmt.Errorf("instance is required: run `openpost instance add <name> <url>` or pass --instance")
+			}
+			client := api.New(cfg.Instance, "")
+			if err := client.Health(cmd.Context()); err != nil {
+				return err
+			}
+			ready, err := client.Ready(cmd.Context())
+			if err != nil {
+				return err
+			}
+
+			p := printerFrom(cfg)
+			out := map[string]string{
+				"instance": cfg.Instance,
+				"health":   "ok",
+				"ready":    ready.Status,
+				"database": ready.Database,
+			}
+			if cfg.AsJSON {
+				return p.PrintJSON(out)
+			}
+			p.Table([]string{"INSTANCE", "HEALTH", "READY", "DATABASE"}, [][]string{{
+				out["instance"],
+				out["health"],
+				out["ready"],
+				out["database"],
+			}})
 			return nil
 		},
 	}

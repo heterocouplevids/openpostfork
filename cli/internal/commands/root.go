@@ -3,7 +3,7 @@
 // The tree is intentionally flat-and-shallow for the first cut:
 // root
 // ├── auth    (login, status, logout, token list/revoke)
-// ├── instance (add, list, use, remove)
+// ├── instance (add, list, use, remove, health)
 // ├── workspace (list, use, create)
 // ├── account (list, rename, disconnect)
 // ├── set     (list, create, rename, default, add, remove, delete)

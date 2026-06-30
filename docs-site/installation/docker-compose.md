@@ -27,7 +27,7 @@ services:
       - OPENPOST_DATABASE_PATH=/data/db/openpost.db
       - OPENPOST_MEDIA_PATH=/data/media
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/ready"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -74,16 +74,16 @@ Optional hardening after setup:
 docker compose up -d
 ```
 
-## Check health
+## Check readiness
 
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8080/api/v1/ready
 ```
 
 Expected response:
 
 ```json
-{"status":"ok"}
+{"status":"ready","database":"ok"}
 ```
 
 ## Where data is stored
