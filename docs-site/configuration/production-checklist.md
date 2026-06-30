@@ -1,17 +1,71 @@
 # Production Checklist
 
-- [ ] Copy the root `.env.example` to `.env` and remove placeholder values
-- [ ] Generate fresh `OPENPOST_JWT_SECRET`
-- [ ] Generate fresh `OPENPOST_ENCRYPTION_KEY`
-- [ ] Use secrets that are at least 32 characters long
-- [ ] Set `OPENPOST_APP_URL` to the public HTTPS app origin
-- [ ] Set `OPENPOST_PUBLIC_URL` to the public HTTPS app origin
-- [ ] Set `OPENPOST_MEDIA_URL` to the public HTTPS media base URL
-- [ ] Decide whether to set `OPENPOST_DISABLE_REGISTRATIONS=true` after creating the first admin account
-- [ ] Configure reverse proxy with HTTPS
-- [ ] Update provider callback URLs for X, LinkedIn, and Threads
-- [ ] Configure Mastodon servers in `MASTODON_SERVERS` if you need Mastodon
-- [ ] Persist `/data`
-- [ ] Back up database, media, and secrets together
-- [ ] Check `GET /api/v1/ready`
-- [ ] Create a test draft and scheduled post before relying on automation
+Use this page before putting a real OpenPost instance behind a public domain.
+It is operator-facing: product usage lives in [User Docs](/usage/), while code
+changes live in [Developer Docs](/development/).
+
+## Baseline
+
+- [ ] Copy the root `.env.example` to `.env` or mirror every required value in your secret manager.
+- [ ] Generate fresh `OPENPOST_JWT_SECRET` and `OPENPOST_ENCRYPTION_KEY`.
+- [ ] Keep both secrets at least 32 characters long.
+- [ ] Store secrets outside the repository and outside container images.
+- [ ] Set `OPENPOST_APP_URL` to the public HTTPS app origin.
+- [ ] Set `OPENPOST_PUBLIC_URL` to the same public HTTPS app origin unless you have a specific split-origin reason.
+- [ ] Configure a reverse proxy with HTTPS before connecting OAuth providers.
+- [ ] Confirm `GET /api/v1/health` returns `{"status":"ok"}`.
+- [ ] Confirm `GET /api/v1/ready` returns `{"status":"ready","database":"ok"}`.
+- [ ] Confirm `openpost instance health --instance <public-url>` succeeds against the public URL.
+
+## Self-Hosted Storage
+
+- [ ] Keep `OPENPOST_EDITION=selfhost` or leave it unset.
+- [ ] Use SQLite/local storage unless you intentionally operate Postgres/S3 yourself.
+- [ ] Persist the SQLite database path, usually `/data/db/openpost.db`.
+- [ ] Persist the local media directory, usually `/data/media`.
+- [ ] Set `OPENPOST_MEDIA_URL` to the public media base URL.
+- [ ] Back up database files, media files, and secrets together.
+- [ ] Run at least one test restore before relying on the backup.
+
+## OpenPost Cloud Or Hosted Operators
+
+- [ ] Set `OPENPOST_EDITION=cloud`.
+- [ ] Set `OPENPOST_DATABASE_DRIVER=postgres`.
+- [ ] Set `OPENPOST_DATABASE_URL` to the production Postgres URL.
+- [ ] Set `OPENPOST_STORAGE_DRIVER=s3`.
+- [ ] Set `OPENPOST_S3_REGION`, `OPENPOST_S3_BUCKET`, `OPENPOST_S3_ACCESS_KEY_ID`, and `OPENPOST_S3_SECRET_ACCESS_KEY`.
+- [ ] Set `OPENPOST_S3_PUBLIC_BASE_URL` to a stable public media origin.
+- [ ] Verify the S3 bucket lifecycle policy and object access model before launch.
+- [ ] Configure Polar checkout, customer portal, webhook secret, and product/price IDs before enabling paid workspaces.
+- [ ] Send a signed Polar webhook test event and confirm it is stored once.
+- [ ] Confirm a new hosted user can create the bootstrap workspace and is blocked from extra workspaces before checkout.
+
+## Providers
+
+- [ ] Start with Bluesky or Mastodon for the first end-to-end publish smoke.
+- [ ] Update callback URLs for X, LinkedIn, and Threads to the production HTTPS app origin.
+- [ ] Configure Mastodon servers in `MASTODON_SERVERS` if you need fixed self-hosted Mastodon apps.
+- [ ] Confirm custom Mastodon instance registration works if you rely on dynamic Mastodon connections.
+- [ ] Keep Instagram, Facebook, YouTube, and TikTok labeled as planned until their adapters pass provider-specific OAuth, media, publish, refresh, retry, and quota tests.
+- [ ] Create one test account connection per enabled provider.
+- [ ] Publish a private or low-risk test post with and without media for every enabled provider.
+
+## Product Smoke
+
+- [ ] Create the first admin account.
+- [ ] Decide whether to set `OPENPOST_DISABLE_REGISTRATIONS=true`.
+- [ ] Create a workspace.
+- [ ] Connect at least one social account.
+- [ ] Upload a small image and confirm it appears in the media library.
+- [ ] Create a publication, draft, and scheduled post from the web app.
+- [ ] Create a draft or scheduled post through the CLI.
+- [ ] Create a draft or scheduled post through MCP if assistant access is enabled.
+- [ ] Confirm scheduled publishing creates and completes a background job.
+
+## Operations
+
+- [ ] Point uptime monitoring at `/api/v1/ready`, not only `/api/v1/health`.
+- [ ] Confirm logs include startup configuration, database readiness errors, provider publish failures, and MCP tool-call failures.
+- [ ] Document your deployment rollback path.
+- [ ] Document where database backups, media backups, and secret backups live.
+- [ ] Verify the release artifact or container image matches the version you intended to deploy.

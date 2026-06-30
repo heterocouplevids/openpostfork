@@ -1,15 +1,19 @@
 # Backups
 
-You need both the database and the media directory for a usable backup.
+You need the database, media objects, and secrets for a usable backup. The exact
+commands depend on whether you run the self-hosted SQLite/local-storage default
+or a hosted Postgres/S3-compatible deployment.
 
 ## What to back up
 
-- SQLite database
-- Media directory
+- SQLite database files or a Postgres dump
+- Local media directory or S3-compatible bucket objects
 - Your `.env` file or secret-management equivalent
 - File ownership and permissions for the runtime directories
 
-## Backup example
+## Self-hosted SQLite and local media
+
+This is the default self-hosting path.
 
 Stop OpenPost first if you want the simplest backup path:
 
@@ -45,11 +49,55 @@ Restart when the backup finishes:
 sudo systemctl start openpost
 ```
 
+## Postgres-backed deployments
+
+For hosted or cloud-mode deployments, back up Postgres with the database tools
+provided by your host. A plain `pg_dump` is portable and easy to restore:
+
+```bash
+pg_dump "$OPENPOST_DATABASE_URL" \
+  --format=custom \
+  --file="openpost-postgres-$(date +%Y%m%d).dump"
+```
+
+For a restore drill:
+
+```bash
+createdb openpost_restore
+pg_restore \
+  --dbname="postgres://openpost:secret@localhost:5432/openpost_restore?sslmode=disable" \
+  "openpost-postgres-20260518.dump"
+```
+
+Make sure the restore target runs the same or newer OpenPost migrations before
+you point traffic at it.
+
+## S3-compatible media
+
+For S3/R2-style storage, back up the bucket or configure provider-side
+versioning/replication. A simple object copy is enough for a manual snapshot:
+
+```bash
+aws s3 sync "s3://openpost-media" "./openpost-media-$(date +%Y%m%d)"
+```
+
+For Cloudflare R2 or another S3-compatible endpoint, pass the endpoint URL:
+
+```bash
+aws s3 sync \
+  --endpoint-url "$OPENPOST_S3_ENDPOINT" \
+  "s3://$OPENPOST_S3_BUCKET" \
+  "./openpost-media-$(date +%Y%m%d)"
+```
+
+Back up object metadata and bucket policy if your provider keeps public access,
+custom domains, lifecycle rules, or CORS outside the object data itself.
+
 ## Restore process
 
 1. Stop OpenPost.
-2. Restore the SQLite database files.
-3. Restore the media directory.
+2. Restore the database files or Postgres dump.
+3. Restore the media directory or bucket objects.
 4. Restore `.env` or the equivalent secrets source.
 5. Fix ownership and permissions.
 6. Start OpenPost.
@@ -74,7 +122,7 @@ sudo systemctl start openpost
 
 1. Install the new OpenPost binary or container deployment first.
 2. Stop OpenPost on both the old and new server.
-3. Copy the database, any `-wal` and `-shm` files, the media directory, and `.env`.
+3. Copy the database, any `-wal` and `-shm` files or Postgres dump, the media directory or bucket data, and `.env`.
 4. Restore ownership and permissions on the new server.
 5. Start OpenPost on the new server.
 6. Verify provider callbacks, media URLs, and scheduled posts before switching traffic.
@@ -87,7 +135,8 @@ If the hostname changes, update your reverse proxy, provider callback URLs, and 
 - Do previously uploaded media items load?
 - Are connected accounts still listed?
 - Are drafts and scheduled posts present?
-- Does the readiness endpoint respond?
+- Does `GET /api/v1/ready` return `{"status":"ready","database":"ok"}`?
+- Does `openpost instance health --instance <restored-url>` succeed against the restored URL?
 - If the server hostname changed: do provider callbacks and public media URLs still point at the new host?
 
 ## Notes
@@ -95,3 +144,4 @@ If the hostname changes, update your reverse proxy, provider callback URLs, and 
 - Test restores, not just backups.
 - Keep database and media snapshots reasonably aligned in time.
 - Protect backup copies of `.env`: encrypted provider tokens still depend on `OPENPOST_ENCRYPTION_KEY`.
+- In cloud mode, do not treat a database dump without matching media objects and secrets as a complete backup.

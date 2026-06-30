@@ -29,3 +29,39 @@ Expected response:
 ```
 
 Use this endpoint for container health checks, deploy rollouts, and external uptime probes that should fail when the database is unavailable. It returns `503` when OpenPost cannot run a database probe.
+
+## CLI check
+
+The CLI can check the same public instance from an operator shell:
+
+```bash
+openpost instance health
+```
+
+Use this for deploy validation and operator smoke checks. The command checks
+both liveness and readiness, and exits non-zero if either probe fails.
+
+For remote scripts, point the active CLI profile at the public app URL first:
+
+```bash
+openpost instance add production https://app.openpost.example
+openpost instance use production
+openpost instance health --json
+```
+
+You can also avoid saved state and pass the instance URL directly:
+
+```bash
+openpost instance health --instance https://app.openpost.example --json
+```
+
+The JSON output is useful for logs and monitors because it includes the checked
+instance URL, liveness result, readiness result, and database readiness status.
+
+## Recommended probes
+
+- Load balancer liveness: `GET /api/v1/health`
+- Deploy rollout readiness: `GET /api/v1/ready`
+- External uptime monitor: `GET /api/v1/ready`
+- Operator smoke from a shell: `openpost instance health`
+- Mobile app instance setup: the app validates `/api/v1/ready` before saving the instance URL.
