@@ -1,0 +1,32 @@
+# Billing And Usage Foundation
+
+OpenPost Cloud billing is built around local entitlement snapshots and durable usage counters. The backend should not call Polar on every API request.
+
+## Current pieces
+
+- `entitlements.Service`: evaluates plan limits and keeps self-hosted defaults unlimited.
+- `usage_counters`: monthly durable counters keyed by workspace, metric, and UTC month.
+- Workspace creation checks `LimitWorkspaces` before inserting a new workspace.
+
+## Monthly metrics
+
+Initial metrics match the production-readiness plan:
+
+- `scheduled_posts_monthly`
+- `published_posts_monthly`
+- `media_bytes_uploaded_monthly`
+- `media_bytes_stored`
+- `provider_write_calls_monthly`
+- `social_accounts`
+- `workspaces`
+- `team_members`
+
+## Next enforcement points
+
+- Account connection: `social_accounts`
+- Media upload: `media_bytes_uploaded_monthly` and `media_bytes_stored`
+- Scheduling: `scheduled_posts_monthly`
+- Publishing worker: `published_posts_monthly` and `provider_write_calls_monthly`
+- Team invitations: `team_members`
+
+Polar integration should update subscription state and entitlement snapshots through webhook handlers. API handlers should consume local snapshots only.

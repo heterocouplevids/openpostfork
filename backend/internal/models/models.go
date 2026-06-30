@@ -117,6 +117,17 @@ type WorkspaceMember struct {
 	Role        string `bun:",notnull" json:"role"` // 'admin', 'editor', 'viewer'
 }
 
+type UsageCounter struct {
+	bun.BaseModel `bun:"table:usage_counters"`
+
+	WorkspaceID string    `bun:",pk" json:"workspace_id"`
+	Metric      string    `bun:",pk" json:"metric"`
+	PeriodStart time.Time `bun:",pk" json:"period_start"`
+	Value       int64     `bun:",notnull,default:0" json:"value"`
+	CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
 type SocialAccount struct {
 	bun.BaseModel `bun:"table:social_accounts"`
 

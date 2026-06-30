@@ -12,16 +12,22 @@ import (
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/queue"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/uptrace/bun"
 )
 
 type WorkspaceHandler struct {
-	db   *bun.DB
-	auth middleware.Authenticator
+	db          *bun.DB
+	auth        middleware.Authenticator
+	entitlement entitlements.Service
 }
 
-func NewWorkspaceHandler(db *bun.DB, authenticator middleware.Authenticator) *WorkspaceHandler {
-	return &WorkspaceHandler{db: db, auth: authenticator}
+func NewWorkspaceHandler(db *bun.DB, authenticator middleware.Authenticator, entitlement ...entitlements.Service) *WorkspaceHandler {
+	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
+	if len(entitlement) > 0 && entitlement[0] != nil {
+		entitlementService = entitlement[0]
+	}
+	return &WorkspaceHandler{db: db, auth: authenticator, entitlement: entitlementService}
 }
 
 type CreateWorkspaceInput struct {
@@ -57,6 +63,9 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		Middlewares:   huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *CreateWorkspaceInput) (*CreateWorkspaceOutput, error) {
 		userID := middleware.GetUserID(ctx)
+		if err := h.checkCreateWorkspaceEntitlement(ctx, userID); err != nil {
+			return nil, err
+		}
 
 		workspace := &models.Workspace{
 			ID:        uuid.New().String(),
@@ -89,6 +98,35 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		resp.Body.WorkspaceCreatedAt = workspace.CreatedAt.Format(time.RFC3339)
 		return resp, nil
 	})
+}
+
+func (h *WorkspaceHandler) checkCreateWorkspaceEntitlement(ctx context.Context, userID string) error {
+	var current int
+	if err := h.db.NewSelect().
+		ColumnExpr("COUNT(*)").
+		Model((*models.WorkspaceMember)(nil)).
+		Where("user_id = ?", userID).
+		Scan(ctx, &current); err != nil {
+		return huma.Error500InternalServerError("failed to check workspace limit")
+	}
+
+	decision, err := h.entitlement.Check(ctx, entitlements.Request{
+		UserID:  userID,
+		Limit:   entitlements.LimitWorkspaces,
+		Current: int64(current),
+		Amount:  1,
+	})
+	if err != nil {
+		return huma.Error500InternalServerError("failed to check workspace limit")
+	}
+	if !decision.Allowed {
+		reason := decision.Reason
+		if reason == "" {
+			reason = "workspace limit exceeded"
+		}
+		return huma.NewError(http.StatusPaymentRequired, reason)
+	}
+	return nil
 }
 
 func (h *WorkspaceHandler) ListWorkspaces(api huma.API) {

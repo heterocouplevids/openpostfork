@@ -27,8 +27,8 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Add `OPENPOST_EDITION=selfhost|cloud`.
 - Add `OPENPOST_DATABASE_DRIVER=sqlite|postgres` and Postgres-backed Bun ORM initialization.
 - Add `OPENPOST_STORAGE_DRIVER=local|s3` with S3-compatible storage.
-- Add usage counters and entitlement checks at API boundaries.
-- Add quota enforcement for workspace creation, account connection, media upload, scheduling, and team invites.
+- Add usage counters and entitlement checks at API boundaries. The first foundation is in place with monthly `usage_counters` and workspace-creation entitlement checks.
+- Add quota enforcement for account connection, media upload, scheduling, and team invites.
 - Add monthly usage counters for scheduled posts, published posts, uploaded bytes, stored bytes, and provider write calls.
 
 ### 2. Billing And Plans
@@ -96,7 +96,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 2. Add production-readiness docs and keep links discoverable.
 3. Add backend config primitives for edition, database driver, and storage driver.
 4. Add storage-driver tests before implementing S3/R2.
-5. Add entitlement interfaces and self-host defaults.
-6. Add usage tables and API boundary checks.
+5. Add entitlement interfaces and self-host defaults. Done for the service contract and workspace creation boundary.
+6. Add usage tables and API boundary checks. Monthly usage counters are in place; account/media/posting enforcement is next.
 7. Add Playwright coverage around the core app flows.
 8. Start MCP with authenticated remote metadata and safe read/create-draft tools.

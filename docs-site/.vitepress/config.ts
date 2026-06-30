@@ -107,6 +107,7 @@ const developmentSidebar = [
 			{ text: 'Background Jobs', link: '/development/background-jobs' },
 			{ text: 'Testing', link: '/development/testing' },
 			{ text: 'MCP And ChatGPT App', link: '/development/mcp' },
+			{ text: 'Billing And Usage', link: '/development/billing-and-usage' },
 			{ text: 'Production Readiness', link: '/development/production-readiness' },
 			{ text: 'Contributing', link: '/development/contributing' },
 		],
