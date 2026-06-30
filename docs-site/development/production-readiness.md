@@ -70,7 +70,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 - Expose a remote MCP endpoint for OpenPost Cloud at `/mcp`.
 - Keep the MCP server backend-owned, not frontend-owned.
-- Add a local `openpost-mcp` stdio binary for desktop/self-hosted clients.
+- Add a local `openpost-mcp` stdio binary for desktop/self-hosted clients. The CLI now includes a stdio proxy that loads the active OpenPost profile/token and forwards frames to `/mcp`.
 - Reuse CLI/API client behavior where possible, but keep MCP stdout strict.
 - Start with safe semantic tools: list workspaces, list accounts, create draft, upload media from URL, schedule post, cancel post, get post status, suggest next slot. The remote MCP foundation now supports workspace/account listing, draft creation, quota-checked scheduling, post status reads, scheduled-post cancellation, and next-slot suggestions.
 - Require auth for remote MCP, scope sessions, log tool calls, and expose revocation in settings.

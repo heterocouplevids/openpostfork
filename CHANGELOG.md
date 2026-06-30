@@ -28,6 +28,7 @@ All notable changes to this project are documented in this file.
 - Added a Playwright app smoke suite that boots the Go server and verifies the authenticated billing settings surface.
 - Added MCP `schedule_post`, `get_post_status`, and `cancel_post` tools with workspace/account validation, scheduled-post quota enforcement, and publish-job queue integration.
 - Added MCP `suggest_next_slot` so assistants can pick the next free configured posting slot before scheduling.
+- Added an `openpost-mcp` CLI stdio proxy that reuses OpenPost CLI profiles and tokens to connect desktop MCP clients to the authenticated remote `/mcp` endpoint.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

@@ -18,6 +18,7 @@ During development, install into your Go bin directory:
 
 ```sh
 devenv shell -- bash -lc 'cd cli && go install ./cmd/openpost'
+devenv shell -- bash -lc 'cd cli && go install ./cmd/openpost-mcp'
 ```
 
 Make sure `$(go env GOPATH)/bin` is on your `PATH`.
@@ -144,3 +145,15 @@ openpost auth token list
 openpost completion bash
 openpost --version
 ```
+
+## MCP stdio proxy
+
+`openpost-mcp` lets desktop MCP clients talk to the same authenticated remote
+`/mcp` endpoint using the active CLI profile and token. Configure an instance
+and log in with `openpost` first, then point the MCP client at:
+
+```sh
+openpost-mcp --profile local
+```
+
+You can also pass `--instance` and `--token` directly for automation.

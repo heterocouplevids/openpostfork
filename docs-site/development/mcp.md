@@ -12,6 +12,15 @@ The endpoint is JSON-RPC over HTTP and requires:
 Authorization: Bearer <jwt-or-api-token>
 ```
 
+Desktop MCP clients can use the local stdio proxy from the CLI module:
+
+```sh
+openpost-mcp --profile local
+```
+
+The proxy loads the same OpenPost CLI profile and token, then forwards MCP
+JSON-RPC frames to the remote `/mcp` endpoint.
+
 ## Current tools
 
 - `list_workspaces`: returns the workspaces available to the authenticated user.
@@ -25,6 +34,7 @@ Authorization: Bearer <jwt-or-api-token>
 ## Current scope
 
 - Uses the same Bearer authentication path as the CLI and API tokens.
+- Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Validates workspace membership and account ownership before returning, creating, scheduling, or canceling data.
 - Enforces the same scheduled-post entitlement and usage accounting as the web/API post creation path.
 - Returns structured content so assistants can inspect workspace, account, post, destination, and suggested slot IDs without parsing prose.
