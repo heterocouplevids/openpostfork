@@ -229,7 +229,7 @@ func main() {
 	cliAuthHandler := handlers.NewCLIAuthHandler(cliAuthService, authenticator, cfg.PublicURL)
 	cliAuthHandler.RegisterRoutes(api)
 
-	mcpHandler := handlers.NewMCPHandler(db, authenticator)
+	mcpHandler := handlers.NewMCPHandler(db, authenticator, entitlementService)
 	mcpHandler.RegisterRoutes(e)
 
 	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator, entitlementService)

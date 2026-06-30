@@ -26,6 +26,7 @@ All notable changes to this project are documented in this file.
 - Added a workspace billing status API and settings UI summary for current plans and monthly usage.
 - Added publishing-worker quota enforcement for monthly published posts and provider write calls.
 - Added a Playwright app smoke suite that boots the Go server and verifies the authenticated billing settings surface.
+- Added MCP `schedule_post`, `get_post_status`, and `cancel_post` tools with workspace/account validation, scheduled-post quota enforcement, and publish-job queue integration.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

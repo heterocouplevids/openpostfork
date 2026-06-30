@@ -11,6 +11,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 )
@@ -21,6 +22,10 @@ type mcpTestServer struct {
 }
 
 func newMCPTestServer(t *testing.T) *mcpTestServer {
+	return newMCPTestServerWithEntitlement(t, nil)
+}
+
+func newMCPTestServerWithEntitlement(t *testing.T, entitlement entitlements.Service) *mcpTestServer {
 	t.Helper()
 
 	db := createHandlerTestDB(
@@ -30,6 +35,8 @@ func newMCPTestServer(t *testing.T) *mcpTestServer {
 		(*models.SocialAccount)(nil),
 		(*models.Post)(nil),
 		(*models.PostDestination)(nil),
+		(*models.Job)(nil),
+		(*models.UsageCounter)(nil),
 	)
 	ctx := context.Background()
 	workspaces := []models.Workspace{
@@ -87,7 +94,7 @@ func newMCPTestServer(t *testing.T) *mcpTestServer {
 	require.NoError(t, err)
 
 	e := echo.New()
-	NewMCPHandler(db, testAuthenticator{}).RegisterRoutes(e)
+	NewMCPHandler(db, testAuthenticator{}, entitlement).RegisterRoutes(e)
 	return &mcpTestServer{echo: e, db: db}
 }
 
@@ -134,10 +141,13 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 3)
+	require.Len(t, tools, 6)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
 	require.Equal(t, "list_accounts", tools[1].(map[string]any)["name"])
 	require.Equal(t, "create_draft", tools[2].(map[string]any)["name"])
+	require.Equal(t, "schedule_post", tools[3].(map[string]any)["name"])
+	require.Equal(t, "get_post_status", tools[4].(map[string]any)["name"])
+	require.Equal(t, "cancel_post", tools[5].(map[string]any)["name"])
 }
 
 func TestMCPCallListWorkspaces(t *testing.T) {
@@ -260,4 +270,202 @@ func TestMCPCallCreateDraftRejectsOutsideAccount(t *testing.T) {
 	var count int
 	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &count))
 	require.Equal(t, 0, count)
+}
+
+func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	scheduledAt := "2026-07-01T12:00:00Z"
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-schedule",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "schedule_post",
+			"arguments": map[string]any{
+				"workspace_id":       "ws-1",
+				"content":            "Ship agentic scheduling",
+				"scheduled_at":       scheduledAt,
+				"social_account_ids": []string{"account-1"},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	structured := result["structuredContent"].(map[string]any)
+	post := structured["post"].(map[string]any)
+	require.Equal(t, "scheduled", post["status"])
+	require.Equal(t, scheduledAt, post["scheduled_at"])
+	require.Equal(t, "Ship agentic scheduling", post["content"])
+	destinations := post["destinations"].([]any)
+	require.Len(t, destinations, 1)
+	require.Equal(t, "account-1", destinations[0].(map[string]any)["social_account_id"])
+	postID := post["id"].(string)
+
+	var storedPost models.Post
+	require.NoError(t, srv.db.NewSelect().Model(&storedPost).Where("id = ?", postID).Scan(context.Background()))
+	require.Equal(t, statusScheduled, storedPost.Status)
+	require.Equal(t, "user-1", storedPost.CreatedByID)
+	require.Equal(t, time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC), storedPost.ScheduledAt)
+	require.Equal(t, storedPost.ScheduledAt, storedPost.ActualRunAt)
+
+	var job models.Job
+	require.NoError(t, srv.db.NewSelect().Model(&job).Where("type = ?", jobTypePublishPost).Scan(context.Background()))
+	require.Equal(t, "pending", job.Status)
+	require.Equal(t, storedPost.ScheduledAt, job.RunAt)
+	var payload map[string]string
+	require.NoError(t, json.Unmarshal([]byte(job.Payload), &payload))
+	require.Equal(t, postID, payload[postIDKey])
+}
+
+func TestMCPCallGetPostStatusReturnsDestinations(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	scheduledAt := time.Date(2026, 7, 2, 9, 30, 0, 0, time.UTC)
+	post := models.Post{
+		ID:          "post-status",
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "Check the launch queue",
+		Status:      statusScheduled,
+		ScheduledAt: scheduledAt,
+		ActualRunAt: scheduledAt,
+		CreatedAt:   time.Date(2026, 6, 30, 15, 0, 0, 0, time.UTC),
+	}
+	_, err := srv.db.NewInsert().Model(&post).Exec(context.Background())
+	require.NoError(t, err)
+	destination := models.PostDestination{
+		ID:              "destination-status",
+		PostID:          post.ID,
+		SocialAccountID: "account-1",
+		Status:          postStatusPending,
+	}
+	_, err = srv.db.NewInsert().Model(&destination).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-status",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "get_post_status",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"post_id":      post.ID,
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	structured := result["structuredContent"].(map[string]any)
+	gotPost := structured["post"].(map[string]any)
+	require.Equal(t, post.ID, gotPost["id"])
+	require.Equal(t, "scheduled", gotPost["status"])
+	require.Equal(t, scheduledAt.Format(time.RFC3339), gotPost["actual_run_at"])
+	destinations := gotPost["destinations"].([]any)
+	require.Len(t, destinations, 1)
+	require.Equal(t, "x", destinations[0].(map[string]any)["platform"])
+	require.Equal(t, "x-openpost", destinations[0].(map[string]any)["slug"])
+}
+
+func TestMCPCallCancelPostRemovesQueuedJobAndReturnsDraft(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	postID := "post-cancel"
+	scheduledAt := time.Date(2026, 7, 3, 8, 0, 0, 0, time.UTC)
+	_, err := srv.db.NewInsert().Model(&models.Post{
+		ID:          postID,
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "Cancel me",
+		Status:      statusScheduled,
+		ScheduledAt: scheduledAt,
+		ActualRunAt: scheduledAt,
+		CreatedAt:   time.Date(2026, 6, 30, 16, 0, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	payload, err := json.Marshal(map[string]string{postIDKey: postID})
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.Job{
+		ID:      "job-cancel",
+		Type:    jobTypePublishPost,
+		Payload: string(payload),
+		Status:  "pending",
+		RunAt:   scheduledAt,
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-cancel",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "cancel_post",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"post_id":      postID,
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	structured := result["structuredContent"].(map[string]any)
+	post := structured["post"].(map[string]any)
+	require.Equal(t, "draft", post["status"])
+	require.NotContains(t, post, "scheduled_at")
+	require.NotContains(t, post, "actual_run_at")
+
+	var storedPost models.Post
+	require.NoError(t, srv.db.NewSelect().Model(&storedPost).Where("id = ?", postID).Scan(context.Background()))
+	require.Equal(t, statusDraft, storedPost.Status)
+	require.True(t, storedPost.ScheduledAt.IsZero())
+	require.True(t, storedPost.ActualRunAt.IsZero())
+	var jobCount int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("jobs").Scan(context.Background(), &jobCount))
+	require.Equal(t, 0, jobCount)
+}
+
+func TestMCPCallSchedulePostHonorsQuota(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServerWithEntitlement(t, entitlements.NewStaticService(entitlements.PlanSnapshot{
+		Limits: map[entitlements.LimitKey]int64{
+			entitlements.LimitScheduledPostsMonthly: 0,
+		},
+	}))
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-schedule-quota",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "schedule_post",
+			"arguments": map[string]any{
+				"workspace_id":       "ws-1",
+				"content":            "This should hit the limit",
+				"scheduled_at":       "2026-07-01T12:00:00Z",
+				"social_account_ids": []string{"account-1"},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	rpcErr := out["error"].(map[string]any)
+	require.Contains(t, rpcErr["message"], "scheduled_posts_monthly")
+	var postCount int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &postCount))
+	require.Equal(t, 0, postCount)
 }
