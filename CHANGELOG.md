@@ -19,6 +19,7 @@ All notable changes to this project are documented in this file.
 - Added scheduled-post quota enforcement for single posts and threads, with successful scheduled creates recorded into monthly usage counters.
 - Added social account connection quota enforcement in the shared account saver used by OAuth and app-password provider flows.
 - Added MCP `list_accounts` and `create_draft` tools so authenticated assistants can inspect connected accounts and create workspace-scoped draft posts.
+- Added publishing-worker usage accounting for successful published posts and provider publish write calls.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

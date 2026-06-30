@@ -2,6 +2,7 @@ package publisher
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -31,6 +32,9 @@ func (f *fakePublisherStorage) Open(id string) (io.ReadCloser, error) {
 
 type fakePublisherAdapter struct {
 	uploadedBody string
+	publishCalls int
+	publishErr   error
+	externalID   string
 }
 
 func (f *fakePublisherAdapter) GenerateAuthURL(string) (string, map[string]string) {
@@ -57,8 +61,17 @@ func (f *fakePublisherAdapter) UploadMedia(_ context.Context, _, _, _ string, re
 	return "platform-media-id", nil
 }
 func (f *fakePublisherAdapter) Publish(context.Context, string, string, *platform.PublishRequest) (string, error) {
-	return "", nil
+	f.publishCalls++
+	if f.publishErr != nil {
+		return "", f.publishErr
+	}
+	if f.externalID != "" {
+		return f.externalID, nil
+	}
+	return "external-post-id", nil
 }
+
+var errFakePublishFailed = errors.New("publish failed")
 
 func TestUploadMediaToPlatformReadsFromBlobStorage(t *testing.T) {
 	storage := &fakePublisherStorage{body: "stored-media"}

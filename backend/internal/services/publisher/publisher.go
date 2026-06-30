@@ -13,9 +13,11 @@ import (
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/tokenmanager"
+	"github.com/openpost/backend/internal/services/usage"
 	"github.com/uptrace/bun"
 )
 
@@ -29,6 +31,7 @@ type Service struct {
 	publicMediaURL               string
 	mediaSigner                  *mediasigner.Signer
 	storage                      mediastore.BlobStorage
+	usage                        *usage.Service
 }
 
 func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
@@ -36,6 +39,7 @@ func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
 		db:        db,
 		tm:        tm,
 		providers: make(map[string]platform.Adapter),
+		usage:     usage.NewService(db),
 	}
 }
 
@@ -53,6 +57,12 @@ func (s *Service) SetMediaSigner(signer *mediasigner.Signer) {
 
 func (s *Service) SetStorage(storage mediastore.BlobStorage) {
 	s.storage = storage
+}
+
+func (s *Service) SetUsage(usageService *usage.Service) {
+	if usageService != nil {
+		s.usage = usageService
+	}
 }
 
 func (s *Service) SetProvider(platformName string, adapter platform.Adapter) {
@@ -284,7 +294,9 @@ func (s *Service) finalizePost(ctx context.Context, post *models.Post) {
 			Where("id = ?", post.ID).
 			Exec(ctx); err != nil {
 			log.Printf("[Publisher] Failed to update post %s status: %v", post.ID, err)
+			return
 		}
+		s.recordPublishedPost(ctx, post.WorkspaceID)
 	}
 }
 
@@ -390,6 +402,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		}
 	}
 
+	s.recordProviderWriteCall(ctx, post.WorkspaceID)
 	externalID, err := provider.Publish(ctx, token, account.AccountID, req)
 	if err != nil {
 		if isExpiredTokenError(err) {
@@ -398,6 +411,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 			if refreshErr != nil {
 				return fmt.Errorf("%s token refresh failed after expiry: %w", account.Platform, refreshErr)
 			}
+			s.recordProviderWriteCall(ctx, post.WorkspaceID)
 			externalID, err = provider.Publish(ctx, refreshedToken, account.AccountID, req)
 			if err != nil {
 				return err
@@ -417,6 +431,23 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 	}
 
 	return nil
+}
+
+func (s *Service) recordPublishedPost(ctx context.Context, workspaceID string) {
+	s.recordUsage(ctx, workspaceID, entitlements.LimitPublishedPostsMonthly)
+}
+
+func (s *Service) recordProviderWriteCall(ctx context.Context, workspaceID string) {
+	s.recordUsage(ctx, workspaceID, entitlements.LimitProviderWriteCallsMonthly)
+}
+
+func (s *Service) recordUsage(ctx context.Context, workspaceID string, metric entitlements.LimitKey) {
+	if s.usage == nil || workspaceID == "" {
+		return
+	}
+	if _, err := s.usage.IncrementMonthly(ctx, workspaceID, metric, 1, time.Now().UTC()); err != nil {
+		log.Printf("[Publisher] Failed to record usage metric %s for workspace %s: %v", metric, workspaceID, err)
+	}
 }
 
 func isExpiredTokenError(err error) bool {
