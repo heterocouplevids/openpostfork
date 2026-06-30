@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
@@ -29,6 +30,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
 	import { getLocaleTag } from '$lib/i18n';
+	import { hostedPlanFromSearchParams } from '$lib/billing';
 
 	const timezones = [
 		{ group: 'Americas', value: 'America/New_York', label: 'New York (ET)' },
@@ -166,6 +168,7 @@
 	let billingError = $state('');
 	let billingStatusLoading = $state(false);
 	let billingStatus = $state<BillingStatus | null>(null);
+	let handledCheckoutPlan = '';
 
 	interface APITokenSummary {
 		id: string;
@@ -254,6 +257,10 @@
 	const currentBillingPlan = $derived(
 		billingPlans.find((plan) => plan.id === billingStatus?.plan_id) ?? null
 	);
+	const requestedBillingPlan = $derived.by(() => {
+		const planID = hostedPlanFromSearchParams(page.url.searchParams);
+		return billingPlans.some((plan) => plan.id === planID) ? planID : '';
+	});
 	const monthlyBillingUsageRows = $derived.by(() => {
 		if (!billingStatus) return [];
 		return Object.entries(billingStatus.limits)
@@ -830,6 +837,18 @@
 		if (workspaceCtx.currentWorkspace) {
 			loadBillingStatus();
 			loadSchedules();
+		}
+	});
+
+	$effect(() => {
+		if (
+			requestedBillingPlan &&
+			workspaceCtx.currentWorkspace &&
+			handledCheckoutPlan !== requestedBillingPlan &&
+			!billingBusyPlan
+		) {
+			handledCheckoutPlan = requestedBillingPlan;
+			startCheckout(requestedBillingPlan);
 		}
 	});
 

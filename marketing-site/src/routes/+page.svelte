@@ -2,6 +2,7 @@
 	const appUrl = 'https://app.openpost.social';
 	const docsUrl = 'https://docs.openpost.social';
 	const githubUrl = 'https://github.com/rodrgds/openpost';
+	const signupUrl = (plan: string) => `${appUrl}/register?plan=${encodeURIComponent(plan)}`;
 
 	const platforms = [
 		'X',
@@ -91,6 +92,31 @@
 			'The default direction is draft and schedule first. Consequential actions like publish-now should stay scoped, logged, and confirmable.'
 		]
 	];
+	const plans = [
+		{
+			id: 'starter',
+			name: 'Starter',
+			price: '$6',
+			description: 'Open-web posting for small projects and founders.',
+			limits: ['1 workspace', '3 social accounts', '100 scheduled posts/mo', '1 GB media']
+		},
+		{
+			id: 'creator',
+			name: 'Creator',
+			price: '$12',
+			description: 'Agentic scheduling across mainstream platforms with more accounts and media.',
+			limits: ['3 workspaces', '6 social accounts', '500 scheduled posts/mo', '5 GB media'],
+			featured: true
+		},
+		{
+			id: 'pro',
+			name: 'Pro',
+			price: '$24',
+			description:
+				'Higher limits, more workspaces, team workflows, and deeper operations visibility.',
+			limits: ['10 workspaces', '15 social accounts', '2,500 scheduled posts/mo', '25 GB media']
+		}
+	];
 </script>
 
 <svelte:head>
@@ -135,7 +161,7 @@
 				versions, and schedule the release from one calm dashboard.
 			</p>
 			<div class="hero-actions">
-				<a class="button primary" href={appUrl}>Start free trial</a>
+				<a class="button primary" href={signupUrl('creator')}>Start free trial</a>
 				<a class="button secondary" href="#demo">Watch demo</a>
 			</div>
 			<p class="microcopy">
@@ -267,21 +293,19 @@
 			</p>
 		</div>
 		<div class="plans">
-			<article>
-				<span>Starter</span>
-				<strong>$6</strong>
-				<p>Open-web posting for small projects and founders.</p>
-			</article>
-			<article class="featured">
-				<span>Creator</span>
-				<strong>$12</strong>
-				<p>Agentic scheduling across mainstream platforms with more accounts and media.</p>
-			</article>
-			<article>
-				<span>Pro</span>
-				<strong>$24</strong>
-				<p>Higher limits, more workspaces, team workflows, and deeper operations visibility.</p>
-			</article>
+			{#each plans as plan (plan.id)}
+				<article class:featured={plan.featured}>
+					<span>{plan.name}</span>
+					<strong>{plan.price}</strong>
+					<p>{plan.description}</p>
+					<ul>
+						{#each plan.limits as limit (limit)}
+							<li>{limit}</li>
+						{/each}
+					</ul>
+					<a class="plan-cta" href={signupUrl(plan.id)}>Start {plan.name}</a>
+				</article>
+			{/each}
 		</div>
 	</section>
 
@@ -314,7 +338,7 @@
 	<section class="final-cta">
 		<div class="shell">
 			<h2>Ready to turn one idea into a planned release?</h2>
-			<a class="button primary" href={appUrl}>Start free trial</a>
+			<a class="button primary" href={signupUrl('creator')}>Start free trial</a>
 		</div>
 	</section>
 </main>
@@ -822,6 +846,8 @@
 	}
 
 	.plans article {
+		display: flex;
+		flex-direction: column;
 		min-height: 260px;
 	}
 
@@ -845,6 +871,39 @@
 		color: inherit;
 		line-height: 1.5;
 		opacity: 0.78;
+	}
+
+	.plans ul {
+		display: grid;
+		gap: 8px;
+		margin: 22px 0;
+		padding: 0;
+		list-style: none;
+		color: inherit;
+		opacity: 0.82;
+	}
+
+	.plans li::before {
+		content: '✓';
+		margin-right: 8px;
+		font-weight: 900;
+	}
+
+	.plan-cta {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		margin-top: auto;
+		border: 1px solid currentColor;
+		border-radius: 999px;
+		padding: 12px 16px;
+		text-decoration: none;
+		font-weight: 900;
+	}
+
+	.plan-cta:hover {
+		transform: translateY(-1px);
 	}
 
 	.open-core {

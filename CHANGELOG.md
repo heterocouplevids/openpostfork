@@ -62,6 +62,7 @@ All notable changes to this project are documented in this file.
 - Added user-facing web-app Publications docs that distinguish the UI workflow from CLI and MCP publication workflows.
 - Added user-facing MCP docs and reorganized the docs navigation around user docs, self-hosting docs, and developer docs.
 - Added a backend OpenAPI generator command so docs builds regenerate the checked-in Huma spec from the same route registrar used by the server.
+- Added hosted pricing handoff from landing-page plan CTAs through registration, onboarding, and the app billing checkout flow.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

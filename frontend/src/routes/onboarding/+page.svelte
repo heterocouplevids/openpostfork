@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth';
 	import { client } from '$lib/api/client';
@@ -12,6 +13,11 @@
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { m } from '$lib/paraglide/messages';
+	import {
+		hostedPlanFromSearchParams,
+		onboardingPathForPlan,
+		settingsPathForPlan
+	} from '$lib/billing';
 
 	let workspaceName = $state('Personal');
 	let isLoading = $state(false);
@@ -19,12 +25,24 @@
 	let authReady = $state(false);
 	let pageLoading = $state(true);
 
+	function selectedPlanID() {
+		return hostedPlanFromSearchParams(page.url.searchParams);
+	}
+
+	function afterOnboardingTarget() {
+		return settingsPathForPlan(selectedPlanID());
+	}
+
+	function loginTarget() {
+		return `/login?redirect=${encodeURIComponent(onboardingPathForPlan(selectedPlanID()))}`;
+	}
+
 	onMount(() => {
 		const unsubscribe = auth.subscribe((state) => {
 			if (!state.isLoading && !authReady) {
 				authReady = true;
 				if (!state.isAuthenticated) {
-					goto('/login');
+					goto(loginTarget());
 					return;
 				}
 				void loadOnboardingState();
@@ -45,7 +63,7 @@
 			}
 
 			if ((data ?? []).length > 0) {
-				goto('/');
+				goto(afterOnboardingTarget());
 				return;
 			}
 		} catch (e) {
@@ -67,7 +85,7 @@
 				body: { name: workspaceName.trim() }
 			});
 			if (err) throw new Error((err as any).detail || m.onboarding_create_failed());
-			goto('/');
+			goto(afterOnboardingTarget());
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {

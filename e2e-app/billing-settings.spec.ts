@@ -111,3 +111,32 @@ test('settings creates MCP-scoped API tokens', async ({ page, request }) => {
 	await expect(page.getByText('ChatGPT App E2E')).toBeVisible();
 	await expect(page.getByText(/mcp:full/)).toBeVisible();
 });
+
+test('plan selection from signup starts checkout after onboarding', async ({ page }) => {
+	const unique = Date.now().toString(36);
+	const email = `plan-signup-${unique}@example.com`;
+	const password = 'password-1234';
+	let checkoutBody: { workspace_id?: string; plan_id?: string } | undefined;
+
+	await page.route('**/api/v1/billing/checkout', async (route) => {
+		checkoutBody = JSON.parse(route.request().postData() ?? '{}');
+		await route.fulfill({
+			contentType: 'application/json',
+			json: { id: 'checkout-e2e', url: '/settings?checkout=creator' }
+		});
+	});
+
+	await page.goto('/register?plan=creator');
+	await page.getByLabel('Email').fill(email);
+	await page.getByLabel('Password', { exact: true }).fill(password);
+	await page.getByLabel('Confirm Password').fill(password);
+	await page.getByRole('button', { name: 'Create Account' }).click();
+
+	await expect(page).toHaveURL(/\/onboarding\?plan=creator/);
+	await page.getByLabel('Workspace name').fill('Plan Handoff E2E');
+	await page.getByRole('button', { name: 'Get Started' }).click();
+
+	await expect(page).toHaveURL(/\/settings\?checkout=creator/);
+	expect(checkoutBody?.workspace_id).toBeTruthy();
+	expect(checkoutBody?.plan_id).toBe('creator');
+});

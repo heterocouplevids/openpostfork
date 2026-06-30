@@ -6,6 +6,22 @@ test('marketing page presents the cloud product and demo slot', async ({ page })
 	await expect(page).toHaveTitle(/OpenPost Cloud/);
 	await expect(page.getByRole('heading', { name: 'Agentic social media scheduling' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Start free trial' }).first()).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Start free trial' }).first()).toHaveAttribute(
+		'href',
+		'https://app.openpost.social/register?plan=creator'
+	);
+	await expect(page.getByRole('link', { name: 'Start Starter' })).toHaveAttribute(
+		'href',
+		'https://app.openpost.social/register?plan=starter'
+	);
+	await expect(page.getByRole('link', { name: 'Start Creator' })).toHaveAttribute(
+		'href',
+		'https://app.openpost.social/register?plan=creator'
+	);
+	await expect(page.getByRole('link', { name: 'Start Pro' })).toHaveAttribute(
+		'href',
+		'https://app.openpost.social/register?plan=pro'
+	);
 	await expect(page.getByLabel('OpenPost product demo placeholder')).toBeVisible();
 	await expect(page.getByText('Replace this with the recorded walkthrough.')).toBeVisible();
 	await expect(

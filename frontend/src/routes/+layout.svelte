@@ -16,6 +16,7 @@
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { m } from '$lib/paraglide/messages';
+	import { onboardingPathForPlan } from '$lib/billing';
 
 	let { children } = $props();
 
@@ -75,7 +76,7 @@
 
 			if (needsOnboarding) {
 				if (!isOnboardingPage) {
-					goto('/onboarding');
+					goto(onboardingPathForPlan($page.url.searchParams.get('plan')));
 				}
 			} else if (currentPath === '/login' || currentPath === '/register') {
 				goto('/');

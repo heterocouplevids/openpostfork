@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { auth } from '$lib/stores/auth';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import {
@@ -15,6 +16,7 @@
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import CheckCircleIcon from 'lucide-svelte/icons/check-circle-2';
 	import { m } from '$lib/paraglide/messages';
+	import { onboardingPathForPlan } from '$lib/billing';
 
 	let email = $state('');
 	let password = $state('');
@@ -43,7 +45,7 @@
 
 		if (result.success) {
 			registrationSuccess = true;
-			goto('/onboarding');
+			goto(onboardingPathForPlan(page.url.searchParams.get('plan')));
 		} else {
 			error = result.error || m.auth_register_failed();
 			isLoading = false;
