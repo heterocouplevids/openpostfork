@@ -5,6 +5,10 @@
 	import bluesky from '../../../../assets/logos/bluesky.svg?raw';
 	import linkedin from '../../../../assets/logos/linkedin.svg?raw';
 	import { getPlatformKey } from '$lib/utils';
+	import FacebookIcon from 'lucide-svelte/icons/facebook';
+	import InstagramIcon from 'lucide-svelte/icons/instagram';
+	import Music2Icon from 'lucide-svelte/icons/music-2';
+	import YoutubeIcon from 'lucide-svelte/icons/youtube';
 
 	interface Props {
 		platform: string;
@@ -24,4 +28,12 @@
 {#if svg}
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html svg}
+{:else if platformKey === 'facebook'}
+	<FacebookIcon class={className} />
+{:else if platformKey === 'instagram'}
+	<InstagramIcon class={className} />
+{:else if platformKey === 'tiktok'}
+	<Music2Icon class={className} />
+{:else if platformKey === 'youtube'}
+	<YoutubeIcon class={className} />
 {/if}

@@ -25,6 +25,14 @@ export function getPlatformKey(platform: string): string {
 			return 'bluesky';
 		case 'linkedin':
 			return 'linkedin';
+		case 'instagram':
+			return 'instagram';
+		case 'facebook':
+			return 'facebook';
+		case 'youtube':
+			return 'youtube';
+		case 'tiktok':
+			return 'tiktok';
 		default:
 			return key;
 	}
@@ -42,6 +50,14 @@ export function getPlatformName(platform: string): string {
 			return 'Bluesky';
 		case 'linkedin':
 			return 'LinkedIn';
+		case 'instagram':
+			return 'Instagram';
+		case 'facebook':
+			return 'Facebook';
+		case 'youtube':
+			return 'YouTube';
+		case 'tiktok':
+			return 'TikTok';
 		default:
 			return platform.split(':')[0];
 	}
@@ -64,7 +80,11 @@ export function getPlatformColor(platform: string): string {
 		mastodon: 'bg-indigo-500',
 		threads: 'bg-orange-500',
 		bluesky: 'bg-sky-500',
-		linkedin: 'bg-blue-600'
+		linkedin: 'bg-blue-600',
+		instagram: 'bg-pink-500',
+		facebook: 'bg-blue-700',
+		youtube: 'bg-red-600',
+		tiktok: 'bg-zinc-900'
 	};
 	return colors[getPlatformKey(platform)] || 'bg-gray-500';
 }

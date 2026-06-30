@@ -91,12 +91,15 @@ type MastodonServerInfo struct {
 }
 
 type ProviderInfo struct {
-	Platform    string `json:"platform" doc:"Provider key"`
-	DisplayName string `json:"display_name" doc:"Human-readable provider name"`
-	AuthMode    string `json:"auth_mode" doc:"Connection method: oauth, app_password, or oauth_oob"`
-	Configured  bool   `json:"configured" doc:"Whether this provider can currently be connected"`
-	Name        string `json:"name,omitempty" doc:"Provider app or server display name"`
-	InstanceURL string `json:"instance_url,omitempty" doc:"Federated server URL, when applicable"`
+	Platform     string   `json:"platform" doc:"Provider key"`
+	DisplayName  string   `json:"display_name" doc:"Human-readable provider name"`
+	AuthMode     string   `json:"auth_mode" doc:"Connection method: oauth, app_password, or oauth_oob"`
+	Configured   bool     `json:"configured" doc:"Whether this provider can currently be connected"`
+	Status       string   `json:"status,omitempty" doc:"Provider launch status: available, needs_configuration, or planned"`
+	Description  string   `json:"description,omitempty" doc:"Short connection or launch note for this provider"`
+	Capabilities []string `json:"capabilities,omitempty" doc:"High-level OpenPost capabilities available or planned for this provider"`
+	Name         string   `json:"name,omitempty" doc:"Provider app or server display name"`
+	InstanceURL  string   `json:"instance_url,omitempty" doc:"Federated server URL, when applicable"`
 }
 
 type ListProvidersOutput struct {
@@ -172,12 +175,82 @@ type UpdateAccountOutput struct {
 
 var accountSlugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
+const (
+	providerStatusAvailable          = "available"
+	providerStatusNeedsConfiguration = "needs_configuration"
+	providerStatusPlanned            = "planned"
+)
+
+var coreProviderCapabilities = []string{"Text posts", "Media posts", "Scheduling", "Platform variants", "MCP workflows"}
+
 var providerCatalog = []ProviderInfo{
-	{Platform: "bluesky", DisplayName: "Bluesky", AuthMode: "app_password"},
-	{Platform: "x", DisplayName: "X (Twitter)", AuthMode: "oauth"},
-	{Platform: mastodonProvider, DisplayName: "Mastodon", AuthMode: "oauth_oob"},
-	{Platform: "linkedin", DisplayName: "LinkedIn", AuthMode: "oauth"},
-	{Platform: "threads", DisplayName: "Threads", AuthMode: "oauth"},
+	{
+		Platform:     "bluesky",
+		DisplayName:  "Bluesky",
+		AuthMode:     "app_password",
+		Description:  "Handle and app-password connection with no server app setup.",
+		Capabilities: coreProviderCapabilities,
+	},
+	{
+		Platform:     "x",
+		DisplayName:  "X (Twitter)",
+		AuthMode:     "oauth",
+		Description:  "OAuth app connection for X publishing and threads.",
+		Capabilities: coreProviderCapabilities,
+	},
+	{
+		Platform:     mastodonProvider,
+		DisplayName:  "Mastodon",
+		AuthMode:     "oauth_oob",
+		Description:  "Per-instance OAuth connection, including custom public instances.",
+		Capabilities: coreProviderCapabilities,
+	},
+	{
+		Platform:     "linkedin",
+		DisplayName:  "LinkedIn",
+		AuthMode:     "oauth",
+		Description:  "OAuth app connection for LinkedIn profile and organization publishing.",
+		Capabilities: coreProviderCapabilities,
+	},
+	{
+		Platform:     "threads",
+		DisplayName:  "Threads",
+		AuthMode:     "oauth",
+		Description:  "Meta OAuth connection with public media URL requirements.",
+		Capabilities: coreProviderCapabilities,
+	},
+	{
+		Platform:     "instagram",
+		DisplayName:  "Instagram",
+		AuthMode:     "oauth",
+		Status:       providerStatusPlanned,
+		Description:  "Planned Meta adapter for Instagram publishing views.",
+		Capabilities: []string{"Images", "Reels", "Scheduling", "Platform variants", "MCP workflows"},
+	},
+	{
+		Platform:     "facebook",
+		DisplayName:  "Facebook",
+		AuthMode:     "oauth",
+		Status:       providerStatusPlanned,
+		Description:  "Planned Meta adapter for Facebook Pages publishing.",
+		Capabilities: []string{"Page posts", "Media posts", "Scheduling", "Platform variants", "MCP workflows"},
+	},
+	{
+		Platform:     "youtube",
+		DisplayName:  "YouTube",
+		AuthMode:     "oauth",
+		Status:       providerStatusPlanned,
+		Description:  "Planned adapter for Shorts and video publishing workflows.",
+		Capabilities: []string{"Shorts", "Video", "Scheduling", "Platform variants", "MCP workflows"},
+	},
+	{
+		Platform:     "tiktok",
+		DisplayName:  "TikTok",
+		AuthMode:     "oauth",
+		Status:       providerStatusPlanned,
+		Description:  "Planned adapter for short-form video publishing workflows.",
+		Capabilities: []string{"Short videos", "Scheduling", "Platform variants", "MCP workflows"},
+	},
 }
 
 func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapter, error) {
@@ -235,11 +308,14 @@ func (h *OAuthHandler) isDynamicMastodonConfigured() bool {
 
 func (h *OAuthHandler) dynamicMastodonInfo() ProviderInfo {
 	return ProviderInfo{
-		Platform:    mastodonProvider,
-		DisplayName: "Mastodon",
-		AuthMode:    "oauth_oob",
-		Configured:  true,
-		Name:        "Custom instance",
+		Platform:     mastodonProvider,
+		DisplayName:  "Mastodon",
+		AuthMode:     "oauth_oob",
+		Configured:   true,
+		Status:       providerStatusAvailable,
+		Description:  "Connect any public Mastodon instance.",
+		Capabilities: coreProviderCapabilities,
+		Name:         "Custom instance",
 	}
 }
 
@@ -273,10 +349,24 @@ func (h *OAuthHandler) providerAvailability() []ProviderInfo {
 			providers = append(providers, mastodonProviders...)
 			continue
 		}
-		item.Configured = h.providers[item.Platform] != nil
+		item = h.providerInfoWithStatus(item)
 		providers = append(providers, item)
 	}
 	return providers
+}
+
+func (h *OAuthHandler) providerInfoWithStatus(item ProviderInfo) ProviderInfo {
+	if item.Status == providerStatusPlanned {
+		item.Configured = false
+		return item
+	}
+	item.Configured = h.providers[item.Platform] != nil
+	if item.Configured {
+		item.Status = providerStatusAvailable
+	} else {
+		item.Status = providerStatusNeedsConfiguration
+	}
+	return item
 }
 
 func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
@@ -290,6 +380,8 @@ func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
 			DisplayName: "Mastodon",
 			AuthMode:    "oauth_oob",
 			Configured:  false,
+			Status:      providerStatusNeedsConfiguration,
+			Description: "Configure Mastodon servers or dynamic instance registration before connecting.",
 		}}
 	}
 
@@ -299,12 +391,15 @@ func (h *OAuthHandler) mastodonProviderAvailability() []ProviderInfo {
 	}
 	for _, server := range servers {
 		providers = append(providers, ProviderInfo{
-			Platform:    mastodonProvider,
-			DisplayName: "Mastodon",
-			AuthMode:    "oauth_oob",
-			Configured:  true,
-			Name:        server.Name,
-			InstanceURL: server.InstanceURL,
+			Platform:     mastodonProvider,
+			DisplayName:  "Mastodon",
+			AuthMode:     "oauth_oob",
+			Configured:   true,
+			Status:       providerStatusAvailable,
+			Description:  "Connect this configured Mastodon instance.",
+			Capabilities: coreProviderCapabilities,
+			Name:         server.Name,
+			InstanceURL:  server.InstanceURL,
 		})
 	}
 	return providers

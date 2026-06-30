@@ -33,30 +33,82 @@ test("accounts page shows configured and unavailable providers", async ({
           display_name: "Bluesky",
           auth_mode: "app_password",
           configured: true,
+          status: "available",
+          description: "Handle and app-password connection.",
+          capabilities: [
+            "Text posts",
+            "Media posts",
+            "Scheduling",
+            "MCP workflows",
+          ],
         },
         {
           platform: "x",
           display_name: "X (Twitter)",
           auth_mode: "oauth",
           configured: false,
+          status: "needs_configuration",
+          description: "Requires an X provider app.",
         },
         {
           platform: "mastodon",
           display_name: "Mastodon",
           auth_mode: "oauth_oob",
           configured: false,
+          status: "needs_configuration",
+          description: "Configure Mastodon instances first.",
         },
         {
           platform: "linkedin",
           display_name: "LinkedIn",
           auth_mode: "oauth",
           configured: false,
+          status: "needs_configuration",
+          description: "Requires a LinkedIn provider app.",
         },
         {
           platform: "threads",
           display_name: "Threads",
           auth_mode: "oauth",
           configured: false,
+          status: "needs_configuration",
+          description: "Requires a Meta provider app.",
+        },
+        {
+          platform: "instagram",
+          display_name: "Instagram",
+          auth_mode: "oauth",
+          configured: false,
+          status: "planned",
+          description: "Planned Meta adapter for Instagram publishing views.",
+          capabilities: ["Images", "Reels", "Scheduling", "MCP workflows"],
+        },
+        {
+          platform: "facebook",
+          display_name: "Facebook",
+          auth_mode: "oauth",
+          configured: false,
+          status: "planned",
+          description: "Planned adapter for Facebook Pages publishing.",
+          capabilities: ["Page posts", "Media posts", "Scheduling"],
+        },
+        {
+          platform: "youtube",
+          display_name: "YouTube",
+          auth_mode: "oauth",
+          configured: false,
+          status: "planned",
+          description: "Planned adapter for Shorts and video workflows.",
+          capabilities: ["Shorts", "Video", "Scheduling", "MCP workflows"],
+        },
+        {
+          platform: "tiktok",
+          display_name: "TikTok",
+          auth_mode: "oauth",
+          configured: false,
+          status: "planned",
+          description: "Planned adapter for short-form video workflows.",
+          capabilities: ["Short videos", "Scheduling", "MCP workflows"],
         },
       ],
     });
@@ -67,7 +119,10 @@ test("accounts page shows configured and unavailable providers", async ({
     page.getByRole("heading", { name: "Connect a Platform" }),
   ).toBeVisible();
   await expect(page.getByTestId("provider-card-bluesky")).toContainText(
-    "Post to Bluesky",
+    "Handle and app-password connection.",
+  );
+  await expect(page.getByTestId("provider-card-bluesky")).toContainText(
+    "MCP workflows",
   );
   await expect(
     page
@@ -77,12 +132,23 @@ test("accounts page shows configured and unavailable providers", async ({
 
   for (const platform of ["x", "mastodon", "linkedin", "threads"]) {
     await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
-      "Not configured",
+      "Needs app config",
     );
     await expect(
       page
         .getByTestId(`provider-card-${platform}`)
         .getByRole("button", { name: "Unavailable" }),
+    ).toBeDisabled();
+  }
+
+  for (const platform of ["instagram", "facebook", "youtube", "tiktok"]) {
+    await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
+      "Planned",
+    );
+    await expect(
+      page
+        .getByTestId(`provider-card-${platform}`)
+        .getByRole("button", { name: "Planned" }),
     ).toBeDisabled();
   }
 });
@@ -120,6 +186,8 @@ test("accounts page starts custom Mastodon instance connection", async ({
           display_name: "Mastodon",
           auth_mode: "oauth_oob",
           configured: true,
+          status: "available",
+          description: "Connect any public Mastodon instance.",
           name: "Custom instance",
         },
       ],

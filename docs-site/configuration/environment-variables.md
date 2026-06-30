@@ -65,7 +65,7 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 ## Notes
 
 - The preferred names above are what new deployments should use.
-- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. It currently supports `x`, `mastodon`, `linkedin`, and `threads`; Bluesky is enabled separately through app-password login.
+- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. It currently supports implemented adapters only: `x`, `mastodon`, `linkedin`, and `threads`; Bluesky is enabled separately through app-password login. Planned providers such as Instagram, Facebook, YouTube, and TikTok are visible in provider discovery but are rejected in app config until their adapters land.
 - Backward-compatible aliases still work for existing installs: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.
 - The root `.env.example` is the best copy-paste starting point.
 - Set explicit public URLs in production even when defaults exist.

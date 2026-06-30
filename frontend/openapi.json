@@ -2223,9 +2223,20 @@
 						"description": "Connection method: oauth, app_password, or oauth_oob",
 						"type": "string"
 					},
+					"capabilities": {
+						"description": "High-level OpenPost capabilities available or planned for this provider",
+						"items": {
+							"type": "string"
+						},
+						"type": ["array", "null"]
+					},
 					"configured": {
 						"description": "Whether this provider can currently be connected",
 						"type": "boolean"
+					},
+					"description": {
+						"description": "Short connection or launch note for this provider",
+						"type": "string"
 					},
 					"display_name": {
 						"description": "Human-readable provider name",
@@ -2241,6 +2252,10 @@
 					},
 					"platform": {
 						"description": "Provider key",
+						"type": "string"
+					},
+					"status": {
+						"description": "Provider launch status: available, needs_configuration, or planned",
 						"type": "string"
 					}
 				},

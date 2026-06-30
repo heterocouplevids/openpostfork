@@ -9,6 +9,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import PageContainer from '$lib/components/page-container.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
@@ -43,6 +44,9 @@
 		display_name: string;
 		auth_mode: string;
 		configured: boolean;
+		status?: string;
+		description?: string;
+		capabilities?: string[];
 		name?: string;
 		instance_url?: string;
 	}
@@ -68,11 +72,78 @@
 	);
 
 	const fallbackProviderEntries: ProviderInfo[] = [
-		{ platform: 'bluesky', display_name: 'Bluesky', auth_mode: 'app_password', configured: true },
-		{ platform: 'x', display_name: 'X (Twitter)', auth_mode: 'oauth', configured: false },
-		{ platform: 'mastodon', display_name: 'Mastodon', auth_mode: 'oauth_oob', configured: false },
-		{ platform: 'threads', display_name: 'Threads', auth_mode: 'oauth', configured: false },
-		{ platform: 'linkedin', display_name: 'LinkedIn', auth_mode: 'oauth', configured: false }
+		{
+			platform: 'bluesky',
+			display_name: 'Bluesky',
+			auth_mode: 'app_password',
+			configured: true,
+			status: 'available',
+			description: 'Handle and app-password connection.'
+		},
+		{
+			platform: 'x',
+			display_name: 'X (Twitter)',
+			auth_mode: 'oauth',
+			configured: false,
+			status: 'needs_configuration',
+			description: 'Requires an X provider app.'
+		},
+		{
+			platform: 'mastodon',
+			display_name: 'Mastodon',
+			auth_mode: 'oauth_oob',
+			configured: false,
+			status: 'needs_configuration',
+			description: 'Configure Mastodon instances first.'
+		},
+		{
+			platform: 'threads',
+			display_name: 'Threads',
+			auth_mode: 'oauth',
+			configured: false,
+			status: 'needs_configuration',
+			description: 'Requires a Meta provider app.'
+		},
+		{
+			platform: 'linkedin',
+			display_name: 'LinkedIn',
+			auth_mode: 'oauth',
+			configured: false,
+			status: 'needs_configuration',
+			description: 'Requires a LinkedIn provider app.'
+		},
+		{
+			platform: 'instagram',
+			display_name: 'Instagram',
+			auth_mode: 'oauth',
+			configured: false,
+			status: 'planned',
+			description: 'Planned Meta adapter for Instagram publishing views.'
+		},
+		{
+			platform: 'facebook',
+			display_name: 'Facebook',
+			auth_mode: 'oauth',
+			configured: false,
+			status: 'planned',
+			description: 'Planned adapter for Facebook Pages publishing.'
+		},
+		{
+			platform: 'youtube',
+			display_name: 'YouTube',
+			auth_mode: 'oauth',
+			configured: false,
+			status: 'planned',
+			description: 'Planned adapter for Shorts and video workflows.'
+		},
+		{
+			platform: 'tiktok',
+			display_name: 'TikTok',
+			auth_mode: 'oauth',
+			configured: false,
+			status: 'planned',
+			description: 'Planned adapter for short-form video workflows.'
+		}
 	];
 
 	let blueskyModalOpen = $state(false);
@@ -315,7 +386,7 @@
 
 		const unsubscribe = auth.subscribe(async (state) => {
 			if (!state.isLoading && !state.isAuthenticated) {
-				goto('/login');
+				goto(resolve('/login'));
 			} else if (!state.isLoading && state.isAuthenticated) {
 				try {
 					const { data, error: err } = await client.GET('/workspaces');
@@ -505,6 +576,7 @@
 	}
 
 	function providerDescription(provider: ProviderInfo): string {
+		if (provider.description) return provider.description;
 		if (!provider.configured) return 'Not configured';
 		if (isCustomMastodonProvider(provider)) {
 			return 'Connect any public Mastodon instance';
@@ -524,6 +596,50 @@
 			default:
 				return 'Connect account';
 		}
+	}
+
+	function providerStatus(provider: ProviderInfo): string {
+		if (provider.status) return provider.status;
+		return provider.configured ? 'available' : 'needs_configuration';
+	}
+
+	function providerStatusLabel(provider: ProviderInfo): string {
+		switch (providerStatus(provider)) {
+			case 'available':
+				return 'Available';
+			case 'planned':
+				return 'Planned';
+			case 'needs_configuration':
+				return 'Needs app config';
+			default:
+				return provider.configured ? 'Available' : 'Unavailable';
+		}
+	}
+
+	function providerStatusClass(provider: ProviderInfo): string {
+		switch (providerStatus(provider)) {
+			case 'available':
+				return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+			case 'planned':
+				return 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300';
+			case 'needs_configuration':
+				return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+			default:
+				return 'border-muted bg-muted text-muted-foreground';
+		}
+	}
+
+	function providerCanConnect(provider: ProviderInfo): boolean {
+		return provider.configured && providerStatus(provider) !== 'planned';
+	}
+
+	function providerActionLabel(provider: ProviderInfo): string {
+		if (providerStatus(provider) === 'planned') return 'Planned';
+		return provider.configured ? 'Connect' : 'Unavailable';
+	}
+
+	function visibleProviderCapabilities(provider: ProviderInfo): string[] {
+		return (provider.capabilities ?? []).slice(0, 4);
 	}
 
 	function isCustomMastodonProvider(provider: ProviderInfo): boolean {
@@ -549,7 +665,7 @@
 	}
 
 	function connectProvider(provider: ProviderInfo) {
-		if (!provider.configured) return;
+		if (!providerCanConnect(provider)) return;
 		switch (provider.platform) {
 			case 'x':
 				connectTwitter();
@@ -873,9 +989,11 @@
 					{#each providerEntries as provider (providerKey(provider))}
 						<div
 							data-testid={`provider-card-${provider.platform}`}
-							class="group rounded-lg border bg-card p-4 transition-all hover:shadow-sm {provider.configured
+							class="group rounded-lg border bg-card p-4 transition-all hover:shadow-sm {providerCanConnect(
+								provider
+							)
 								? ''
-								: 'opacity-60'}"
+								: 'bg-muted/20'}"
 						>
 							<div class="flex items-center gap-3">
 								<div
@@ -886,7 +1004,16 @@
 									<PlatformIcon platform={provider.platform} class="h-4 w-4 text-white" />
 								</div>
 								<div class="min-w-0 flex-1">
-									<h3 class="text-sm font-medium">{providerTitle(provider)}</h3>
+									<div class="flex flex-wrap items-center gap-2">
+										<h3 class="text-sm font-medium">{providerTitle(provider)}</h3>
+										<span
+											class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium {providerStatusClass(
+												provider
+											)}"
+										>
+											{providerStatusLabel(provider)}
+										</span>
+									</div>
 									<p class="truncate text-sm text-muted-foreground">
 										{providerDescription(provider)}
 									</p>
@@ -906,12 +1033,23 @@
 									<Button
 										onclick={() => connectProvider(provider)}
 										size="sm"
-										disabled={!provider.configured}
+										disabled={!providerCanConnect(provider)}
 									>
-										{provider.configured ? 'Connect' : 'Unavailable'}
+										{providerActionLabel(provider)}
 									</Button>
 								{/if}
 							</div>
+							{#if visibleProviderCapabilities(provider).length > 0}
+								<div class="mt-3 flex flex-wrap gap-1.5">
+									{#each visibleProviderCapabilities(provider) as capability (capability)}
+										<span
+											class="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+										>
+											{capability}
+										</span>
+									{/each}
+								</div>
+							{/if}
 							{#if isCustomMastodonProvider(provider)}
 								<form
 									class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]"

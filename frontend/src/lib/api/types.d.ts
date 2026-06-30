@@ -2219,8 +2219,12 @@ export interface components {
         ProviderInfo: {
             /** @description Connection method: oauth, app_password, or oauth_oob */
             auth_mode: string;
+            /** @description High-level OpenPost capabilities available or planned for this provider */
+            capabilities?: string[] | null;
             /** @description Whether this provider can currently be connected */
             configured: boolean;
+            /** @description Short connection or launch note for this provider */
+            description?: string;
             /** @description Human-readable provider name */
             display_name: string;
             /** @description Federated server URL, when applicable */
@@ -2229,6 +2233,8 @@ export interface components {
             name?: string;
             /** @description Provider key */
             platform: string;
+            /** @description Provider launch status: available, needs_configuration, or planned */
+            status?: string;
         };
         RegisterInputBody: {
             /**

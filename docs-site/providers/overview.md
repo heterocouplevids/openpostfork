@@ -2,27 +2,44 @@
 
 OAuth and provider app setup are the most common source of deployment friction. Use this section when you are enabling networks one by one.
 
-| Provider | Auth method | Server setup | Notes |
-|---|---|---|---|
-| X | OAuth 1.0a | Client ID + secret | Requires an X developer app with OAuth 1.0a user auth enabled. |
-| Mastodon | OAuth 2.0 per instance | `MASTODON_SERVERS` JSON | One app per instance. |
-| Bluesky | App password | None | Users connect with handle + app password. |
-| LinkedIn | OAuth 2.0 | Client ID + secret | Replies may need extra approval. |
-| Threads | Meta OAuth | Client ID + secret + redirect URI | Public media URL required. |
+## Current provider apps
+
+These providers have adapter code in OpenPost today. The Accounts page discovers them through `GET /api/v1/accounts/providers` and shows whether each one is ready to connect on the current server.
+
+| Provider | Auth method            | Server setup                                    | Status       | Notes                                                          |
+| -------- | ---------------------- | ----------------------------------------------- | ------------ | -------------------------------------------------------------- |
+| Bluesky  | App password           | None                                            | Built-in     | Users connect with handle + app password.                      |
+| X        | OAuth 1.0a             | Client ID + secret                              | Configurable | Requires an X developer app with OAuth 1.0a user auth enabled. |
+| Mastodon | OAuth 2.0 per instance | Dynamic registration or `MASTODON_SERVERS` JSON | Configurable | One app per instance, unless dynamic registration is enabled.  |
+| LinkedIn | OAuth 2.0              | Client ID + secret                              | Configurable | Replies may need extra approval.                               |
+| Threads  | Meta OAuth             | Client ID + secret + redirect URI               | Configurable | Public media URL required.                                     |
 
 Start with one provider, confirm the callback works, then expand.
+
+## Planned provider apps
+
+OpenPost now exposes planned providers in the provider discovery API so clients can render a truthful roadmap without enabling broken connect buttons.
+
+| Provider  | Planned focus                                                                        | Status          |
+| --------- | ------------------------------------------------------------------------------------ | --------------- |
+| Instagram | Images, Reels, scheduling, platform variants, MCP workflows                          | Planned adapter |
+| Facebook  | Facebook Pages publishing, media posts, scheduling, platform variants, MCP workflows | Planned adapter |
+| YouTube   | Shorts and video publishing workflows                                                | Planned adapter |
+| TikTok    | Short-form video publishing workflows                                                | Planned adapter |
+
+Do not add planned providers to `OPENPOST_PROVIDER_APPS` yet. The backend intentionally rejects unsupported provider app entries until each adapter implements the shared `PlatformAdapter` contract.
 
 ## Support matrix
 
 This matrix reflects current OpenPost support, not the full theoretical capability of each provider API.
 
-| Provider | Text posts | Image posts | Threads / replies | Scheduled posts | Video posts | Platform-specific variants | Analytics |
-|---|---|---|---|---|---|---|---|
-| X | Yes | Yes | Yes | Yes | Partial, needs real-account verification | Yes | No |
-| Mastodon | Yes | Yes | Yes | Yes | Partial, needs real-account verification | Yes | No |
-| Bluesky | Yes | Yes | Yes | Yes | Partial, one MP4 path implemented and needs real-account verification | Yes | No |
-| LinkedIn | Yes | Yes | Partial, implemented as comments | Yes | Partial, implementation exists and needs re-verification | Yes | No |
-| Threads | Yes | Yes | Yes | Yes | Partial, public-media deployment dependent | Yes | No |
+| Provider | Text posts | Image posts | Threads / replies                | Scheduled posts | Video posts                                                           | Platform-specific variants | Analytics |
+| -------- | ---------- | ----------- | -------------------------------- | --------------- | --------------------------------------------------------------------- | -------------------------- | --------- |
+| X        | Yes        | Yes         | Yes                              | Yes             | Partial, needs real-account verification                              | Yes                        | No        |
+| Mastodon | Yes        | Yes         | Yes                              | Yes             | Partial, needs real-account verification                              | Yes                        | No        |
+| Bluesky  | Yes        | Yes         | Yes                              | Yes             | Partial, one MP4 path implemented and needs real-account verification | Yes                        | No        |
+| LinkedIn | Yes        | Yes         | Partial, implemented as comments | Yes             | Partial, implementation exists and needs re-verification              | Yes                        | No        |
+| Threads  | Yes        | Yes         | Yes                              | Yes             | Partial, public-media deployment dependent                            | Yes                        | No        |
 
 ## Provider-specific caveats
 
