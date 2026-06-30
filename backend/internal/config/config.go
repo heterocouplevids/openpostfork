@@ -63,6 +63,7 @@ type Config struct {
 	S3ForcePathStyle  bool
 
 	PolarAccessToken      string
+	PolarAPIBaseURL       string
 	PolarWebhookSecret    string
 	PolarCheckoutURL      string
 	PolarReturnURL        string
@@ -136,6 +137,7 @@ func Load() *Config {
 		S3ForcePathStyle:  getEnvBoolWithAliases(false, "OPENPOST_S3_FORCE_PATH_STYLE"),
 
 		PolarAccessToken:      getEnvDefault("OPENPOST_POLAR_ACCESS_TOKEN", ""),
+		PolarAPIBaseURL:       strings.TrimRight(getEnvDefault("OPENPOST_POLAR_API_BASE_URL", "https://api.polar.sh/v1"), "/"),
 		PolarWebhookSecret:    getEnvDefault("OPENPOST_POLAR_WEBHOOK_SECRET", ""),
 		PolarCheckoutURL:      strings.TrimRight(getEnvDefault("OPENPOST_POLAR_CHECKOUT_SUCCESS_URL", ""), "/"),
 		PolarReturnURL:        strings.TrimRight(getEnvWithFallbacks("OPENPOST_POLAR_RETURN_URL", "", "OPENPOST_POLAR_CUSTOMER_PORTAL_URL"), "/"),
@@ -292,7 +294,15 @@ func (c *Config) ValidateRuntime() error {
 		return nil
 	}
 
-	missing := []string{}
+	missing := append(c.missingCloudDataPlaneConfig(), c.missingCloudBillingConfig()...)
+	if len(missing) > 0 {
+		return fmt.Errorf("OPENPOST_EDITION=cloud requires: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func (c *Config) missingCloudDataPlaneConfig() []string {
+	missing := make([]string, 0, 8)
 	if c.DatabaseDriver != DatabaseDriverPostgres {
 		missing = append(missing, "OPENPOST_DATABASE_DRIVER=postgres")
 	}
@@ -317,10 +327,33 @@ func (c *Config) ValidateRuntime() error {
 	if strings.TrimSpace(c.S3PublicBaseURL) == "" {
 		missing = append(missing, "OPENPOST_S3_PUBLIC_BASE_URL")
 	}
-	if len(missing) > 0 {
-		return fmt.Errorf("OPENPOST_EDITION=cloud requires: %s", strings.Join(missing, ", "))
+	return missing
+}
+
+func (c *Config) missingCloudBillingConfig() []string {
+	missing := make([]string, 0, 7)
+	if strings.TrimSpace(c.PolarAccessToken) == "" {
+		missing = append(missing, "OPENPOST_POLAR_ACCESS_TOKEN")
 	}
-	return nil
+	if strings.TrimSpace(c.PolarWebhookSecret) == "" {
+		missing = append(missing, "OPENPOST_POLAR_WEBHOOK_SECRET")
+	}
+	if strings.TrimSpace(c.PolarCheckoutURL) == "" {
+		missing = append(missing, "OPENPOST_POLAR_CHECKOUT_SUCCESS_URL")
+	}
+	if strings.TrimSpace(c.PolarReturnURL) == "" {
+		missing = append(missing, "OPENPOST_POLAR_RETURN_URL")
+	}
+	if strings.TrimSpace(c.PolarStarterProductID) == "" {
+		missing = append(missing, "OPENPOST_POLAR_STARTER_PRODUCT_ID")
+	}
+	if strings.TrimSpace(c.PolarCreatorProductID) == "" {
+		missing = append(missing, "OPENPOST_POLAR_CREATOR_PRODUCT_ID")
+	}
+	if strings.TrimSpace(c.PolarProProductID) == "" {
+		missing = append(missing, "OPENPOST_POLAR_PRO_PRODUCT_ID")
+	}
+	return missing
 }
 
 // warnOnPlaceholderURL emits a loud startup warning when the operator is

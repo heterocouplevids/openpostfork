@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 ### Added
+- Added `OPENPOST_POLAR_API_BASE_URL` and strict cloud-mode Polar billing config validation for hosted checkout, portal, and webhook readiness.
 - Added a production-readiness implementation plan covering OpenPost Cloud, Postgres/S3 drivers, Polar billing, provider readiness, the publication model, MCP/ChatGPT app work, marketing/SEO, and verification.
 - Rebuilt `marketing-site/` as a SvelteKit landing page for OpenPost Cloud with an agentic scheduler position, demo slot, pricing direction, platform grid, FAQ, and lower-page open-core trust section.
 - Added backend edition, database-driver, and storage-driver configuration primitives, including Postgres Bun driver initialization and S3-compatible storage settings for upcoming cloud storage work.

@@ -95,11 +95,11 @@ func DefaultPlanCatalog(starterProductID, creatorProductID, proProductID string)
 }
 
 func NewService(db *bun.DB, webhookSecret string, polarConfig ...PolarConfig) *Service {
-	cfg := PolarConfig{APIBaseURL: "https://api.polar.sh"}
+	cfg := PolarConfig{APIBaseURL: "https://api.polar.sh/v1"}
 	if len(polarConfig) > 0 {
 		cfg = polarConfig[0]
 		if cfg.APIBaseURL == "" {
-			cfg.APIBaseURL = "https://api.polar.sh"
+			cfg.APIBaseURL = "https://api.polar.sh/v1"
 		}
 	}
 	return &Service{
@@ -247,7 +247,7 @@ func (s *Service) postPolar(ctx context.Context, path string, payload any, out a
 	if err != nil {
 		return err
 	}
-	url := strings.TrimRight(s.polar.APIBaseURL, "/") + path
+	url := polarAPIURL(s.polar.APIBaseURL, path)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -269,6 +269,24 @@ func (s *Service) postPolar(ctx context.Context, path string, payload any, out a
 		return fmt.Errorf("invalid polar response: %w", err)
 	}
 	return nil
+}
+
+func polarAPIURL(baseURL, path string) string {
+	base := strings.TrimRight(baseURL, "/")
+	if base == "" {
+		base = "https://api.polar.sh/v1"
+	}
+
+	apiPath := "/" + strings.TrimLeft(path, "/")
+	baseHasVersion := strings.HasSuffix(base, "/v1")
+	pathHasVersion := strings.HasPrefix(apiPath, "/v1/")
+	switch {
+	case baseHasVersion && pathHasVersion:
+		apiPath = strings.TrimPrefix(apiPath, "/v1")
+	case !baseHasVersion && !pathHasVersion:
+		apiPath = "/v1" + apiPath
+	}
+	return base + apiPath
 }
 
 type WebhookHeaders struct {

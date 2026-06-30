@@ -75,6 +75,7 @@ func main() {
 	apiTokenService := apitokens.NewService(db)
 	billingService := billing.NewService(db, cfg.PolarWebhookSecret, billing.PolarConfig{
 		AccessToken: cfg.PolarAccessToken,
+		APIBaseURL:  cfg.PolarAPIBaseURL,
 		SuccessURL:  cfg.PolarCheckoutURL,
 		ReturnURL:   cfg.PolarReturnURL,
 		Plans: billing.DefaultPlanCatalog(

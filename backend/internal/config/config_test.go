@@ -18,6 +18,7 @@ func TestLoadProductionPrimitiveDefaults(t *testing.T) {
 	require.Empty(t, cfg.DatabaseURL)
 	require.Empty(t, cfg.S3Bucket)
 	require.Empty(t, cfg.PolarAccessToken)
+	require.Equal(t, "https://api.polar.sh/v1", cfg.PolarAPIBaseURL)
 	require.Empty(t, cfg.PolarWebhookSecret)
 }
 
@@ -102,6 +103,28 @@ func TestValidateRuntimeRejectsCloudMissingS3Primitives(t *testing.T) {
 	require.ErrorContains(t, err, "OPENPOST_S3_PUBLIC_BASE_URL")
 }
 
+func TestValidateRuntimeRejectsCloudMissingPolarPrimitives(t *testing.T) {
+	cfg := validCloudRuntimeConfig()
+	cfg.PolarAccessToken = ""
+	cfg.PolarWebhookSecret = ""
+	cfg.PolarCheckoutURL = ""
+	cfg.PolarReturnURL = ""
+	cfg.PolarStarterProductID = ""
+	cfg.PolarCreatorProductID = ""
+	cfg.PolarProProductID = ""
+
+	err := cfg.ValidateRuntime()
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, "OPENPOST_POLAR_ACCESS_TOKEN")
+	require.ErrorContains(t, err, "OPENPOST_POLAR_WEBHOOK_SECRET")
+	require.ErrorContains(t, err, "OPENPOST_POLAR_CHECKOUT_SUCCESS_URL")
+	require.ErrorContains(t, err, "OPENPOST_POLAR_RETURN_URL")
+	require.ErrorContains(t, err, "OPENPOST_POLAR_STARTER_PRODUCT_ID")
+	require.ErrorContains(t, err, "OPENPOST_POLAR_CREATOR_PRODUCT_ID")
+	require.ErrorContains(t, err, "OPENPOST_POLAR_PRO_PRODUCT_ID")
+}
+
 func validCloudRuntimeConfig() *Config {
 	return &Config{
 		Edition:               EditionCloud,
@@ -116,13 +139,18 @@ func validCloudRuntimeConfig() *Config {
 		S3ForcePathStyle:      true,
 		PolarAccessToken:      "polar-token",
 		PolarWebhookSecret:    "whsec_secret",
+		PolarCheckoutURL:      "https://app.openpost.social/settings/billing?checkout_id={CHECKOUT_ID}",
+		PolarReturnURL:        "https://app.openpost.social/settings/billing",
+		PolarStarterProductID: "starter-product",
 		PolarCreatorProductID: "creator-product",
+		PolarProProductID:     "pro-product",
 	}
 }
 
 func TestLoadPolarPrimitives(t *testing.T) {
 	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
 	t.Setenv("OPENPOST_POLAR_ACCESS_TOKEN", "polar-token")
+	t.Setenv("OPENPOST_POLAR_API_BASE_URL", "https://sandbox-api.polar.sh/v1/")
 	t.Setenv("OPENPOST_POLAR_WEBHOOK_SECRET", "whsec_secret")
 	t.Setenv("OPENPOST_POLAR_CHECKOUT_SUCCESS_URL", "https://app.openpost.social/settings/billing/")
 	t.Setenv("OPENPOST_POLAR_RETURN_URL", "https://app.openpost.social/settings/billing/")
@@ -133,6 +161,7 @@ func TestLoadPolarPrimitives(t *testing.T) {
 	cfg := Load()
 
 	require.Equal(t, "polar-token", cfg.PolarAccessToken)
+	require.Equal(t, "https://sandbox-api.polar.sh/v1", cfg.PolarAPIBaseURL)
 	require.Equal(t, "whsec_secret", cfg.PolarWebhookSecret)
 	require.Equal(t, "https://app.openpost.social/settings/billing", cfg.PolarCheckoutURL)
 	require.Equal(t, "https://app.openpost.social/settings/billing", cfg.PolarReturnURL)

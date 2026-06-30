@@ -190,6 +190,49 @@ func TestCreateCheckoutPostsPolarCheckoutSession(t *testing.T) {
 	require.Equal(t, float64(6), metadata["limit_social_accounts"])
 }
 
+func TestPolarAPIURLAcceptsRootOrVersionedBaseURL(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		base string
+		path string
+		want string
+	}{
+		{
+			name: "root base plus versioned path",
+			base: "https://api.polar.sh",
+			path: "/v1/checkouts/",
+			want: "https://api.polar.sh/v1/checkouts/",
+		},
+		{
+			name: "versioned base plus versioned path",
+			base: "https://sandbox-api.polar.sh/v1",
+			path: "/v1/checkouts/",
+			want: "https://sandbox-api.polar.sh/v1/checkouts/",
+		},
+		{
+			name: "versioned base plus unversioned path",
+			base: "https://api.polar.sh/v1/",
+			path: "/customer-sessions/",
+			want: "https://api.polar.sh/v1/customer-sessions/",
+		},
+		{
+			name: "root base plus unversioned path",
+			base: "https://api.polar.sh",
+			path: "customer-sessions/",
+			want: "https://api.polar.sh/v1/customer-sessions/",
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, polarAPIURL(tt.base, tt.path))
+		})
+	}
+}
+
 func TestCreateCheckoutRejectsUnconfiguredPlan(t *testing.T) {
 	t.Parallel()
 

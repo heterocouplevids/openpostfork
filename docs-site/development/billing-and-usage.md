@@ -41,6 +41,7 @@ Initial metrics match the production-readiness plan:
 Set these only on hosted/cloud deployments:
 
 - `OPENPOST_POLAR_ACCESS_TOKEN`
+- `OPENPOST_POLAR_API_BASE_URL`
 - `OPENPOST_POLAR_WEBHOOK_SECRET`
 - `OPENPOST_POLAR_CHECKOUT_SUCCESS_URL`
 - `OPENPOST_POLAR_RETURN_URL`
@@ -49,6 +50,8 @@ Set these only on hosted/cloud deployments:
 - `OPENPOST_POLAR_PRO_PRODUCT_ID`
 
 `OPENPOST_POLAR_RETURN_URL` is the OpenPost app URL Polar should return users to after hosted checkout or customer portal flows, usually the billing settings page. `OPENPOST_POLAR_CUSTOMER_PORTAL_URL` is still accepted as a legacy alias.
+
+`OPENPOST_POLAR_API_BASE_URL` defaults to `https://api.polar.sh/v1`. Set it to `https://sandbox-api.polar.sh/v1` for Polar sandbox testing.
 
 Checkout and customer portal endpoints return `503` when Polar is missing required server-side configuration such as `OPENPOST_POLAR_ACCESS_TOKEN` or a plan product ID. User input errors, such as an unknown plan ID, remain `400`.
 

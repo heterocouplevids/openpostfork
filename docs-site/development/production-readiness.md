@@ -33,7 +33,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 ### 2. Billing And Plans
 
-- Use Polar for OpenPost Cloud checkout, subscriptions, customer portal, and webhooks.
+- Use Polar for OpenPost Cloud checkout, subscriptions, customer portal, and webhooks. Cloud mode now requires the Polar access token, webhook secret, checkout/return URLs, and Starter/Creator/Pro product IDs at startup.
 - Store local subscription state and entitlement snapshots; do not call Polar on every request. The Polar checkout, customer portal, and webhook foundation now creates hosted billing sessions, verifies signed events, deduplicates webhook deliveries, and upserts workspace subscription snapshots.
 - Keep self-hosted entitlement defaults permissive and configurable.
 - Keep cloud pre-checkout access constrained. Cloud mode now allows a first bootstrap workspace, then evaluates workspace expansion from active user subscription snapshots instead of falling back to self-hosted unlimited behavior.
@@ -99,6 +99,6 @@ This is the implementation map for turning OpenPost into a production-ready self
 3. Add backend config primitives for edition, database driver, and storage driver.
 4. Add storage-driver tests before implementing S3/R2.
 5. Add entitlement interfaces and self-host defaults. Done for the service contract and workspace creation boundary.
-6. Add usage tables and API boundary checks. Monthly usage counters, social-account quota enforcement, media quota enforcement, scheduled-post quota enforcement, and publishing-worker usage accounting are in place; team and hard publish-worker enforcement are next.
+6. Add usage tables and API boundary checks. Monthly usage counters, social-account quota enforcement, media quota enforcement, scheduled-post quota enforcement, and publishing-worker usage/quota enforcement are in place; team invite enforcement is next once invitations exist.
 7. Add Playwright coverage around the core app flows.
 8. Start MCP with authenticated remote metadata and safe read/create/schedule tools. Remote auth, protected-resource metadata, authorization-server metadata, PKCE account linking, tool security descriptors, Apps SDK output metadata, prompt templates, workspace listing, account listing, guarded URL media upload, draft creation, scheduled posting, status reads, scheduled-post cancellation, next-slot suggestions, settings-visible tool-call activity, and dedicated `mcp:full` API-token creation are in place.

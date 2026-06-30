@@ -27,6 +27,14 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 | `OPENPOST_S3_SECRET_ACCESS_KEY` | Required for S3-compatible storage and cloud mode | empty | S3 secret access key. |
 | `OPENPOST_S3_PUBLIC_BASE_URL` | Required in cloud mode | empty | Public media base URL for provider fetches and preview links. |
 | `OPENPOST_S3_FORCE_PATH_STYLE` | No | `false` | Force path-style S3 addressing for compatible providers that require it. |
+| `OPENPOST_POLAR_ACCESS_TOKEN` | Required in cloud mode | empty | Polar API access token for hosted checkout and customer portal sessions. |
+| `OPENPOST_POLAR_API_BASE_URL` | No | `https://api.polar.sh/v1` | Polar API base URL. Use `https://sandbox-api.polar.sh/v1` for sandbox testing. |
+| `OPENPOST_POLAR_WEBHOOK_SECRET` | Required in cloud mode | empty | Polar Standard Webhooks secret used to verify billing events. |
+| `OPENPOST_POLAR_CHECKOUT_SUCCESS_URL` | Required in cloud mode | empty | Browser return URL after a successful checkout. |
+| `OPENPOST_POLAR_RETURN_URL` | Required in cloud mode | empty | Browser return URL for customer portal sessions. |
+| `OPENPOST_POLAR_STARTER_PRODUCT_ID` | Required in cloud mode | empty | Polar product ID for the Starter plan. |
+| `OPENPOST_POLAR_CREATOR_PRODUCT_ID` | Required in cloud mode | empty | Polar product ID for the Creator plan. |
+| `OPENPOST_POLAR_PRO_PRODUCT_ID` | Required in cloud mode | empty | Polar product ID for the Pro plan. |
 | `OPENPOST_ENV` | No | empty | Optional deployment label. Secret validation is enforced regardless of environment mode. |
 
 ## X
