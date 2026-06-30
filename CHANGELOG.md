@@ -81,6 +81,7 @@ All notable changes to this project are documented in this file.
 - Moved the JavaScript workspace to pnpm workspaces with Turborepo orchestration across the web app, docs site, and marketing site.
 
 ### Fixed
+- Made the frontend instance connection check use the database-backed readiness probe instead of accepting liveness-only health responses.
 - Return service-unavailable billing API errors for missing Polar server configuration instead of classifying operator setup problems as bad client requests.
 - Enforced cloud-mode runtime validation so hosted deployments must boot with Postgres and S3-compatible media storage instead of local SQLite/filesystem defaults.
 - Made app Playwright E2E runs start a freshly built Go server by default instead of silently reusing stale local servers.

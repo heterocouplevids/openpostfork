@@ -83,7 +83,7 @@ export function instanceStore() {
 				};
 			}
 
-			const result = await testConnection(url);
+			const result = await testInstanceConnection(url);
 			if (!result.ok) {
 				return { success: false, error: result.error };
 			}
@@ -104,12 +104,14 @@ export function instanceStore() {
 	};
 }
 
-async function testConnection(url: string): Promise<{ ok: boolean; error?: string }> {
+export async function testInstanceConnection(
+	url: string
+): Promise<{ ok: boolean; error?: string }> {
 	try {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 10000);
 
-		const resp = await fetch(`${url}/api/v1/health`, {
+		const resp = await fetch(`${url}/api/v1/ready`, {
 			signal: controller.signal
 		});
 		clearTimeout(timeout);
@@ -119,8 +121,8 @@ async function testConnection(url: string): Promise<{ ok: boolean; error?: strin
 		}
 
 		const data = await resp.json();
-		if (data?.status !== 'ok') {
-			return { ok: false, error: 'Server is not a valid OpenPost instance' };
+		if (data?.status !== 'ready' || data?.database !== 'ok') {
+			return { ok: false, error: 'OpenPost is not ready. Check server logs and database access.' };
 		}
 
 		return { ok: true };
