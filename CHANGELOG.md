@@ -25,6 +25,7 @@ All notable changes to this project are documented in this file.
 - Added authenticated Polar checkout and customer portal API endpoints for OpenPost Cloud billing.
 - Added a workspace billing status API and settings UI summary for current plans and monthly usage.
 - Added publishing-worker quota enforcement for monthly published posts and provider write calls.
+- Added a Playwright app smoke suite that boots the Go server and verifies the authenticated billing settings surface.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
