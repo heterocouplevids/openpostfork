@@ -56,6 +56,11 @@ type Config struct {
 	S3SecretAccessKey string
 	S3PublicBaseURL   string
 	S3ForcePathStyle  bool
+
+	PolarAccessToken    string
+	PolarWebhookSecret  string
+	PolarCheckoutURL    string
+	PolarCustomerPortal string
 }
 
 const minSecretLength = 32
@@ -121,6 +126,11 @@ func Load() *Config {
 		S3SecretAccessKey: getEnvDefault("OPENPOST_S3_SECRET_ACCESS_KEY", ""),
 		S3PublicBaseURL:   strings.TrimRight(getEnvDefault("OPENPOST_S3_PUBLIC_BASE_URL", ""), "/"),
 		S3ForcePathStyle:  getEnvBoolWithAliases(false, "OPENPOST_S3_FORCE_PATH_STYLE"),
+
+		PolarAccessToken:    getEnvDefault("OPENPOST_POLAR_ACCESS_TOKEN", ""),
+		PolarWebhookSecret:  getEnvDefault("OPENPOST_POLAR_WEBHOOK_SECRET", ""),
+		PolarCheckoutURL:    strings.TrimRight(getEnvDefault("OPENPOST_POLAR_CHECKOUT_SUCCESS_URL", ""), "/"),
+		PolarCustomerPortal: strings.TrimRight(getEnvDefault("OPENPOST_POLAR_CUSTOMER_PORTAL_URL", ""), "/"),
 	}
 
 	if cfg.PublicURL == "" {

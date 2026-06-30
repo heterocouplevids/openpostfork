@@ -26,6 +26,7 @@ import (
 	"github.com/openpost/backend/internal/queue"
 	"github.com/openpost/backend/internal/services/apitokens"
 	"github.com/openpost/backend/internal/services/auth"
+	"github.com/openpost/backend/internal/services/billing"
 	cliauth "github.com/openpost/backend/internal/services/cli_auth"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/mediasigner"
@@ -65,6 +66,7 @@ func main() {
 	tokenEncryptor := crypto.NewTokenEncryptor(cfg.EncryptionKey)
 	authService := auth.NewService(cfg.JWTSecret)
 	apiTokenService := apitokens.NewService(db)
+	billingService := billing.NewService(db, cfg.PolarWebhookSecret)
 	authenticator := apimiddleware.NewCompositeService(authService, apiTokenService)
 	cliAuthService := cliauth.NewService(db, apiTokenService)
 	mediaSigner := mediasigner.New(cfg.EncryptionKey)
@@ -169,6 +171,7 @@ func main() {
 
 	mediaHandler.RegisterRoutes(api)
 	mediaHandler.RegisterLegacyRoutes(e)
+	handlers.NewBillingHandler(billingService).RegisterRoutes(e)
 
 	e.GET("/openapi.json", func(c echo.Context) error {
 		spec := api.OpenAPI()

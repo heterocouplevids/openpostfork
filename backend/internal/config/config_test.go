@@ -17,6 +17,8 @@ func TestLoadProductionPrimitiveDefaults(t *testing.T) {
 	require.Equal(t, StorageDriverLocal, cfg.StorageDriver)
 	require.Empty(t, cfg.DatabaseURL)
 	require.Empty(t, cfg.S3Bucket)
+	require.Empty(t, cfg.PolarAccessToken)
+	require.Empty(t, cfg.PolarWebhookSecret)
 }
 
 func TestLoadCloudPostgresAndS3Primitives(t *testing.T) {
@@ -46,6 +48,21 @@ func TestLoadCloudPostgresAndS3Primitives(t *testing.T) {
 	require.Equal(t, "secret-key", cfg.S3SecretAccessKey)
 	require.Equal(t, "https://media.openpost.social", cfg.S3PublicBaseURL)
 	require.True(t, cfg.S3ForcePathStyle)
+}
+
+func TestLoadPolarPrimitives(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("OPENPOST_POLAR_ACCESS_TOKEN", "polar-token")
+	t.Setenv("OPENPOST_POLAR_WEBHOOK_SECRET", "whsec_secret")
+	t.Setenv("OPENPOST_POLAR_CHECKOUT_SUCCESS_URL", "https://app.openpost.social/settings/billing/")
+	t.Setenv("OPENPOST_POLAR_CUSTOMER_PORTAL_URL", "https://polar.sh/openpost/portal/")
+
+	cfg := Load()
+
+	require.Equal(t, "polar-token", cfg.PolarAccessToken)
+	require.Equal(t, "whsec_secret", cfg.PolarWebhookSecret)
+	require.Equal(t, "https://app.openpost.social/settings/billing", cfg.PolarCheckoutURL)
+	require.Equal(t, "https://polar.sh/openpost/portal", cfg.PolarCustomerPortal)
 }
 
 func TestLoadInvalidProductionPrimitiveEnumsFallback(t *testing.T) {

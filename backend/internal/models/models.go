@@ -128,6 +128,34 @@ type UsageCounter struct {
 	UpdatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
+type BillingSubscription struct {
+	bun.BaseModel `bun:"table:billing_subscriptions"`
+
+	WorkspaceID            string    `bun:",pk" json:"workspace_id"`
+	Provider               string    `bun:",notnull,default:'polar'" json:"provider"`
+	ProviderCustomerID     string    `bun:",notnull" json:"provider_customer_id"`
+	ProviderSubscriptionID string    `bun:",notnull,unique" json:"provider_subscription_id"`
+	ProviderProductID      string    `json:"provider_product_id"`
+	ProviderPriceID        string    `json:"provider_price_id"`
+	Status                 string    `bun:",notnull" json:"status"`
+	PlanID                 string    `bun:",notnull,default:''" json:"plan_id"`
+	EntitlementSnapshot    string    `bun:",notnull,default:'{}'" json:"entitlement_snapshot"`
+	CurrentPeriodEnd       time.Time `bun:",nullzero" json:"current_period_end"`
+	CancelAtPeriodEnd      bool      `bun:",notnull,default:false" json:"cancel_at_period_end"`
+	RawPayload             string    `bun:",notnull,default:'{}'" json:"raw_payload"`
+	CreatedAt              time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt              time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+type BillingWebhookEvent struct {
+	bun.BaseModel `bun:"table:billing_webhook_events"`
+
+	EventID     string    `bun:",pk" json:"event_id"`
+	Provider    string    `bun:",notnull,default:'polar'" json:"provider"`
+	EventType   string    `bun:",notnull" json:"event_type"`
+	ProcessedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"processed_at"`
+}
+
 type SocialAccount struct {
 	bun.BaseModel `bun:"table:social_accounts"`
 
