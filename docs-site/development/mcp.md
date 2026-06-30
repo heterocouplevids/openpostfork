@@ -71,8 +71,10 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 
 - `list_workspaces`: returns the workspaces available to the authenticated user.
 - `list_provider_catalog`: returns provider launch status so assistants know which platforms are available, need server configuration, or are still planned.
+- `list_publications`: returns source publications for a workspace, optionally filtered by status.
 - `list_accounts`: returns active social accounts for a workspace.
 - `list_media`: returns recent workspace media attachments so assistants can reuse existing assets.
+- `create_publication`: creates a source publication from an idea, link, goal, audience, and optional media before platform drafts are created.
 - `create_draft`: creates a draft post in a workspace, optionally assigned to destination accounts and media attachments.
 - `list_drafts`: returns editable draft posts for a workspace so an assistant can inspect existing work before creating more drafts.
 - `update_draft`: updates a draft's source content and optionally replaces destination accounts or source media.
@@ -108,6 +110,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Advertises MCP prompt templates for common agentic scheduling workflows: planning a post, adapting platform renditions, and reviewing the publishing queue.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
+- Lets assistants start from a publication source idea, attach workspace media, and later turn that publication into platform-specific drafts and renditions.
 - Keeps draft iteration agent-friendly: assistants can list drafts, update draft copy/destinations, set per-destination renditions, and schedule the same draft when it is ready.
 - Validates rendition targets against the post destination list so assistants do not create variants that would never publish.
 - Rejects media URL fetches that resolve to private, loopback, link-local, multicast, or otherwise local addresses.
