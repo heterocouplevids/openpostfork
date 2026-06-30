@@ -59,6 +59,7 @@ All notable changes to this project are documented in this file.
 - Linked source publications to post creation/update, thread creation, CLI API structs, and MCP draft/schedule workflows through `publication_id`.
 - Added CLI publication commands plus `--publication` linking for post and thread workflows.
 - Added a web Publications page for source ideas, source media, status changes, and handoff into the composer.
+- Added user-facing web-app Publications docs that distinguish the UI workflow from CLI and MCP publication workflows.
 - Added user-facing MCP docs and reorganized the docs navigation around user docs, self-hosting docs, and developer docs.
 - Added a backend OpenAPI generator command so docs builds regenerate the checked-in Huma spec from the same route registrar used by the server.
 

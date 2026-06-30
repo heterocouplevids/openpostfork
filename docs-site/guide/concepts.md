@@ -15,6 +15,9 @@ A connected provider account, such as one X account or one Mastodon profile.
 The top-level unit of intent: one update, launch, idea, link, or asset set that
 can be adapted into platform-native posts.
 
+See [Publications](/usage/publications) for the web-app workflow and
+[CLI Publications](/cli/publications) for terminal automation.
+
 ## Post
 
 A scheduled or published artifact that can belong to a publication. Today a post
