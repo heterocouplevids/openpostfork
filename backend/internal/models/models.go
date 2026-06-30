@@ -15,6 +15,15 @@ const (
 	PostStatusFailed     = "failed"
 )
 
+// Publication status values stored in the `publications.status` column.
+const (
+	PublicationStatusDraft     = "draft"
+	PublicationStatusReady     = "ready"
+	PublicationStatusScheduled = "scheduled"
+	PublicationStatusPublished = "published"
+	PublicationStatusFailed    = "failed"
+)
+
 // Workspace role values stored in the `workspace_members.role` column.
 const (
 	WorkspaceRoleAdmin  = "admin"
@@ -241,13 +250,33 @@ type XOAuthRequestToken struct {
 	CreatedAt     time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+// Publication is the user's canonical unit of intent: one idea, launch,
+// update, or announcement that can produce platform-specific posts.
+type Publication struct {
+	bun.BaseModel `bun:"table:publications"`
+
+	ID              string    `bun:",pk" json:"id"`
+	WorkspaceID     string    `bun:",notnull" json:"workspace_id"`
+	CreatedByID     string    `bun:"created_by,notnull" json:"created_by"`
+	Title           string    `bun:",notnull" json:"title"`
+	SourceContent   string    `bun:"source_content,notnull" json:"source_content"`
+	SourceURL       string    `bun:"source_url" json:"source_url"`
+	Goal            string    `json:"goal"`
+	Audience        string    `json:"audience"`
+	Status          string    `bun:",notnull,default:'draft'" json:"status"`
+	ReleasePlanJSON string    `bun:"release_plan_json,notnull,default:'{}'" json:"release_plan_json"`
+	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
 type Post struct {
 	bun.BaseModel `bun:"table:posts"`
 
-	ID          string `bun:",pk" json:"id"`
-	WorkspaceID string `bun:",notnull" json:"workspace_id"`
-	CreatedByID string `bun:"created_by,notnull" json:"created_by"`
-	Content     string `bun:",notnull" json:"content"`
+	ID            string `bun:",pk" json:"id"`
+	WorkspaceID   string `bun:",notnull" json:"workspace_id"`
+	CreatedByID   string `bun:"created_by,notnull" json:"created_by"`
+	PublicationID string `bun:"publication_id" json:"publication_id"`
+	Content       string `bun:",notnull" json:"content"`
 
 	ParentPostID   string `json:"parent_post_id"`
 	ThreadSequence int    `bun:",default:0" json:"thread_sequence"`
@@ -297,6 +326,15 @@ type PostMedia struct {
 	PostID       string `bun:",pk" json:"post_id"`
 	MediaID      string `bun:",pk" json:"media_id"`
 	DisplayOrder int    `json:"display_order"`
+}
+
+type PublicationAsset struct {
+	bun.BaseModel `bun:"table:publication_assets"`
+
+	PublicationID string    `bun:",pk" json:"publication_id"`
+	MediaID       string    `bun:",pk" json:"media_id"`
+	DisplayOrder  int       `bun:",notnull,default:0" json:"display_order"`
+	CreatedAt     time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 type Job struct {

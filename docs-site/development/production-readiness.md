@@ -61,6 +61,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 ### 5. Publication Model
 
 - Introduce **Publication** as the user-facing unit of intent.
+- The first schema foundation is in place with `publications`, `publication_assets`, and optional `posts.publication_id` links.
 - Keep **Renditions** as destination-specific versions with format-specific validation.
 - Keep current `posts` flow working while adding publication tables behind tests.
 - Migrate the composer toward source idea, destinations, renditions, and release plan.

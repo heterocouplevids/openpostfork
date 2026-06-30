@@ -10,9 +10,16 @@ A workspace groups accounts, media, prompts, and scheduling settings. Most conte
 
 A connected provider account, such as one X account or one Mastodon profile.
 
+## Publication
+
+The top-level unit of intent: one update, launch, idea, link, or asset set that
+can be adapted into platform-native posts.
+
 ## Post
 
-A single scheduled or published unit of content. A post can target one or multiple providers.
+A scheduled or published artifact that can belong to a publication. Today a post
+can target one or multiple providers; over time posts become the platform-facing
+renditions created from a publication.
 
 ## Thread
 

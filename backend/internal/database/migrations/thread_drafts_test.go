@@ -43,6 +43,7 @@ func newMigrationsTestDB(t *testing.T) *bun.DB {
 		(*models.SocialAccount)(nil),
 		(*models.SocialMediaSet)(nil),
 		(*models.SocialMediaSetAccount)(nil),
+		(*models.MediaAttachment)(nil),
 		(*models.ThreadDraft)(nil),
 		(*models.Post)(nil),
 		(*models.PostVariant)(nil),

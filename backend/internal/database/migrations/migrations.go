@@ -104,8 +104,9 @@ func runMigration(ctx context.Context, db *bun.DB, m migration) error {
 			}
 			if _, err := tx.ExecContext(txCtx, stmt); err != nil {
 				// SQLite: ignore "duplicate column name" — migration may already be applied
-				// via CreateSchema on a fresh database
-				if strings.Contains(err.Error(), "duplicate column name") {
+				// via CreateSchema on a fresh database. Postgres reports the same
+				// condition as "column ... already exists".
+				if isDuplicateColumnMigrationError(stmt, err) {
 					continue
 				}
 				return fmt.Errorf("statement failed: %s: %w", stmt, err)
@@ -122,6 +123,18 @@ func runMigration(ctx context.Context, db *bun.DB, m migration) error {
 		}
 		return nil
 	})
+}
+
+func isDuplicateColumnMigrationError(stmt string, err error) bool {
+	if err == nil {
+		return false
+	}
+	normalizedStmt := strings.ToUpper(strings.TrimSpace(stmt))
+	if !strings.HasPrefix(normalizedStmt, "ALTER TABLE") || !strings.Contains(normalizedStmt, "ADD COLUMN") {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "duplicate column name") || strings.Contains(message, "already exists")
 }
 
 func parseVersion(filename string) (int64, error) {
