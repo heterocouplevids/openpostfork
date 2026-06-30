@@ -13,5 +13,5 @@
 - [ ] Configure Mastodon servers in `MASTODON_SERVERS` if you need Mastodon
 - [ ] Persist `/data`
 - [ ] Back up database, media, and secrets together
-- [ ] Check `GET /api/v1/health`
+- [ ] Check `GET /api/v1/ready`
 - [ ] Create a test draft and scheduled post before relying on automation

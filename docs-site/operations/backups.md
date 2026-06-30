@@ -87,7 +87,7 @@ If the hostname changes, update your reverse proxy, provider callback URLs, and 
 - Do previously uploaded media items load?
 - Are connected accounts still listed?
 - Are drafts and scheduled posts present?
-- Does the health endpoint respond?
+- Does the readiness endpoint respond?
 - If the server hostname changed: do provider callbacks and public media URLs still point at the new host?
 
 ## Notes

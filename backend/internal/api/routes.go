@@ -163,10 +163,10 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	oauthHandler.UpdateAccount(api)
 	oauthHandler.DisconnectAccount(api)
 
-	RegisterHealth(api)
+	RegisterHealth(api, deps.DB)
 }
 
-func RegisterHealth(api huma.API) {
+func RegisterHealth(api huma.API, db *bun.DB) {
 	huma.Register(api, huma.Operation{
 		OperationID: "health-check",
 		Method:      http.MethodGet,
@@ -184,6 +184,37 @@ func RegisterHealth(api huma.API) {
 			}
 		}{}
 		resp.Body.Status = "ok"
+		return resp, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "readiness-check",
+		Method:      http.MethodGet,
+		Path:        "/ready",
+		Summary:     "Readiness check",
+		Tags:        []string{"System"},
+		Errors:      []int{503},
+	}, func(ctx context.Context, _ *struct{}) (*struct {
+		Body struct {
+			Status   string `json:"status" doc:"Readiness status"`
+			Database string `json:"database" doc:"Database dependency status"`
+		}
+	}, error) {
+		if db == nil {
+			return nil, huma.NewError(http.StatusServiceUnavailable, "database is not ready")
+		}
+		var one int
+		if err := db.NewSelect().ColumnExpr("1").Scan(ctx, &one); err != nil {
+			return nil, huma.NewError(http.StatusServiceUnavailable, "database is not ready")
+		}
+		resp := &struct {
+			Body struct {
+				Status   string `json:"status" doc:"Readiness status"`
+				Database string `json:"database" doc:"Database dependency status"`
+			}
+		}{}
+		resp.Body.Status = "ready"
+		resp.Body.Database = "ok"
 		return resp, nil
 	})
 }
