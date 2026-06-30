@@ -37,6 +37,7 @@ func newMCPTestServerWithEntitlement(t *testing.T, entitlement entitlements.Serv
 		(*models.PostDestination)(nil),
 		(*models.Job)(nil),
 		(*models.UsageCounter)(nil),
+		(*models.PostingSchedule)(nil),
 	)
 	ctx := context.Background()
 	workspaces := []models.Workspace{
@@ -141,13 +142,14 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 6)
+	require.Len(t, tools, 7)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
 	require.Equal(t, "list_accounts", tools[1].(map[string]any)["name"])
 	require.Equal(t, "create_draft", tools[2].(map[string]any)["name"])
 	require.Equal(t, "schedule_post", tools[3].(map[string]any)["name"])
 	require.Equal(t, "get_post_status", tools[4].(map[string]any)["name"])
 	require.Equal(t, "cancel_post", tools[5].(map[string]any)["name"])
+	require.Equal(t, "suggest_next_slot", tools[6].(map[string]any)["name"])
 }
 
 func TestMCPCallListWorkspaces(t *testing.T) {
@@ -468,4 +470,122 @@ func TestMCPCallSchedulePostHonorsQuota(t *testing.T) {
 	var postCount int
 	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &postCount))
 	require.Equal(t, 0, postCount)
+}
+
+func TestMCPCallSuggestNextSlotReturnsFirstFreeSchedule(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	_, err := srv.db.NewInsert().Model(&[]models.PostingSchedule{
+		{
+			ID:          "slot-9",
+			WorkspaceID: "ws-1",
+			UTCHour:     9,
+			UTCMinute:   0,
+			DayOfWeek:   int(time.Monday),
+			Label:       "Morning",
+			IsActive:    true,
+			CreatedAt:   time.Date(2026, 6, 30, 17, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:          "slot-17",
+			WorkspaceID: "ws-1",
+			UTCHour:     17,
+			UTCMinute:   0,
+			DayOfWeek:   int(time.Monday),
+			Label:       "Evening",
+			IsActive:    true,
+			CreatedAt:   time.Date(2026, 6, 30, 17, 5, 0, 0, time.UTC),
+		},
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-slot",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "suggest_next_slot",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"after":        "2026-07-06T08:00:00Z",
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	structured := result["structuredContent"].(map[string]any)
+	suggestion := structured["suggestion"].(map[string]any)
+	require.Equal(t, "Next available slot found.", suggestion["message"])
+	require.Equal(t, "2026-07-06T09:00:00Z", suggestion["slot_time"])
+	require.Equal(t, "2026-07-06T09:00:00Z", suggestion["slot_time_utc"])
+	slot := suggestion["slot"].(map[string]any)
+	require.Equal(t, "slot-9", slot["id"])
+	require.Equal(t, "Morning", slot["label"])
+}
+
+func TestMCPCallSuggestNextSlotSkipsOccupiedSlot(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	_, err := srv.db.NewInsert().Model(&[]models.PostingSchedule{
+		{
+			ID:          "slot-9",
+			WorkspaceID: "ws-1",
+			UTCHour:     9,
+			UTCMinute:   0,
+			DayOfWeek:   int(time.Monday),
+			Label:       "Morning",
+			IsActive:    true,
+			CreatedAt:   time.Date(2026, 6, 30, 17, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:          "slot-17",
+			WorkspaceID: "ws-1",
+			UTCHour:     17,
+			UTCMinute:   0,
+			DayOfWeek:   int(time.Monday),
+			Label:       "Evening",
+			IsActive:    true,
+			CreatedAt:   time.Date(2026, 6, 30, 17, 5, 0, 0, time.UTC),
+		},
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.Post{
+		ID:          "post-occupied-slot",
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "Already using the morning slot",
+		Status:      statusScheduled,
+		ScheduledAt: time.Date(2026, 7, 6, 9, 0, 0, 0, time.UTC),
+		CreatedAt:   time.Date(2026, 6, 30, 18, 0, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-slot-occupied",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "suggest_next_slot",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"after":        "2026-07-06T08:00:00Z",
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	structured := result["structuredContent"].(map[string]any)
+	suggestion := structured["suggestion"].(map[string]any)
+	require.Equal(t, "2026-07-06T17:00:00Z", suggestion["slot_time"])
+	slot := suggestion["slot"].(map[string]any)
+	require.Equal(t, "slot-17", slot["id"])
+	require.Equal(t, "Evening", slot["label"])
 }

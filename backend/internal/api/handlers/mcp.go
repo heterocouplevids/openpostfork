@@ -26,6 +26,7 @@ const (
 	mcpToolSchedulePost = "schedule_post"
 	mcpToolGetPost      = "get_post_status"
 	mcpToolCancelPost   = "cancel_post"
+	mcpToolSuggestSlot  = "suggest_next_slot"
 )
 
 type MCPHandler struct {
@@ -143,6 +144,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 			mcpSchedulePostTool(),
 			mcpGetPostStatusTool(),
 			mcpCancelPostTool(),
+			mcpSuggestNextSlotTool(),
 		}}, nil
 	case "tools/call":
 		return h.callTool(ctx, principal, req.Params)
@@ -291,6 +293,34 @@ func mcpCancelPostTool() map[string]any {
 	}
 }
 
+func mcpSuggestNextSlotTool() map[string]any {
+	return map[string]any{
+		"name":        mcpToolSuggestSlot,
+		"title":       "Suggest next slot",
+		"description": "Suggest the next free configured posting slot for a workspace.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Workspace ID returned by list_workspaces.",
+				},
+				"set_id": map[string]any{
+					"type":        "string",
+					"description": "Optional social media set ID to filter schedules.",
+				},
+				"after": map[string]any{
+					"type":        "string",
+					"format":      "date-time",
+					"description": "Optional RFC3339 lower bound. Defaults to the current time.",
+				},
+			},
+			"required":             []string{"workspace_id"},
+			"additionalProperties": false,
+		},
+	}
+}
+
 func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Principal, raw json.RawMessage) (any, *mcpError) {
 	var params struct {
 		Name      string         `json:"name"`
@@ -312,6 +342,8 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 		return h.getPostStatus(ctx, principal.UserID, params.Arguments)
 	case mcpToolCancelPost:
 		return h.cancelPost(ctx, principal.UserID, params.Arguments)
+	case mcpToolSuggestSlot:
+		return h.suggestNextSlot(ctx, principal.UserID, params.Arguments)
 	default:
 		return nil, &mcpError{Code: -32602, Message: "unknown tool"}
 	}
@@ -690,6 +722,107 @@ func (h *MCPHandler) cancelPost(ctx context.Context, userID string, args map[str
 	return mcpPostToolResult("Post canceled and returned to drafts: "+post.ID, postStatus), nil
 }
 
+type mcpSlotSuggestion struct {
+	WorkspaceID string                   `json:"workspace_id"`
+	SetID       string                   `json:"set_id,omitempty"`
+	Timezone    string                   `json:"timezone"`
+	SlotTime    string                   `json:"slot_time,omitempty"`
+	SlotTimeUTC string                   `json:"slot_time_utc,omitempty"`
+	Slot        *PostingScheduleResponse `json:"slot,omitempty"`
+	Message     string                   `json:"message"`
+}
+
+func (h *MCPHandler) suggestNextSlot(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	var input struct {
+		WorkspaceID string `json:"workspace_id"`
+		SetID       string `json:"set_id"`
+		After       string `json:"after"`
+	}
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return nil, &mcpError{Code: -32602, Message: "invalid suggest_next_slot arguments"}
+	}
+	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
+		return nil, rpcErr
+	}
+
+	var workspace models.Workspace
+	err := h.db.NewSelect().
+		Model(&workspace).
+		Where("id = ?", input.WorkspaceID).
+		Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, &mcpError{Code: -32602, Message: "workspace not found"}
+		}
+		return nil, &mcpError{Code: -32603, Message: "failed to load workspace"}
+	}
+
+	loc, err := time.LoadLocation(workspace.Timezone)
+	if err != nil {
+		loc = time.UTC
+		workspace.Timezone = "UTC"
+	}
+	now := time.Now().In(loc)
+	if strings.TrimSpace(input.After) != "" {
+		after, err := time.Parse(time.RFC3339, input.After)
+		if err != nil {
+			return nil, &mcpError{Code: -32602, Message: "after must be an RFC3339 timestamp"}
+		}
+		now = after.In(loc)
+	}
+
+	var schedules []models.PostingSchedule
+	query := h.db.NewSelect().
+		Model(&schedules).
+		Where("workspace_id = ?", input.WorkspaceID).
+		Where("is_active = ?", true)
+	if strings.TrimSpace(input.SetID) != "" {
+		query = query.Where("set_id = ?", input.SetID)
+	}
+	if err := query.Scan(ctx); err != nil && err != sql.ErrNoRows {
+		return nil, &mcpError{Code: -32603, Message: "failed to load posting schedules"}
+	}
+
+	if len(schedules) == 0 {
+		suggestion := mcpSlotSuggestion{
+			WorkspaceID: input.WorkspaceID,
+			SetID:       input.SetID,
+			Timezone:    workspace.Timezone,
+			Message:     "No posting schedules configured for this workspace.",
+		}
+		return mcpSlotToolResult(suggestion), nil
+	}
+
+	var scheduledPosts []models.Post
+	postQuery := h.db.NewSelect().
+		Model(&scheduledPosts).
+		Where("workspace_id = ?", input.WorkspaceID).
+		Where("status = ?", statusScheduled).
+		Where("scheduled_at >= ?", now.UTC().Add(-24*time.Hour)).
+		Order("scheduled_at ASC")
+	if err := postQuery.Scan(ctx); err != nil && err != sql.ErrNoRows {
+		return nil, &mcpError{Code: -32603, Message: "failed to load scheduled posts"}
+	}
+
+	nextSlot, nextSlotTime := findNextConfiguredScheduleSlotTime(now, loc, schedules, scheduledPosts)
+	suggestion := mcpSlotSuggestion{
+		WorkspaceID: input.WorkspaceID,
+		SetID:       input.SetID,
+		Timezone:    workspace.Timezone,
+		Message:     "No available slots found in the next month.",
+	}
+	if !nextSlotTime.IsZero() {
+		suggestion.SlotTime = nextSlotTime.Format(time.RFC3339)
+		suggestion.SlotTimeUTC = nextSlotTime.UTC().Format(time.RFC3339)
+		suggestion.Message = "Next available slot found."
+		if nextSlot != nil {
+			slot := postingScheduleResponseForWorkspace(nextSlotTime, loc, *nextSlot)
+			suggestion.Slot = &slot
+		}
+	}
+	return mcpSlotToolResult(suggestion), nil
+}
+
 func (h *MCPHandler) accessibleMCPPost(ctx context.Context, userID string, args map[string]any) (*models.Post, *mcpError) {
 	var input struct {
 		WorkspaceID string `json:"workspace_id"`
@@ -779,6 +912,18 @@ func mcpPostToolResult(text string, post mcpPostStatus) map[string]any {
 		}},
 		"structuredContent": map[string]any{
 			"post": post,
+		},
+	}
+}
+
+func mcpSlotToolResult(suggestion mcpSlotSuggestion) map[string]any {
+	return map[string]any{
+		"content": []mcpContent{{
+			Type: "text",
+			Text: suggestion.Message,
+		}},
+		"structuredContent": map[string]any{
+			"suggestion": suggestion,
 		},
 	}
 }
