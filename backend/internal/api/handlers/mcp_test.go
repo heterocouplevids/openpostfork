@@ -41,6 +41,7 @@ func newMCPTestServerWithEntitlement(t *testing.T, entitlement entitlements.Serv
 		(*models.SocialAccount)(nil),
 		(*models.Post)(nil),
 		(*models.PostDestination)(nil),
+		(*models.PostVariant)(nil),
 		(*models.Job)(nil),
 		(*models.UsageCounter)(nil),
 		(*models.PostingSchedule)(nil),
@@ -221,16 +222,17 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 9)
+	require.Len(t, tools, 10)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
 	require.Equal(t, "list_accounts", tools[1].(map[string]any)["name"])
 	require.Equal(t, "create_draft", tools[2].(map[string]any)["name"])
-	require.Equal(t, "schedule_post", tools[3].(map[string]any)["name"])
-	require.Equal(t, "get_post_status", tools[4].(map[string]any)["name"])
-	require.Equal(t, "list_scheduled_posts", tools[5].(map[string]any)["name"])
-	require.Equal(t, "cancel_post", tools[6].(map[string]any)["name"])
-	require.Equal(t, "suggest_next_slot", tools[7].(map[string]any)["name"])
-	require.Equal(t, "upload_media_from_url", tools[8].(map[string]any)["name"])
+	require.Equal(t, "set_post_renditions", tools[3].(map[string]any)["name"])
+	require.Equal(t, "schedule_post", tools[4].(map[string]any)["name"])
+	require.Equal(t, "get_post_status", tools[5].(map[string]any)["name"])
+	require.Equal(t, "list_scheduled_posts", tools[6].(map[string]any)["name"])
+	require.Equal(t, "cancel_post", tools[7].(map[string]any)["name"])
+	require.Equal(t, "suggest_next_slot", tools[8].(map[string]any)["name"])
+	require.Equal(t, "upload_media_from_url", tools[9].(map[string]any)["name"])
 
 	for _, tool := range tools {
 		descriptor := tool.(map[string]any)
@@ -420,6 +422,126 @@ func TestMCPCallCreateDraftRejectsOutsideAccount(t *testing.T) {
 	require.Contains(t, rpcErr["message"], "outside this workspace")
 	var count int
 	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &count))
+	require.Equal(t, 0, count)
+}
+
+func TestMCPCallSetPostRenditions(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	post := models.Post{
+		ID:          "post-renditions",
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "One launch thought",
+		Status:      statusDraft,
+		CreatedAt:   time.Date(2026, 6, 30, 15, 0, 0, 0, time.UTC),
+	}
+	_, err := srv.db.NewInsert().Model(&post).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.PostDestination{
+		ID:              "destination-rendition",
+		PostID:          post.ID,
+		SocialAccountID: "account-1",
+		Status:          postStatusPending,
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.MediaAttachment{
+		ID:               "media-rendition",
+		WorkspaceID:      "ws-1",
+		FilePath:         "media-rendition.png",
+		MimeType:         "image/png",
+		ProcessingStatus: "ready",
+		Size:             1234,
+		OriginalFilename: "launch.png",
+		FileHash:         "media-rendition-hash",
+		CreatedAt:        time.Date(2026, 6, 30, 15, 5, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-renditions",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "set_post_renditions",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"post_id":      post.ID,
+				"renditions": []map[string]any{{
+					"social_account_id": "account-1",
+					"content":           "X-native launch copy with a sharper hook",
+					"media_ids":         []string{"media-rendition"},
+				}},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	content := result["content"].([]any)
+	require.Contains(t, content[0].(map[string]any)["text"], "Updated 1 post renditions")
+	structured := result["structuredContent"].(map[string]any)
+	require.Equal(t, post.ID, structured["post_id"])
+	renditions := structured["renditions"].([]any)
+	require.Len(t, renditions, 1)
+	rendition := renditions[0].(map[string]any)
+	require.Equal(t, "account-1", rendition["social_account_id"])
+	require.Equal(t, "x", rendition["platform"])
+	require.Equal(t, "x-openpost", rendition["slug"])
+	require.Equal(t, "X-native launch copy with a sharper hook", rendition["content"])
+	require.Equal(t, []any{"media-rendition"}, rendition["media_ids"])
+	require.Equal(t, true, rendition["is_unsynced"])
+
+	var stored models.PostVariant
+	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("post_id = ?", post.ID).Scan(context.Background()))
+	require.Equal(t, "account-1", stored.SocialAccountID)
+	require.Equal(t, "X-native launch copy with a sharper hook", stored.Content)
+	require.Equal(t, `["media-rendition"]`, stored.MediaIDs)
+	require.True(t, stored.IsUnsynced)
+}
+
+func TestMCPCallSetPostRenditionsRejectsNonDestinationAccount(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	post := models.Post{
+		ID:          "post-renditions-no-destination",
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "One launch thought",
+		Status:      statusDraft,
+		CreatedAt:   time.Date(2026, 6, 30, 15, 0, 0, 0, time.UTC),
+	}
+	_, err := srv.db.NewInsert().Model(&post).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-renditions-invalid",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "set_post_renditions",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"post_id":      post.ID,
+				"renditions": []map[string]any{{
+					"social_account_id": "account-1",
+					"content":           "This should not be saved",
+				}},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	rpcErr := out["error"].(map[string]any)
+	require.Contains(t, rpcErr["message"], "not destinations")
+	var count int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("post_variants").Scan(context.Background(), &count))
 	require.Equal(t, 0, count)
 }
 

@@ -29,6 +29,7 @@ const (
 	mcpToolWorkspaces   = "list_workspaces"
 	mcpToolAccounts     = "list_accounts"
 	mcpToolCreateDraft  = "create_draft"
+	mcpToolRenditions   = "set_post_renditions"
 	mcpToolSchedulePost = "schedule_post"
 	mcpToolGetPost      = "get_post_status"
 	mcpToolListPosts    = "list_scheduled_posts"
@@ -236,6 +237,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 			mcpListWorkspacesTool(),
 			mcpListAccountsTool(),
 			mcpCreateDraftTool(),
+			mcpSetPostRenditionsTool(),
 			mcpSchedulePostTool(),
 			mcpGetPostStatusTool(),
 			mcpListScheduledPostsTool(),
@@ -305,6 +307,54 @@ func mcpCreateDraftTool() map[string]any {
 				},
 			},
 			"required":             []string{"workspace_id", "content"},
+			"additionalProperties": false,
+		},
+	}, false, false)
+}
+
+func mcpSetPostRenditionsTool() map[string]any {
+	return mcpToolDescriptor(map[string]any{
+		"name":        mcpToolRenditions,
+		"title":       "Set post renditions",
+		"description": "Create or update destination-specific post copy for accounts already assigned to an OpenPost draft or scheduled post.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Workspace ID returned by list_workspaces.",
+				},
+				"post_id": map[string]any{
+					"type":        "string",
+					"description": "Post ID returned by create_draft or schedule_post.",
+				},
+				"renditions": map[string]any{
+					"type":        "array",
+					"description": "Destination-specific copy keyed by social account.",
+					"minItems":    1,
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"social_account_id": map[string]any{
+								"type":        "string",
+								"description": "Destination account ID returned by list_accounts and already attached to the post.",
+							},
+							"content": map[string]any{
+								"type":        "string",
+								"description": "Platform-native post content for this destination.",
+							},
+							"media_ids": map[string]any{
+								"type":        "array",
+								"description": "Optional media IDs to use for this destination instead of the parent post media.",
+								"items":       map[string]any{"type": "string"},
+							},
+						},
+						"required":             []string{"social_account_id", "content"},
+						"additionalProperties": false,
+					},
+				},
+			},
+			"required":             []string{"workspace_id", "post_id", "renditions"},
 			"additionalProperties": false,
 		},
 	}, false, false)
@@ -526,6 +576,8 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 		result, rpcErr = h.listAccounts(ctx, principal.UserID, params.Arguments)
 	case mcpToolCreateDraft:
 		result, rpcErr = h.createDraft(ctx, principal.UserID, params.Arguments)
+	case mcpToolRenditions:
+		result, rpcErr = h.setPostRenditions(ctx, principal.UserID, params.Arguments)
 	case mcpToolSchedulePost:
 		result, rpcErr = h.schedulePost(ctx, principal.UserID, params.Arguments)
 	case mcpToolGetPost:
@@ -778,6 +830,228 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 			},
 		},
 	}, nil
+}
+
+type mcpPostRenditionInput struct {
+	WorkspaceID string                    `json:"workspace_id"`
+	PostID      string                    `json:"post_id"`
+	Renditions  []mcpPostRenditionRequest `json:"renditions"`
+}
+
+type mcpPostRenditionRequest struct {
+	SocialAccountID string   `json:"social_account_id"`
+	Content         string   `json:"content"`
+	MediaIDs        []string `json:"media_ids"`
+}
+
+type mcpPostRendition struct {
+	ID              string   `json:"id"`
+	PostID          string   `json:"post_id"`
+	SocialAccountID string   `json:"social_account_id"`
+	Platform        string   `json:"platform"`
+	Slug            string   `json:"slug"`
+	Content         string   `json:"content"`
+	MediaIDs        []string `json:"media_ids"`
+	IsUnsynced      bool     `json:"is_unsynced"`
+	CreatedAt       string   `json:"created_at"`
+	UpdatedAt       string   `json:"updated_at"`
+}
+
+func (h *MCPHandler) setPostRenditions(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
+	input, post, rpcErr := h.validateSetPostRenditionsInput(ctx, userID, args)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+
+	err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		for _, rendition := range input.Renditions {
+			if err := upsertMCPPostRendition(txCtx, tx, post.ID, rendition); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, &mcpError{Code: -32603, Message: "failed to update post renditions"}
+	}
+
+	renditions, rpcErr := h.loadMCPPostRenditions(ctx, post.ID)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+	return map[string]any{
+		"content": []mcpContent{{
+			Type: "text",
+			Text: fmt.Sprintf("Updated %d post renditions.", len(input.Renditions)),
+		}},
+		"structuredContent": map[string]any{
+			"post_id":    post.ID,
+			"renditions": renditions,
+		},
+	}, nil
+}
+
+func (h *MCPHandler) validateSetPostRenditionsInput(ctx context.Context, userID string, args map[string]any) (mcpPostRenditionInput, *models.Post, *mcpError) {
+	var input mcpPostRenditionInput
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return input, nil, &mcpError{Code: -32602, Message: "invalid set_post_renditions arguments"}
+	}
+	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
+		return input, nil, rpcErr
+	}
+	if strings.TrimSpace(input.PostID) == "" {
+		return input, nil, &mcpError{Code: -32602, Message: "post_id is required"}
+	}
+	if len(input.Renditions) == 0 {
+		return input, nil, &mcpError{Code: -32602, Message: "renditions must contain at least one item"}
+	}
+
+	post, rpcErr := h.accessibleMCPPost(ctx, userID, map[string]any{
+		"workspace_id": input.WorkspaceID,
+		"post_id":      input.PostID,
+	})
+	if rpcErr != nil {
+		return input, nil, rpcErr
+	}
+	if post.Status == models.PostStatusPublished || post.Status == models.PostStatusPublishing {
+		return input, nil, &mcpError{Code: -32602, Message: "cannot update renditions for a post that is published or being published"}
+	}
+
+	accountIDs, mediaIDs, rpcErr := validateMCPRenditionRequests(input.Renditions)
+	if rpcErr != nil {
+		return input, nil, rpcErr
+	}
+	if rpcErr := h.ensureActiveAccounts(ctx, input.WorkspaceID, accountIDs); rpcErr != nil {
+		return input, nil, rpcErr
+	}
+	if rpcErr := h.ensurePostDestinationAccounts(ctx, post.ID, accountIDs); rpcErr != nil {
+		return input, nil, rpcErr
+	}
+	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, input.WorkspaceID, mediaIDs); rpcErr != nil {
+		return input, nil, rpcErr
+	}
+	return input, post, nil
+}
+
+func validateMCPRenditionRequests(renditions []mcpPostRenditionRequest) ([]string, []string, *mcpError) {
+	accountIDs := make([]string, 0, len(renditions))
+	mediaIDs := make([]string, 0)
+	seenAccounts := make(map[string]struct{}, len(renditions))
+	for _, rendition := range renditions {
+		accountID := strings.TrimSpace(rendition.SocialAccountID)
+		if accountID == "" {
+			return nil, nil, &mcpError{Code: -32602, Message: "renditions.social_account_id is required"}
+		}
+		if _, ok := seenAccounts[accountID]; ok {
+			return nil, nil, &mcpError{Code: -32602, Message: "renditions cannot contain duplicate social_account_id values"}
+		}
+		seenAccounts[accountID] = struct{}{}
+		if strings.TrimSpace(rendition.Content) == "" {
+			return nil, nil, &mcpError{Code: -32602, Message: "renditions.content is required"}
+		}
+		accountIDs = append(accountIDs, accountID)
+		normalizedMediaIDs, rpcErr := normalizeMCPIDs(rendition.MediaIDs, "renditions.media_ids")
+		if rpcErr != nil {
+			return nil, nil, rpcErr
+		}
+		mediaIDs = append(mediaIDs, normalizedMediaIDs...)
+	}
+	mediaIDs, rpcErr := normalizeMCPIDs(mediaIDs, "renditions.media_ids")
+	if rpcErr != nil {
+		return nil, nil, rpcErr
+	}
+	return accountIDs, mediaIDs, nil
+}
+
+func upsertMCPPostRendition(ctx context.Context, tx bun.Tx, postID string, rendition mcpPostRenditionRequest) error {
+	normalizedMediaIDs, rpcErr := normalizeMCPIDs(rendition.MediaIDs, "renditions.media_ids")
+	if rpcErr != nil {
+		return fmt.Errorf("%s", rpcErr.Message)
+	}
+	mediaIDs, err := json.Marshal(normalizedMediaIDs)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	var existing models.PostVariant
+	err = tx.NewSelect().
+		Model(&existing).
+		Where("post_id = ? AND social_account_id = ?", postID, strings.TrimSpace(rendition.SocialAccountID)).
+		Scan(ctx)
+	if err == nil {
+		existing.Content = rendition.Content
+		existing.MediaIDs = string(mediaIDs)
+		existing.IsUnsynced = true
+		existing.UpdatedAt = now
+		_, err = tx.NewUpdate().
+			Model(&existing).
+			Column("content", "media_ids", "is_unsynced", "updated_at").
+			Where("id = ?", existing.ID).
+			Exec(ctx)
+		return err
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	variant := models.PostVariant{
+		ID:              newUUID(),
+		PostID:          postID,
+		SocialAccountID: strings.TrimSpace(rendition.SocialAccountID),
+		Content:         rendition.Content,
+		MediaIDs:        string(mediaIDs),
+		IsUnsynced:      true,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	_, err = tx.NewInsert().Model(&variant).Exec(ctx)
+	return err
+}
+
+func (h *MCPHandler) loadMCPPostRenditions(ctx context.Context, postID string) ([]mcpPostRendition, *mcpError) {
+	var rows []struct {
+		models.PostVariant `bun:",extend"`
+		Platform           string `bun:"platform"`
+		Slug               string `bun:"slug"`
+	}
+	err := h.db.NewSelect().
+		Model(&rows).
+		ColumnExpr("post_variant.*").
+		ColumnExpr("sa.platform").
+		ColumnExpr("sa.slug").
+		Join("JOIN social_accounts AS sa ON sa.id = post_variant.social_account_id").
+		Where("post_variant.post_id = ?", postID).
+		OrderExpr("sa.platform ASC, sa.slug ASC").
+		Scan(ctx)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, &mcpError{Code: -32603, Message: "failed to load post renditions"}
+	}
+	renditions := make([]mcpPostRendition, 0, len(rows))
+	for _, row := range rows {
+		renditions = append(renditions, mcpPostRendition{
+			ID:              row.ID,
+			PostID:          row.PostID,
+			SocialAccountID: row.SocialAccountID,
+			Platform:        row.Platform,
+			Slug:            row.Slug,
+			Content:         row.Content,
+			MediaIDs:        decodeVariantMediaIDs(row.MediaIDs),
+			IsUnsynced:      row.IsUnsynced,
+			CreatedAt:       row.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:       row.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	return renditions, nil
+}
+
+func decodeVariantMediaIDs(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return []string{}
+	}
+	var mediaIDs []string
+	if err := json.Unmarshal([]byte(raw), &mediaIDs); err != nil {
+		return []string{}
+	}
+	return mediaIDs
 }
 
 type mcpPostDestination struct {
@@ -1478,6 +1752,50 @@ func (h *MCPHandler) ensureActiveAccounts(ctx context.Context, workspaceID strin
 	}
 	if count != len(unique) {
 		return &mcpError{Code: -32602, Message: "one or more social accounts are invalid, disconnected, or outside this workspace"}
+	}
+	return nil
+}
+
+func (h *MCPHandler) ensurePostDestinationAccounts(ctx context.Context, postID string, accountIDs []string) *mcpError {
+	if len(accountIDs) == 0 {
+		return nil
+	}
+	unique, rpcErr := normalizeMCPIDs(accountIDs, "social_account_ids")
+	if rpcErr != nil {
+		return rpcErr
+	}
+	count, err := h.db.NewSelect().
+		Model((*models.PostDestination)(nil)).
+		Where("post_id = ?", postID).
+		Where("social_account_id IN (?)", bun.List(unique)).
+		Count(ctx)
+	if err != nil {
+		return &mcpError{Code: -32603, Message: "failed to validate post destinations"}
+	}
+	if count != len(unique) {
+		return &mcpError{Code: -32602, Message: "one or more renditions target accounts that are not destinations for this post"}
+	}
+	return nil
+}
+
+func (h *MCPHandler) ensureMediaBelongsToWorkspace(ctx context.Context, workspaceID string, mediaIDs []string) *mcpError {
+	if len(mediaIDs) == 0 {
+		return nil
+	}
+	unique, rpcErr := normalizeMCPIDs(mediaIDs, "media_ids")
+	if rpcErr != nil {
+		return rpcErr
+	}
+	count, err := h.db.NewSelect().
+		Model((*models.MediaAttachment)(nil)).
+		Where("workspace_id = ?", workspaceID).
+		Where("id IN (?)", bun.List(unique)).
+		Count(ctx)
+	if err != nil {
+		return &mcpError{Code: -32603, Message: "failed to validate media"}
+	}
+	if count != len(unique) {
+		return &mcpError{Code: -32602, Message: "one or more media_ids are invalid or outside this workspace"}
 	}
 	return nil
 }

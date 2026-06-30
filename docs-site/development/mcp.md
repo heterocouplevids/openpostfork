@@ -45,6 +45,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - `list_workspaces`: returns the workspaces available to the authenticated user.
 - `list_accounts`: returns active social accounts for a workspace.
 - `create_draft`: creates a draft post in a workspace, optionally assigned to destination accounts.
+- `set_post_renditions`: creates or updates destination-specific copy for draft and scheduled posts. Renditions can only target accounts already attached as post destinations.
 - `schedule_post`: creates a scheduled post with destination accounts and queues the `publish_post` job.
 - `get_post_status`: returns the post status, scheduled run time, and per-destination status.
 - `cancel_post`: cancels a queued scheduled post and returns it to drafts.
@@ -59,6 +60,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. A dedicated OAuth authorization-server flow for ChatGPT account linking is still planned.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
+- Validates rendition targets against the post destination list so assistants do not create variants that would never publish.
 - Rejects media URL fetches that resolve to private, loopback, link-local, multicast, or otherwise local addresses.
 - Enforces the same scheduled-post and media-upload entitlement and usage accounting as the web/API paths.
 - Records MCP tool calls in `mcp_tool_calls` with user, workspace, tool name, success/error status, error message, duration, and timestamp, and exposes recent calls in settings.
