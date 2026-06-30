@@ -53,6 +53,7 @@ jobs:
           pnpm --filter @openpost/site build
           pnpm --filter @openpost/docs docs:build
           pnpm run test:e2e
+          pnpm run test:e2e:app
           pnpm run test:e2e:docs
 
           cd cli

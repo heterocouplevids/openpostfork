@@ -75,6 +75,7 @@ All notable changes to this project are documented in this file.
 - Added stricter Apps SDK metadata coverage for the MCP scheduler widget, including standard `_meta.ui` CSP keys, legacy ChatGPT aliases, and model-only render-tool visibility.
 - Added Playwright docs E2E coverage that verifies the user-facing, self-hosting, and developer docs entry points stay distinct and reachable.
 - Added the docs E2E suite to CI and release preflight gates so docs audience separation stays verified automatically.
+- Added the app Playwright E2E suite to CI and release preflight gates for billing, MCP, provider, and publication workflows.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

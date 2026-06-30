@@ -46,10 +46,12 @@ jobs:
               - 'marketing-site/**'
               - 'docs-site/**'
               - 'e2e/**'
+              - 'e2e-app/**'
               - 'e2e-docs/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
+              - 'playwright.app.config.ts'
               - 'playwright.config.ts'
               - 'playwright.docs.config.ts'
               - 'turbo.json'
@@ -315,6 +317,7 @@ jobs:
           pnpm --filter @openpost/site build
           pnpm --filter @openpost/docs docs:build
           pnpm run test:e2e
+          pnpm run test:e2e:app
           pnpm run test:e2e:docs
 
   cli:
