@@ -51,15 +51,15 @@ jobs:
           pnpm --filter @openpost/web build
           pnpm --filter @openpost/site check
           pnpm --filter @openpost/site build
+          pnpm --filter @openpost/docs docs:build
           pnpm run test:e2e
+          pnpm run test:e2e:docs
 
           cd cli
           go mod download
           go build ./...
           go test ./...
           cd ..
-
-          pnpm --filter @openpost/docs docs:build
 
   build-docker:
     name: Build and Push Docker Image

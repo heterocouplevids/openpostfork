@@ -44,9 +44,14 @@ jobs:
             frontend:
               - 'frontend/**'
               - 'marketing-site/**'
+              - 'docs-site/**'
+              - 'e2e/**'
+              - 'e2e-docs/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
+              - 'playwright.config.ts'
+              - 'playwright.docs.config.ts'
               - 'turbo.json'
               - 'devenv.nix'
               - 'devenv.yaml'
@@ -308,7 +313,9 @@ jobs:
           pnpm --filter @openpost/web build
           pnpm --filter @openpost/site check
           pnpm --filter @openpost/site build
+          pnpm --filter @openpost/docs docs:build
           pnpm run test:e2e
+          pnpm run test:e2e:docs
 
   cli:
     name: CLI
