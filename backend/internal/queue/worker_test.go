@@ -21,6 +21,7 @@ import (
 
 type stubStorage struct{}
 
+func (stubStorage) Driver() string                         { return "test" }
 func (stubStorage) Save(string, io.Reader) (string, error) { return "", nil }
 func (stubStorage) Delete(string) error                    { return nil }
 func (stubStorage) GetURL(string) string                   { return "" }

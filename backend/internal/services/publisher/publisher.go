@@ -1,20 +1,20 @@
 package publisher
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/mediasigner"
+	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/uptrace/bun"
 )
@@ -28,6 +28,7 @@ type Service struct {
 	disableLinkedInThreadReplies bool
 	publicMediaURL               string
 	mediaSigner                  *mediasigner.Signer
+	storage                      mediastore.BlobStorage
 }
 
 func NewService(db *bun.DB, tm *tokenmanager.TokenManager) *Service {
@@ -48,6 +49,10 @@ func (s *Service) SetPublicMediaURL(url string) {
 
 func (s *Service) SetMediaSigner(signer *mediasigner.Signer) {
 	s.mediaSigner = signer
+}
+
+func (s *Service) SetStorage(storage mediastore.BlobStorage) {
+	s.storage = storage
 }
 
 func (s *Service) SetProvider(platformName string, adapter platform.Adapter) {
@@ -429,12 +434,16 @@ func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.Soc
 		return s.getPublicMediaURL(media), nil
 	}
 
-	data, err := os.ReadFile(media.FilePath)
-	if err != nil {
-		return "", fmt.Errorf("reading media file %s: %w", media.FilePath, err)
+	if s.storage == nil {
+		return "", fmt.Errorf("media storage is not configured")
 	}
+	data, err := s.storage.Open(filepath.Base(media.FilePath))
+	if err != nil {
+		return "", fmt.Errorf("opening media file %s: %w", media.FilePath, err)
+	}
+	defer data.Close()
 
-	return provider.UploadMedia(ctx, token, account.AccountID, media.MimeType, bytes.NewReader(data))
+	return provider.UploadMedia(ctx, token, account.AccountID, media.MimeType, data)
 }
 
 func (s *Service) loadVariant(ctx context.Context, postID, socialAccountID string) (*models.PostVariant, error) {

@@ -38,4 +38,4 @@ OPENPOST_S3_PUBLIC_BASE_URL=https://media.openpost.example
 OPENPOST_S3_FORCE_PATH_STYLE=false
 ```
 
-The storage driver setting is available now; direct browser-to-S3 upload sessions and provider media-state tracking are part of the production-readiness roadmap.
+The S3-compatible storage driver is available for server-side media uploads. Direct browser-to-S3 upload sessions and provider media-state tracking are part of the production-readiness roadmap.

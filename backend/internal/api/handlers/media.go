@@ -921,7 +921,7 @@ func (h *MediaHandler) processUpload(workspaceID string, fileHeader *multipart.F
 		ID:               mediaID,
 		WorkspaceID:      workspaceID,
 		FilePath:         savedPath,
-		StorageType:      "local",
+		StorageType:      h.storage.Driver(),
 		MimeType:         mimeType,
 		ProcessingStatus: "ready",
 		Size:             fileHeader.Size,

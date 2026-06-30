@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -142,10 +141,24 @@ func main() {
 		publishSvc.SetProvider(name, adapter)
 	}
 
-	storage := mediastore.NewLocalStorage(cfg.MediaPath, cfg.MediaURL)
-	if err := os.MkdirAll(filepath.Clean(cfg.MediaPath), 0755); err != nil {
-		log.Printf("Warning: could not create media directory %s: %v", cfg.MediaPath, err)
+	storage, err := mediastore.New(context.Background(), mediastore.Config{
+		Driver:    cfg.StorageDriver,
+		LocalPath: cfg.MediaPath,
+		BaseURL:   cfg.MediaURL,
+		S3: mediastore.S3Config{
+			Endpoint:        cfg.S3Endpoint,
+			Region:          cfg.S3Region,
+			Bucket:          cfg.S3Bucket,
+			AccessKeyID:     cfg.S3AccessKeyID,
+			SecretAccessKey: cfg.S3SecretAccessKey,
+			PublicBaseURL:   cfg.S3PublicBaseURL,
+			ForcePathStyle:  cfg.S3ForcePathStyle,
+		},
+	})
+	if err != nil {
+		log.Fatalf("failed to initialize media storage: %v", err)
 	}
+	publishSvc.SetStorage(storage)
 	mediaHandler := handlers.NewMediaHandler(db, storage, authService, authenticator, mediaSigner)
 
 	worker := queue.NewWorker(db, "worker-1", 1*time.Second, publishSvc, tokenManager, storage)
