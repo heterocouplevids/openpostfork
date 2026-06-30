@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List configured account providers */
+        get: operations["list-account-providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{account_id}": {
         parameters: {
             query?: never;
@@ -380,23 +397,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/billing/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get billing status */
-        get: operations["get-billing-status"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/billing/portal": {
         parameters: {
             query?: never;
@@ -408,6 +408,23 @@ export interface paths {
         put?: never;
         /** Create billing portal session */
         post: operations["create-billing-portal-session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/billing/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get billing status */
+        get: operations["get-billing-status"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1106,18 +1123,6 @@ export interface components {
             /** @description Optional passkey label */
             name: string;
         };
-        BillingURLResponse: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/BillingURLResponse.json
-             */
-            readonly $schema?: string;
-            /** @description Provider object ID */
-            id?: string;
-            /** @description Redirect URL */
-            url: string;
-        };
         BillingStatusResponse: {
             /**
              * Format: uri
@@ -1147,6 +1152,18 @@ export interface components {
             };
             /** @description Workspace ID */
             workspace_id: string;
+        };
+        BillingURLResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/BillingURLResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Provider object ID */
+            id?: string;
+            /** @description Redirect URL */
+            url: string;
         };
         BlueskyLoginInputBody: {
             /**
@@ -1197,7 +1214,7 @@ export interface components {
             expires_at?: string;
             /** @description User-visible token name */
             name: string;
-            /** @description Token scope. Defaults to cli:full. */
+            /** @description Token scope. Supported values: cli:full, mcp:full. Defaults to cli:full. */
             scope?: string;
         };
         CreateAPITokenOutputBody: {
@@ -1526,6 +1543,8 @@ export interface components {
             readonly $schema?: string;
             /** @description Authorization code from OAuth flow */
             code: string;
+            /** @description Mastodon instance URL to dynamically register */
+            instance_url: string;
             /** @description Mastodon server name from config */
             server_name: string;
             /** @description Workspace ID */
@@ -1712,6 +1731,14 @@ export interface components {
             password: string;
         };
         MCPActivityItem: {
+            /** @description API token ID associated with the call, when available */
+            client_id?: string;
+            /** @description API token name associated with the call, when available */
+            client_name?: string;
+            /** @description API token scope associated with the call, when available */
+            client_scope?: string;
+            /** @description API token prefix associated with the call, when available */
+            client_token_prefix?: string;
             /** @description Call creation time */
             created_at: string;
             /**
@@ -2021,6 +2048,20 @@ export interface components {
             user_id?: string;
             /** @description Workspace ID (if custom) */
             workspace_id?: string;
+        };
+        ProviderInfo: {
+            /** @description Connection method: oauth, app_password, or oauth_oob */
+            auth_mode: string;
+            /** @description Whether this provider can currently be connected */
+            configured: boolean;
+            /** @description Human-readable provider name */
+            display_name: string;
+            /** @description Federated server URL, when applicable */
+            instance_url?: string;
+            /** @description Provider app or server display name */
+            name?: string;
+            /** @description Provider key */
+            platform: string;
         };
         RegisterInputBody: {
             /**
@@ -2646,6 +2687,35 @@ export interface operations {
             };
         };
     };
+    "list-account-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderInfo"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "disconnect-account": {
         parameters: {
             query?: never;
@@ -2780,6 +2850,8 @@ export interface operations {
                 workspace_id: string;
                 /** @description Mastodon server name from config (required for mastodon) */
                 server_name?: string;
+                /** @description Mastodon instance URL to dynamically register */
+                instance_url?: string;
             };
             header?: never;
             path: {
@@ -3748,17 +3820,18 @@ export interface operations {
             };
         };
     };
-    "get-billing-status": {
+    "create-billing-portal-session": {
         parameters: {
-            query?: {
-                /** @description Workspace ID */
-                workspace_id?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBillingPortalInputBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3766,7 +3839,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BillingStatusResponse"];
+                    "application/json": components["schemas"]["BillingURLResponse"];
                 };
             };
             /** @description Bad Request */
@@ -3807,18 +3880,17 @@ export interface operations {
             };
         };
     };
-    "create-billing-portal-session": {
+    "get-billing-status": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Workspace ID */
+                workspace_id?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateBillingPortalInputBody"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -3826,7 +3898,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BillingURLResponse"];
+                    "application/json": components["schemas"]["BillingStatusResponse"];
                 };
             };
             /** @description Bad Request */
