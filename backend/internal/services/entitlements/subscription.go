@@ -26,6 +26,15 @@ type subscriptionSnapshot struct {
 
 func (s *SubscriptionService) Check(ctx context.Context, req Request) (Decision, error) {
 	if strings.TrimSpace(req.WorkspaceID) == "" {
+		if req.Limit == LimitWorkspaces && strings.TrimSpace(req.UserID) != "" {
+			decision, found, err := s.checkUserWorkspaceLimit(ctx, req)
+			if err != nil {
+				return Decision{}, err
+			}
+			if found {
+				return decision, nil
+			}
+		}
 		if s.fallback != nil {
 			return s.fallback.Check(ctx, req)
 		}
@@ -69,6 +78,52 @@ func (s *SubscriptionService) Check(ctx context.Context, req Request) (Decision,
 		Limits: snapshot.Limits,
 	})
 	return static.Check(ctx, req)
+}
+
+func (s *SubscriptionService) checkUserWorkspaceLimit(ctx context.Context, req Request) (Decision, bool, error) {
+	var subscriptions []models.BillingSubscription
+	err := s.db.NewSelect().
+		Model(&subscriptions).
+		ModelTableExpr("billing_subscriptions AS bs").
+		ColumnExpr("bs.*").
+		Join("JOIN workspace_members AS wm ON wm.workspace_id = bs.workspace_id").
+		Where("wm.user_id = ?", req.UserID).
+		Scan(ctx)
+	if err != nil {
+		return Decision{}, false, fmt.Errorf("loading user subscriptions: %w", err)
+	}
+
+	var maxLimit int64
+	foundLimit := false
+	for _, sub := range subscriptions {
+		if !subscriptionStatusAllowsUsage(sub.Status) {
+			continue
+		}
+		snapshot, err := parseSubscriptionSnapshot(sub.EntitlementSnapshot)
+		if err != nil {
+			return Decision{}, false, err
+		}
+		limit, ok := snapshot.Limits[LimitWorkspaces]
+		if !ok {
+			continue
+		}
+		if !foundLimit || limit > maxLimit {
+			maxLimit = limit
+			foundLimit = true
+		}
+	}
+	if !foundLimit {
+		return Decision{}, false, nil
+	}
+
+	static := NewStaticService(PlanSnapshot{
+		PlanID: "user-subscription",
+		Limits: map[LimitKey]int64{
+			LimitWorkspaces: maxLimit,
+		},
+	})
+	decision, err := static.Check(ctx, req)
+	return decision, true, err
 }
 
 func subscriptionStatusAllowsUsage(status string) bool {

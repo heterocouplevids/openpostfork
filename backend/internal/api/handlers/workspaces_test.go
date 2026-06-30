@@ -60,6 +60,23 @@ func TestCreateWorkspaceAllowsSelfHostedDefault(t *testing.T) {
 	require.Equal(t, 1, count)
 }
 
+func TestCreateWorkspaceCloudBootstrapAllowsFirstWorkspaceOnly(t *testing.T) {
+	t.Parallel()
+
+	srv := newWorkspaceTestServer(t, entitlements.NewCloudBootstrapService())
+
+	first := srv.createWorkspace(t, "Launch")
+	require.Equal(t, http.StatusOK, first.Code)
+
+	second := srv.createWorkspace(t, "Second")
+	require.Equal(t, http.StatusPaymentRequired, second.Code)
+	require.Contains(t, second.Body.String(), "workspaces limit exceeded")
+
+	var count int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("workspaces").Scan(context.Background(), &count))
+	require.Equal(t, 1, count)
+}
+
 func TestCreateWorkspaceRejectsWhenEntitlementLimitExceeded(t *testing.T) {
 	t.Parallel()
 

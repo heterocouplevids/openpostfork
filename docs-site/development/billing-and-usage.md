@@ -13,7 +13,7 @@ OpenPost Cloud billing is built around local entitlement snapshots and durable u
 - `POST /api/v1/billing/portal`: creates a Polar customer portal session for the workspace.
 - `POST /api/v1/billing/polar/webhook`: verifies Standard Webhooks signatures and upserts local subscription state.
 - Cloud mode reads `billing_subscriptions.entitlement_snapshot` for workspace-scoped quota checks.
-- Workspace creation checks `LimitWorkspaces` before inserting a new workspace.
+- Workspace creation checks `LimitWorkspaces` before inserting a new workspace. In cloud mode, users get a one-workspace bootstrap allowance before checkout; after a subscription is active, workspace creation uses the highest active workspace limit from that user's existing subscribed workspaces.
 - Provider connection flows check `social_accounts` before inserting a new active social account.
 - Media uploads check `media_bytes_uploaded_monthly` and `media_bytes_stored`; successful new uploads increment monthly uploaded-byte usage.
 - Scheduled single posts and threads check `scheduled_posts_monthly` before inserting posts or jobs; successful scheduled creates increment monthly scheduled-post usage.

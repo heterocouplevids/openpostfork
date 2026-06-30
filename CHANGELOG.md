@@ -68,6 +68,7 @@ All notable changes to this project are documented in this file.
 - Added dedicated docs overview pages that separate user-facing web/CLI/MCP docs, self-hosting operations docs, and developer implementation docs.
 - Added marketing SEO pages for free social post tools and publishing tips, including interactive character counting, thread splitting, and platform previews.
 - Added static marketing-site `robots.txt` and `sitemap.xml` routes for the landing, tools, and tips pages.
+- Added a cloud bootstrap entitlement so hosted users can create one workspace before checkout while paid workspace expansion uses active subscription snapshots.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

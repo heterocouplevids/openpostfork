@@ -85,7 +85,7 @@ func main() {
 	})
 	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
 	if cfg.Edition == config.EditionCloud {
-		entitlementService = entitlements.NewSubscriptionService(db, entitlementService)
+		entitlementService = entitlements.NewSubscriptionService(db, entitlements.NewCloudBootstrapService())
 	}
 	authenticator := apimiddleware.NewCompositeService(authService, apiTokenService)
 	cliAuthService := cliauth.NewService(db, apiTokenService)

@@ -24,6 +24,7 @@ func newSubscriptionEntitlementTestDB(t *testing.T) *bun.DB {
 	db := bun.NewDB(sqldb, sqlitedialect.New())
 	for _, model := range []interface{}{
 		(*models.Workspace)(nil),
+		(*models.WorkspaceMember)(nil),
 		(*models.BillingSubscription)(nil),
 	} {
 		_, err := db.NewCreateTable().Model(model).IfNotExists().Exec(context.Background())
@@ -35,6 +36,17 @@ func newSubscriptionEntitlementTestDB(t *testing.T) *bun.DB {
 		require.NoError(t, db.Close())
 	})
 	return db
+}
+
+func seedWorkspaceMember(t *testing.T, db *bun.DB, userID string) {
+	t.Helper()
+
+	_, err := db.NewInsert().Model(&models.WorkspaceMember{
+		WorkspaceID: "ws-1",
+		UserID:      userID,
+		Role:        models.WorkspaceRoleAdmin,
+	}).Exec(context.Background())
+	require.NoError(t, err)
 }
 
 func seedBillingSubscription(t *testing.T, db *bun.DB, status, snapshot string) {
@@ -132,6 +144,46 @@ func TestSubscriptionServiceFallsBackForNonWorkspaceChecks(t *testing.T) {
 	service := NewSubscriptionService(newSubscriptionEntitlementTestDB(t), NewStaticService(PlanSnapshot{
 		Limits: map[LimitKey]int64{LimitWorkspaces: 1},
 	}))
+
+	decision, err := service.Check(context.Background(), Request{
+		UserID:  "user-1",
+		Limit:   LimitWorkspaces,
+		Current: 1,
+		Amount:  1,
+	})
+
+	require.NoError(t, err)
+	require.False(t, decision.Allowed)
+	require.Contains(t, decision.Reason, "workspaces")
+}
+
+func TestSubscriptionServiceUsesActiveUserSubscriptionForWorkspaceLimit(t *testing.T) {
+	t.Parallel()
+
+	db := newSubscriptionEntitlementTestDB(t)
+	seedWorkspaceMember(t, db, "user-1")
+	seedBillingSubscription(t, db, "active", `{"limits":{"workspaces":3}}`)
+	service := NewSubscriptionService(db, NewCloudBootstrapService())
+
+	decision, err := service.Check(context.Background(), Request{
+		UserID:  "user-1",
+		Limit:   LimitWorkspaces,
+		Current: 2,
+		Amount:  1,
+	})
+
+	require.NoError(t, err)
+	require.True(t, decision.Allowed)
+	require.Equal(t, int64(3), decision.Limit)
+}
+
+func TestSubscriptionServiceFallsBackToBootstrapWithoutActiveUserSubscription(t *testing.T) {
+	t.Parallel()
+
+	db := newSubscriptionEntitlementTestDB(t)
+	seedWorkspaceMember(t, db, "user-1")
+	seedBillingSubscription(t, db, "canceled", `{"limits":{"workspaces":3}}`)
+	service := NewSubscriptionService(db, NewCloudBootstrapService())
 
 	decision, err := service.Check(context.Background(), Request{
 		UserID:  "user-1",

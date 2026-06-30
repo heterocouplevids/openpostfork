@@ -32,6 +32,45 @@ func TestSelfHostedServiceAllowsKnownLimits(t *testing.T) {
 	}
 }
 
+func TestCloudBootstrapServiceAllowsOnlyFirstWorkspace(t *testing.T) {
+	service := NewCloudBootstrapService()
+
+	first, err := service.Check(context.Background(), Request{
+		UserID:  "user-1",
+		Limit:   LimitWorkspaces,
+		Current: 0,
+		Amount:  1,
+	})
+	require.NoError(t, err)
+	require.True(t, first.Allowed)
+	require.Equal(t, int64(1), first.Limit)
+
+	second, err := service.Check(context.Background(), Request{
+		UserID:  "user-1",
+		Limit:   LimitWorkspaces,
+		Current: 1,
+		Amount:  1,
+	})
+	require.NoError(t, err)
+	require.False(t, second.Allowed)
+	require.Contains(t, second.Reason, "workspaces")
+}
+
+func TestCloudBootstrapServiceDeniesNonWorkspaceLimits(t *testing.T) {
+	service := NewCloudBootstrapService()
+
+	decision, err := service.Check(context.Background(), Request{
+		UserID:  "user-1",
+		Limit:   LimitSocialAccounts,
+		Current: 0,
+		Amount:  1,
+	})
+
+	require.NoError(t, err)
+	require.False(t, decision.Allowed)
+	require.Equal(t, int64(0), decision.Limit)
+}
+
 func TestStaticServiceRejectsWhenUsageWouldExceedLimit(t *testing.T) {
 	service := NewStaticService(PlanSnapshot{
 		Limits: map[LimitKey]int64{

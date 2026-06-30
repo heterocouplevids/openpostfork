@@ -52,6 +52,22 @@ func NewSelfHostedService() *StaticService {
 	return NewStaticService(PlanSnapshot{PlanID: "selfhost"})
 }
 
+func NewCloudBootstrapService() *StaticService {
+	return NewStaticService(PlanSnapshot{
+		PlanID: "cloud-bootstrap",
+		Limits: map[LimitKey]int64{
+			LimitWorkspaces:                1,
+			LimitSocialAccounts:            0,
+			LimitScheduledPostsMonthly:     0,
+			LimitPublishedPostsMonthly:     0,
+			LimitMediaBytesStored:          0,
+			LimitMediaBytesUploadedMonthly: 0,
+			LimitProviderWriteCallsMonthly: 0,
+			LimitTeamMembers:               0,
+		},
+	})
+}
+
 func NewStaticService(snapshot PlanSnapshot) *StaticService {
 	return &StaticService{snapshot: snapshot}
 }
