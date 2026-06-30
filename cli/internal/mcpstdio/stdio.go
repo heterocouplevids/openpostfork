@@ -46,6 +46,9 @@ func (p *Proxy) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 		if err != nil {
 			resp = jsonRPCError(frame, err)
 		}
+		if len(resp) == 0 {
+			continue
+		}
 		if err := WriteFrame(out, resp); err != nil {
 			return err
 		}

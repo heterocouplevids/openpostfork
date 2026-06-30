@@ -354,6 +354,51 @@ func TestMCPInitializeAdvertisesPrompts(t *testing.T) {
 	require.Contains(t, capabilities, "prompts")
 }
 
+func TestMCPAcceptsInitializedNotification(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "notifications/initialized",
+	})
+
+	require.Equal(t, http.StatusAccepted, resp.Code)
+	require.Empty(t, resp.Body.String())
+}
+
+func TestMCPRejectsNonNotificationWithoutID(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "tools/list",
+	})
+
+	require.Equal(t, http.StatusBadRequest, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	require.Equal(t, "notifications must use notifications/* methods", out["error"].(map[string]any)["message"])
+}
+
+func TestMCPPing(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "ping-1",
+		"method":  "ping",
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	require.Equal(t, "ping-1", out["id"])
+	require.Empty(t, out["result"].(map[string]any))
+}
+
 func TestMCPPromptsListAndGet(t *testing.T) {
 	t.Parallel()
 

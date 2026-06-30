@@ -144,8 +144,16 @@ func (h *MCPHandler) handle(c echo.Context) error {
 		})
 	}
 
+	body, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, mcpResponse{
+			JSONRPC: "2.0",
+			Error:   &mcpError{Code: -32700, Message: "parse error"},
+		})
+	}
+
 	var req mcpRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		return c.JSON(http.StatusBadRequest, mcpResponse{
 			JSONRPC: "2.0",
 			Error:   &mcpError{Code: -32700, Message: "parse error"},
@@ -157,6 +165,15 @@ func (h *MCPHandler) handle(c echo.Context) error {
 			ID:      req.ID,
 			Error:   &mcpError{Code: -32600, Message: "invalid request"},
 		})
+	}
+	if !mcpRequestHasID(body) {
+		if rpcErr := h.acceptNotification(req); rpcErr != nil {
+			return c.JSON(http.StatusBadRequest, mcpResponse{
+				JSONRPC: "2.0",
+				Error:   rpcErr,
+			})
+		}
+		return c.NoContent(http.StatusAccepted)
 	}
 
 	result, rpcErr := h.dispatch(c.Request().Context(), principal, req)
@@ -236,6 +253,25 @@ func mcpScopeAllowed(scope string) bool {
 	}
 }
 
+func mcpRequestHasID(body []byte) bool {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return false
+	}
+	_, ok := raw["id"]
+	return ok
+}
+
+func (h *MCPHandler) acceptNotification(req mcpRequest) *mcpError {
+	if req.JSONRPC != "2.0" || strings.TrimSpace(req.Method) == "" {
+		return &mcpError{Code: -32600, Message: "invalid notification"}
+	}
+	if strings.HasPrefix(req.Method, "notifications/") {
+		return nil
+	}
+	return &mcpError{Code: -32600, Message: "notifications must use notifications/* methods"}
+}
+
 func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Principal, req mcpRequest) (any, *mcpError) {
 	switch req.Method {
 	case "initialize":
@@ -250,6 +286,8 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 				"prompts": map[string]any{"listChanged": false},
 			},
 		}, nil
+	case "ping":
+		return map[string]any{}, nil
 	case "tools/list":
 		return map[string]any{"tools": []map[string]any{
 			mcpListWorkspacesTool(),

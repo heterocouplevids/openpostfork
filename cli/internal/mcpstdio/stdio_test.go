@@ -92,3 +92,32 @@ func TestProxyServeWrapsHTTPErrorAsJSONRPCError(t *testing.T) {
 		t.Fatalf("unexpected error frame %s", got)
 	}
 }
+
+func TestProxyServeSkipsAcceptedNotificationResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		if string(body) != `{"jsonrpc":"2.0","method":"notifications/initialized"}` {
+			t.Fatalf("unexpected body %s", body)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	proxy := NewProxy(srv.URL, "token")
+	var in bytes.Buffer
+	if err := WriteFrame(&in, []byte(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)); err != nil {
+		t.Fatalf("WriteFrame: %v", err)
+	}
+	var out bytes.Buffer
+	if err := proxy.Serve(context.Background(), &in, &out); err != nil {
+		t.Fatalf("Serve: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("expected no stdio response for notification, got %q", out.String())
+	}
+}

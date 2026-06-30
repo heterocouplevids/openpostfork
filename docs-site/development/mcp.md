@@ -12,6 +12,10 @@ The endpoint is JSON-RPC over HTTP and requires a bearer token:
 Authorization: Bearer <jwt-or-api-token>
 ```
 
+OpenPost accepts MCP `ping` requests and Streamable HTTP JSON-RPC
+notifications. Notification POSTs such as `notifications/initialized` return
+HTTP `202 Accepted` with no response body.
+
 For ChatGPT Apps and other OAuth-aware MCP clients, OpenPost also publishes
 protected-resource and authorization-server metadata:
 
@@ -79,6 +83,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Uses the same Bearer authentication path as the CLI and API tokens.
 - Dedicated `mcp:full` tokens can be created in Settings for ChatGPT, Claude, and other MCP clients. Existing `cli:full` tokens also remain accepted by `/mcp` so `openpost-mcp` profiles continue to work.
 - Publishes MCP protected-resource metadata and returns `WWW-Authenticate` plus `_meta["mcp/www_authenticate"]` challenges for unauthenticated MCP requests.
+- Supports MCP `ping` and accepts `notifications/*` messages with HTTP `202 Accepted`, which keeps standard initialization handshakes quiet.
 - Publishes OAuth authorization-server metadata for public PKCE clients, including `S256`, `mcp:full`, and client ID metadata document support.
 - Provides a browser approval page at `/oauth/authorize` and a form-encoded `/oauth/token` code exchange that mints `mcp:full` API tokens.
 - Validates client metadata redirect URIs for URL-based client IDs, accepts ChatGPT fallback redirects for predefined clients, and binds OAuth-issued MCP tokens to the `/mcp` resource audience.
