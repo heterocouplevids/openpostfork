@@ -181,6 +181,10 @@
 	interface MCPActivityItem {
 		id: string;
 		workspace_id?: string;
+		client_id?: string;
+		client_name?: string;
+		client_scope?: string;
+		client_token_prefix?: string;
 		tool_name: string;
 		status: string;
 		error_message?: string;
@@ -1381,6 +1385,14 @@
 												· Workspace <span class="font-mono">{call.workspace_id}</span>
 											{/if}
 										</p>
+										{#if call.client_name || call.client_scope}
+											<p class="mt-1 truncate text-xs text-muted-foreground">
+												Client {call.client_name || call.client_scope}
+												{#if call.client_token_prefix}
+													· <span class="font-mono">{call.client_token_prefix}</span>
+												{/if}
+											</p>
+										{/if}
 									</div>
 									<span
 										class={[

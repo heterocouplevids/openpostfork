@@ -150,4 +150,13 @@ func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
 	if principal.Scope != apitokens.ScopeMCP {
 		t.Fatalf("expected scope %q, got %q", apitokens.ScopeMCP, principal.Scope)
 	}
+	if principal.ClientID != generated.Model.ID {
+		t.Fatalf("expected client id %q, got %q", generated.Model.ID, principal.ClientID)
+	}
+	if principal.ClientName != "ChatGPT" {
+		t.Fatalf("expected client name %q, got %q", "ChatGPT", principal.ClientName)
+	}
+	if principal.TokenPrefix != generated.Model.TokenPrefix {
+		t.Fatalf("expected token prefix %q, got %q", generated.Model.TokenPrefix, principal.TokenPrefix)
+	}
 }

@@ -159,14 +159,18 @@ type BillingWebhookEvent struct {
 type MCPToolCall struct {
 	bun.BaseModel `bun:"table:mcp_tool_calls"`
 
-	ID           string    `bun:",pk" json:"id"`
-	UserID       string    `bun:",notnull" json:"user_id"`
-	WorkspaceID  string    `bun:",nullzero" json:"workspace_id"`
-	ToolName     string    `bun:",notnull" json:"tool_name"`
-	Status       string    `bun:",notnull" json:"status"`
-	ErrorMessage string    `json:"error_message"`
-	DurationMs   int64     `bun:",notnull,default:0" json:"duration_ms"`
-	CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	ID                string    `bun:",pk" json:"id"`
+	UserID            string    `bun:",notnull" json:"user_id"`
+	WorkspaceID       string    `bun:",nullzero" json:"workspace_id"`
+	ClientID          string    `bun:",nullzero" json:"client_id"`
+	ClientName        string    `json:"client_name"`
+	ClientScope       string    `json:"client_scope"`
+	ClientTokenPrefix string    `json:"client_token_prefix"`
+	ToolName          string    `bun:",notnull" json:"tool_name"`
+	Status            string    `bun:",notnull" json:"status"`
+	ErrorMessage      string    `json:"error_message"`
+	DurationMs        int64     `bun:",notnull,default:0" json:"duration_ms"`
+	CreatedAt         time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 type MastodonInstance struct {

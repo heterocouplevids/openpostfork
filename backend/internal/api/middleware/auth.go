@@ -31,9 +31,12 @@ const (
 )
 
 type Principal struct {
-	UserID string
-	Email  string
-	Scope  string
+	UserID      string
+	Email       string
+	Scope       string
+	ClientID    string
+	ClientName  string
+	TokenPrefix string
 }
 
 type Authenticator interface {
@@ -81,7 +84,14 @@ func (s *CompositeService) AuthenticateBearer(ctx context.Context, token string)
 	if apiErr != nil {
 		return nil, err
 	}
-	return &Principal{UserID: apiPrincipal.UserID, Email: apiPrincipal.Email, Scope: apiPrincipal.Scope}, nil
+	return &Principal{
+		UserID:      apiPrincipal.UserID,
+		Email:       apiPrincipal.Email,
+		Scope:       apiPrincipal.Scope,
+		ClientID:    apiPrincipal.TokenID,
+		ClientName:  apiPrincipal.TokenName,
+		TokenPrefix: apiPrincipal.TokenPrefix,
+	}, nil
 }
 
 func AuthMiddleware(api huma.API, authenticator Authenticator) func(ctx huma.Context, next func(huma.Context)) {

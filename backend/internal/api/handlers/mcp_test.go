@@ -313,7 +313,17 @@ func TestMCPCallLogsSuccessfulToolCall(t *testing.T) {
 	t.Parallel()
 
 	srv := newMCPTestServer(t)
-	resp := srv.request(t, "web-token", map[string]any{
+	srv.handler.auth = mcpScopeAuthenticator{
+		"mcp-token": {
+			UserID:      "user-1",
+			Email:       "user@example.com",
+			Scope:       "mcp:full",
+			ClientID:    "token-chatgpt",
+			ClientName:  "ChatGPT App",
+			TokenPrefix: "abcd1234",
+		},
+	}
+	resp := srv.request(t, "mcp-token", map[string]any{
 		"jsonrpc": "2.0",
 		"id":      "call-log-success",
 		"method":  "tools/call",
@@ -330,6 +340,10 @@ func TestMCPCallLogsSuccessfulToolCall(t *testing.T) {
 	require.NoError(t, srv.db.NewSelect().Model(&call).Where("tool_name = ?", "list_accounts").Scan(context.Background()))
 	require.Equal(t, "user-1", call.UserID)
 	require.Equal(t, "ws-1", call.WorkspaceID)
+	require.Equal(t, "token-chatgpt", call.ClientID)
+	require.Equal(t, "ChatGPT App", call.ClientName)
+	require.Equal(t, "mcp:full", call.ClientScope)
+	require.Equal(t, "abcd1234", call.ClientTokenPrefix)
 	require.Equal(t, "success", call.Status)
 	require.Empty(t, call.ErrorMessage)
 	require.False(t, call.CreatedAt.IsZero())

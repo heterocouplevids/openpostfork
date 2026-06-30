@@ -701,7 +701,7 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 	default:
 		rpcErr = &mcpError{Code: -32602, Message: "unknown tool"}
 	}
-	h.recordToolCall(ctx, principal.UserID, params.Name, workspaceIDFromMCPArguments(params.Arguments), time.Since(start), rpcErr)
+	h.recordToolCall(ctx, principal, params.Name, workspaceIDFromMCPArguments(params.Arguments), time.Since(start), rpcErr)
 	return result, rpcErr
 }
 
@@ -713,7 +713,7 @@ func decodeMCPArguments(args map[string]any, dest any) error {
 	return json.Unmarshal(payload, dest)
 }
 
-func (h *MCPHandler) recordToolCall(ctx context.Context, userID, toolName, workspaceID string, duration time.Duration, rpcErr *mcpError) {
+func (h *MCPHandler) recordToolCall(ctx context.Context, principal *middleware.Principal, toolName, workspaceID string, duration time.Duration, rpcErr *mcpError) {
 	status := "success"
 	errorMessage := ""
 	if rpcErr != nil {
@@ -721,14 +721,18 @@ func (h *MCPHandler) recordToolCall(ctx context.Context, userID, toolName, works
 		errorMessage = rpcErr.Message
 	}
 	_, _ = h.db.NewInsert().Model(&models.MCPToolCall{
-		ID:           newUUID(),
-		UserID:       userID,
-		WorkspaceID:  workspaceID,
-		ToolName:     toolName,
-		Status:       status,
-		ErrorMessage: errorMessage,
-		DurationMs:   duration.Milliseconds(),
-		CreatedAt:    time.Now().UTC(),
+		ID:                newUUID(),
+		UserID:            principal.UserID,
+		WorkspaceID:       workspaceID,
+		ClientID:          principal.ClientID,
+		ClientName:        principal.ClientName,
+		ClientScope:       principal.Scope,
+		ClientTokenPrefix: principal.TokenPrefix,
+		ToolName:          toolName,
+		Status:            status,
+		ErrorMessage:      errorMessage,
+		DurationMs:        duration.Milliseconds(),
+		CreatedAt:         time.Now().UTC(),
 	}).Exec(ctx)
 }
 

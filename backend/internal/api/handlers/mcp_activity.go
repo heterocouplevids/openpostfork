@@ -31,13 +31,17 @@ type ListMCPActivityInput struct {
 }
 
 type MCPActivityItem struct {
-	ID           string `json:"id" doc:"Tool call ID"`
-	WorkspaceID  string `json:"workspace_id,omitempty" doc:"Workspace associated with the call, when provided"`
-	ToolName     string `json:"tool_name" doc:"MCP tool name"`
-	Status       string `json:"status" doc:"Tool call status"`
-	ErrorMessage string `json:"error_message,omitempty" doc:"Error text for failed calls"`
-	DurationMs   int64  `json:"duration_ms" doc:"Call duration in milliseconds"`
-	CreatedAt    string `json:"created_at" doc:"Call creation time"`
+	ID                string `json:"id" doc:"Tool call ID"`
+	WorkspaceID       string `json:"workspace_id,omitempty" doc:"Workspace associated with the call, when provided"`
+	ClientID          string `json:"client_id,omitempty" doc:"API token ID associated with the call, when available"`
+	ClientName        string `json:"client_name,omitempty" doc:"API token name associated with the call, when available"`
+	ClientScope       string `json:"client_scope,omitempty" doc:"API token scope associated with the call, when available"`
+	ClientTokenPrefix string `json:"client_token_prefix,omitempty" doc:"API token prefix associated with the call, when available"`
+	ToolName          string `json:"tool_name" doc:"MCP tool name"`
+	Status            string `json:"status" doc:"Tool call status"`
+	ErrorMessage      string `json:"error_message,omitempty" doc:"Error text for failed calls"`
+	DurationMs        int64  `json:"duration_ms" doc:"Call duration in milliseconds"`
+	CreatedAt         string `json:"created_at" doc:"Call creation time"`
 }
 
 type ListMCPActivityOutput struct {
@@ -107,13 +111,17 @@ func mcpActivityItems(calls []models.MCPToolCall) []MCPActivityItem {
 	out := make([]MCPActivityItem, 0, len(calls))
 	for _, call := range calls {
 		out = append(out, MCPActivityItem{
-			ID:           call.ID,
-			WorkspaceID:  call.WorkspaceID,
-			ToolName:     call.ToolName,
-			Status:       call.Status,
-			ErrorMessage: call.ErrorMessage,
-			DurationMs:   call.DurationMs,
-			CreatedAt:    call.CreatedAt.UTC().Format(time.RFC3339),
+			ID:                call.ID,
+			WorkspaceID:       call.WorkspaceID,
+			ClientID:          call.ClientID,
+			ClientName:        call.ClientName,
+			ClientScope:       call.ClientScope,
+			ClientTokenPrefix: call.ClientTokenPrefix,
+			ToolName:          call.ToolName,
+			Status:            call.Status,
+			ErrorMessage:      call.ErrorMessage,
+			DurationMs:        call.DurationMs,
+			CreatedAt:         call.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 	return out

@@ -55,7 +55,7 @@ func TestListMCPActivityFiltersAuthenticatedUserAndWorkspace(t *testing.T) {
 	now := time.Date(2026, 6, 30, 16, 0, 0, 0, time.UTC)
 	calls := []models.MCPToolCall{
 		{ID: "call-old", UserID: "user-1", WorkspaceID: "ws-1", ToolName: "list_workspaces", Status: "success", DurationMs: 12, CreatedAt: now.Add(-time.Hour)},
-		{ID: "call-new", UserID: "user-1", WorkspaceID: "ws-1", ToolName: "create_post", Status: "error", ErrorMessage: "workspace not accessible", DurationMs: 40, CreatedAt: now},
+		{ID: "call-new", UserID: "user-1", WorkspaceID: "ws-1", ClientID: "token-chatgpt", ClientName: "ChatGPT App", ClientScope: "mcp:full", ClientTokenPrefix: "abcd1234", ToolName: "create_post", Status: "error", ErrorMessage: "workspace not accessible", DurationMs: 40, CreatedAt: now},
 		{ID: "call-other-workspace", UserID: "user-1", WorkspaceID: "ws-2", ToolName: "suggest_slots", Status: "success", DurationMs: 8, CreatedAt: now.Add(time.Minute)},
 		{ID: "call-other-user", UserID: "user-2", WorkspaceID: "ws-1", ToolName: "list_posts", Status: "success", DurationMs: 5, CreatedAt: now.Add(2 * time.Minute)},
 	}
@@ -71,6 +71,10 @@ func TestListMCPActivityFiltersAuthenticatedUserAndWorkspace(t *testing.T) {
 	require.Equal(t, "call-new", out[0]["id"])
 	require.Equal(t, "create_post", out[0]["tool_name"])
 	require.Equal(t, "error", out[0]["status"])
+	require.Equal(t, "token-chatgpt", out[0]["client_id"])
+	require.Equal(t, "ChatGPT App", out[0]["client_name"])
+	require.Equal(t, "mcp:full", out[0]["client_scope"])
+	require.Equal(t, "abcd1234", out[0]["client_token_prefix"])
 	require.Equal(t, "workspace not accessible", out[0]["error_message"])
 	require.Equal(t, float64(40), out[0]["duration_ms"])
 	require.Equal(t, "2026-06-30T16:00:00Z", out[0]["created_at"])

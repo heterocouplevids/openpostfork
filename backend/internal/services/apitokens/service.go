@@ -40,9 +40,12 @@ type Service struct {
 }
 
 type Principal struct {
-	UserID string
-	Email  string
-	Scope  string
+	UserID      string
+	Email       string
+	Scope       string
+	TokenID     string
+	TokenName   string
+	TokenPrefix string
 }
 
 type GeneratedToken struct {
@@ -199,9 +202,12 @@ func (s *Service) validateMatchedToken(ctx context.Context, token *models.APITok
 	}
 
 	return &Principal{
-		UserID: user.ID,
-		Email:  user.Email,
-		Scope:  token.Scope,
+		UserID:      user.ID,
+		Email:       user.Email,
+		Scope:       token.Scope,
+		TokenID:     token.ID,
+		TokenName:   token.Name,
+		TokenPrefix: token.TokenPrefix,
 	}, nil
 }
 

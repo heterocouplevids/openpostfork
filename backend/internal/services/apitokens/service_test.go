@@ -109,6 +109,9 @@ func TestValidateTokenReturnsPrincipalAndTouchesLastUsed(t *testing.T) {
 	require.Equal(t, "user-1", principal.UserID)
 	require.Equal(t, "user@example.com", principal.Email)
 	require.Equal(t, DefaultScope, principal.Scope)
+	require.Equal(t, generated.Model.ID, principal.TokenID)
+	require.Equal(t, "Laptop", principal.TokenName)
+	require.Equal(t, generated.Model.TokenPrefix, principal.TokenPrefix)
 
 	var stored models.APIToken
 	require.NoError(t, db.NewSelect().Model(&stored).Where("id = ?", generated.Model.ID).Scan(ctx))

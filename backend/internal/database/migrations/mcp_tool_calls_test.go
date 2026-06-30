@@ -23,14 +23,18 @@ func TestRunMigrationsCreatesMCPToolCallsSchema(t *testing.T) {
 	require.Contains(t, schema, "tool_name TEXT NOT NULL")
 	require.Contains(t, schema, "duration_ms INTEGER NOT NULL DEFAULT 0")
 	require.Contains(t, schema, "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE SET NULL")
+	require.Contains(t, schema, "client_id TEXT")
+	require.Contains(t, schema, "client_name TEXT")
+	require.Contains(t, schema, "client_scope TEXT")
+	require.Contains(t, schema, "client_token_prefix TEXT")
 
 	var indexCount int
 	require.NoError(t, db.NewSelect().
 		ColumnExpr("COUNT(*)").
 		TableExpr("sqlite_master").
-		Where("type = 'index' AND name IN ('mcp_tool_calls_user_created_idx', 'mcp_tool_calls_workspace_created_idx', 'mcp_tool_calls_tool_status_idx')").
+		Where("type = 'index' AND name IN ('mcp_tool_calls_user_created_idx', 'mcp_tool_calls_workspace_created_idx', 'mcp_tool_calls_tool_status_idx', 'mcp_tool_calls_client_created_idx')").
 		Scan(ctx, &indexCount))
-	require.Equal(t, 3, indexCount)
+	require.Equal(t, 4, indexCount)
 }
 
 func TestRunMigrationsMCPToolCallsNullWorkspaceOnDelete(t *testing.T) {

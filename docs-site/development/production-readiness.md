@@ -73,7 +73,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Add a local `openpost-mcp` stdio binary for desktop/self-hosted clients. The CLI now includes a stdio proxy that loads the active OpenPost profile/token and forwards frames to `/mcp`.
 - Reuse CLI/API client behavior where possible, but keep MCP stdout strict.
 - Start with safe semantic tools: list workspaces, list accounts, create/list/update draft, set post renditions, upload media from URL, schedule post or draft, cancel post, get post status, suggest next slot. The remote MCP foundation now supports workspace/account listing, draft creation/review/revision, destination-specific rendition updates, guarded URL media upload, quota-checked scheduling for new posts and existing drafts, post status reads, scheduled-post queue inspection/cancellation, and next-slot suggestions.
-- Require auth for remote MCP, scope sessions, log tool calls, and expose revocation in settings. Tool-call logging is now persisted in `mcp_tool_calls`, recent calls are visible in settings, Apps SDK-facing protected-resource/tool security metadata is in place, and Settings can create/revoke dedicated `mcp:full` tokens; the OAuth authorization-server flow and per-client session scoping are still next.
+- Require auth for remote MCP, scope sessions, log tool calls, and expose revocation in settings. Tool-call logging is now persisted in `mcp_tool_calls`, recent calls are visible in settings with API-token client attribution, Apps SDK-facing protected-resource/tool security metadata is in place, and Settings can create/revoke dedicated `mcp:full` tokens; the OAuth authorization-server flow and finer per-session scoping are still next.
 
 ### 7. Marketing, SEO, And Docs
 

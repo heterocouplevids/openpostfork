@@ -42,6 +42,7 @@ All notable changes to this project are documented in this file.
 - Added Accounts UI support for custom Mastodon instance connection, including OOB exchange persistence and Playwright coverage.
 - Added MCP `set_post_renditions` so assistants can write destination-specific post variants for draft and scheduled posts.
 - Added MCP `list_drafts`, `update_draft`, and `schedule_draft` so assistant clients can review, revise, and queue existing draft posts without creating duplicates.
+- Added MCP client attribution for tool-call activity by storing API-token client ID, name, scope, and token prefix and surfacing the client label in Settings.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
