@@ -15,9 +15,10 @@ const docsSidebar = [
 		],
 	},
 	{
-		text: 'Using The Web App',
+		text: 'User Docs: Web App',
 		collapsed: false,
 		items: [
+			{ text: 'Overview', link: '/usage/' },
 			{ text: 'Workspaces', link: '/usage/workspaces' },
 			{ text: 'Accounts', link: '/usage/accounts' },
 			{ text: 'Publications', link: '/usage/publications' },
@@ -28,7 +29,7 @@ const docsSidebar = [
 		],
 	},
 	{
-		text: 'Using The CLI',
+		text: 'User Docs: CLI',
 		collapsed: false,
 		items: [
 			{ text: 'Overview', link: '/cli/' },
@@ -41,9 +42,14 @@ const docsSidebar = [
 		],
 	},
 	{
-		text: 'Using MCP',
+		text: 'User Docs: MCP',
 		collapsed: false,
 		items: [{ text: 'Assistant Scheduling', link: '/mcp/' }],
+	},
+	{
+		text: 'Self-Hosting: Overview',
+		collapsed: false,
+		items: [{ text: 'Start Here', link: '/self-hosting/' }],
 	},
 	{
 		text: 'Self-Hosting: Install',
@@ -118,6 +124,7 @@ const developmentSidebar = [
 		text: 'Developer Docs',
 		collapsed: false,
 		items: [
+			{ text: 'Overview', link: '/development/' },
 			{ text: 'Setup', link: '/development/setup' },
 			{ text: 'Architecture', link: '/development/architecture' },
 			{ text: 'API Reference', link: '/development/api-reference' },
@@ -151,12 +158,12 @@ export default defineConfig({
 		logo: '/assets/brand/icon.svg',
 		nav: [
 			{ text: 'Home', link: 'https://openpost.social' },
-			{ text: 'User Docs', link: '/guide/quickstart' },
+			{ text: 'User Docs', link: '/usage/' },
 			{ text: 'CLI', link: '/cli/' },
 			{ text: 'MCP', link: '/mcp/' },
-			{ text: 'Self-Hosting', link: '/installation/docker-compose' },
+			{ text: 'Self-Hosting', link: '/self-hosting/' },
 			{ text: 'Providers', link: '/providers/overview' },
-			{ text: 'Developer Docs', link: '/development/setup' },
+			{ text: 'Developer Docs', link: '/development/' },
 		],
 		socialLinks: [{ icon: 'github', link: 'https://github.com/rodrgds/openpost' }],
 		search: {

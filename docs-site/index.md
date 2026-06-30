@@ -72,9 +72,9 @@ New to OpenPost? Start with the [Quickstart](/guide/quickstart) guide.
 
 ## Choose the right docs
 
-- **User-facing docs** cover the [web app](/usage/composing-posts), [CLI](/cli/), and [MCP assistant scheduling](/mcp/).
-- **Self-hosting docs** cover [installation](/installation/docker-compose), [configuration](/configuration/overview), [providers](/providers/overview), and [operations](/operations/backups).
-- **Developer docs** cover [architecture](/development/architecture), [API reference](/development/api-reference), [platform adapters](/development/platform-adapters), [testing](/development/testing), and the [production-readiness plan](/development/production-readiness).
+- **[User-facing docs](/usage/)** cover the web app, CLI, and MCP workflows for creating publications, adapting platform renditions, scheduling posts, and automating OpenPost as a product user.
+- **[Self-hosting docs](/self-hosting/)** cover installation, configuration, provider app setup, media/database storage, backups, upgrades, and troubleshooting for operators.
+- **[Developer docs](/development/)** cover architecture, API reference, backend/frontend internals, platform adapters, MCP implementation, billing infrastructure, testing, and the production-readiness plan.
 
 ## More ways to use OpenPost
 
