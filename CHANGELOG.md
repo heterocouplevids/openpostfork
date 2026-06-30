@@ -53,6 +53,7 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 - Made app Playwright E2E runs start a freshly built Go server by default instead of silently reusing stale local servers.
+- Wrapped the docs API reference OpenAPI renderer in client-only rendering so VitePress builds no longer emit a nonfatal SSR TypeError.
 
 ## [1.0.16] - 2026-06-23
 

@@ -2,4 +2,6 @@
 aside: false
 ---
 
-<OASpec hideBranding />
+<ClientOnly>
+	<OASpec hideBranding />
+</ClientOnly>
