@@ -4,6 +4,7 @@ const port = Number(process.env.OPENPOST_APP_E2E_PORT ?? 18180);
 const host = '127.0.0.1';
 const baseURL = `http://${host}:${port}`;
 const dbPath = `/tmp/openpost-app-e2e-${port}.db`;
+const reuseExistingServer = process.env.OPENPOST_APP_E2E_REUSE_SERVER === '1';
 
 export default defineConfig({
 	testDir: './e2e-app',
@@ -31,7 +32,7 @@ export default defineConfig({
 			].join(' ')
 		].join(' && '),
 		url: baseURL,
-		reuseExistingServer: !process.env.CI,
+		reuseExistingServer,
 		timeout: 120_000
 	},
 	projects: [

@@ -46,6 +46,9 @@ All notable changes to this project are documented in this file.
 - Moved docs and marketing site deployment from VPS/GitHub Pages to Cloudflare Pages.
 - Moved the JavaScript workspace to pnpm workspaces with Turborepo orchestration across the web app, docs site, and marketing site.
 
+### Fixed
+- Made app Playwright E2E runs start a freshly built Go server by default instead of silently reusing stale local servers.
+
 ## [1.0.16] - 2026-06-23
 
 ### Fixed
