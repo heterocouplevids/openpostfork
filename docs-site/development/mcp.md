@@ -16,6 +16,19 @@ OpenPost accepts MCP `ping` requests and Streamable HTTP JSON-RPC
 notifications. Notification POSTs such as `notifications/initialized` return
 HTTP `202 Accepted` with no response body.
 
+ChatGPT Apps-compatible clients can also discover and load the scheduler widget
+resource:
+
+```txt
+resources/list
+resources/read ui://widget/openpost-scheduler-v1.html
+```
+
+The widget is a self-contained `text/html;profile=mcp-app` resource. The
+read-only `render_scheduler_widget` tool points at that resource through
+`_meta.ui.resourceUri` and `_meta["openai/outputTemplate"]`, then passes
+structured OpenPost data into the widget for rendering.
+
 For ChatGPT Apps and other OAuth-aware MCP clients, OpenPost also publishes
 protected-resource and authorization-server metadata:
 
@@ -71,6 +84,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - `cancel_post`: cancels a queued scheduled post and returns it to drafts.
 - `suggest_next_slot`: returns the next free configured posting slot for a workspace.
 - `upload_media_from_url`: fetches a public HTTP(S) media URL and stores it in a workspace.
+- `render_scheduler_widget`: renders structured OpenPost scheduler data in the ChatGPT Apps widget.
 
 ## Current prompts
 
@@ -89,6 +103,8 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Validates client metadata redirect URIs for URL-based client IDs, accepts ChatGPT fallback redirects for predefined clients, and binds OAuth-issued MCP tokens to the `/mcp` resource audience.
 - Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. Fine-grained per-session scopes are still planned.
 - Adds Apps SDK-friendly `_meta["openai/toolInvocation/invoking"]`, `_meta["openai/toolInvocation/invoked"]`, and `outputSchema` metadata to every tool descriptor.
+- Exposes a ChatGPT Apps-compatible scheduler widget resource at `ui://widget/openpost-scheduler-v1.html`.
+- Keeps data tools reusable across MCP clients and attaches widget UI metadata only to `render_scheduler_widget`.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Advertises MCP prompt templates for common agentic scheduling workflows: planning a post, adapting platform renditions, and reviewing the publishing queue.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.

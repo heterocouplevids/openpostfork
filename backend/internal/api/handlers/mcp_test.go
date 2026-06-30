@@ -273,7 +273,7 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 15)
+	require.Len(t, tools, 16)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
 	require.Equal(t, "list_provider_catalog", tools[1].(map[string]any)["name"])
 	require.Equal(t, "list_accounts", tools[2].(map[string]any)["name"])
@@ -289,6 +289,7 @@ func TestMCPToolsList(t *testing.T) {
 	require.Equal(t, "cancel_post", tools[12].(map[string]any)["name"])
 	require.Equal(t, "suggest_next_slot", tools[13].(map[string]any)["name"])
 	require.Equal(t, "upload_media_from_url", tools[14].(map[string]any)["name"])
+	require.Equal(t, "render_scheduler_widget", tools[15].(map[string]any)["name"])
 
 	requiredOutputKeys := map[string][]any{
 		mcpToolWorkspaces:    {"workspaces"},
@@ -306,6 +307,7 @@ func TestMCPToolsList(t *testing.T) {
 		mcpToolCancelPost:    {"post"},
 		mcpToolSuggestSlot:   {"suggestion"},
 		mcpToolUploadURL:     {"media"},
+		mcpToolRenderWidget:  {"view", "data"},
 	}
 	for _, tool := range tools {
 		descriptor := tool.(map[string]any)
@@ -321,6 +323,11 @@ func TestMCPToolsList(t *testing.T) {
 		require.NotEmpty(t, meta["openai/toolInvocation/invoked"])
 		require.LessOrEqual(t, len(meta["openai/toolInvocation/invoking"].(string)), 64)
 		require.LessOrEqual(t, len(meta["openai/toolInvocation/invoked"].(string)), 64)
+		if toolName == mcpToolRenderWidget {
+			ui := meta["ui"].(map[string]any)
+			require.Equal(t, mcpAppWidgetURI, ui["resourceUri"])
+			require.Equal(t, mcpAppWidgetURI, meta["openai/outputTemplate"])
+		}
 		outputSchema := descriptor["outputSchema"].(map[string]any)
 		require.Equal(t, "object", outputSchema["type"])
 		require.ElementsMatch(t, requiredOutputKeys[toolName], outputSchema["required"])
@@ -352,6 +359,71 @@ func TestMCPInitializeAdvertisesPrompts(t *testing.T) {
 	capabilities := result["capabilities"].(map[string]any)
 	require.Contains(t, capabilities, "tools")
 	require.Contains(t, capabilities, "prompts")
+	require.Contains(t, capabilities, "resources")
+}
+
+func TestMCPResourcesListAndRead(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	listResp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "resources",
+		"method":  "resources/list",
+	})
+	require.Equal(t, http.StatusOK, listResp.Code)
+	var listed map[string]any
+	require.NoError(t, json.Unmarshal(listResp.Body.Bytes(), &listed))
+	resources := listed["result"].(map[string]any)["resources"].([]any)
+	require.Len(t, resources, 1)
+	resource := resources[0].(map[string]any)
+	require.Equal(t, mcpAppWidgetURI, resource["uri"])
+	require.Equal(t, mcpAppWidgetMimeType, resource["mimeType"])
+	require.Equal(t, "OpenPost Scheduler", resource["title"])
+
+	readResp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "resource",
+		"method":  "resources/read",
+		"params": map[string]any{
+			"uri": mcpAppWidgetURI,
+		},
+	})
+	require.Equal(t, http.StatusOK, readResp.Code)
+	var read map[string]any
+	require.NoError(t, json.Unmarshal(readResp.Body.Bytes(), &read))
+	contents := read["result"].(map[string]any)["contents"].([]any)
+	require.Len(t, contents, 1)
+	content := contents[0].(map[string]any)
+	require.Equal(t, mcpAppWidgetURI, content["uri"])
+	require.Equal(t, mcpAppWidgetMimeType, content["mimeType"])
+	require.Contains(t, content["text"], "OpenPost Scheduler")
+	require.Contains(t, content["text"], "window.openai")
+	meta := content["_meta"].(map[string]any)
+	require.Equal(t, true, meta["openai/widgetPrefersBorder"])
+	require.NotEmpty(t, meta["openai/widgetDescription"])
+	ui := meta["ui"].(map[string]any)
+	require.Equal(t, true, ui["prefersBorder"])
+	require.Equal(t, "https://app.openpost.test", meta["openai/widgetDomain"])
+}
+
+func TestMCPResourcesReadRejectsUnknownResource(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "unknown-resource",
+		"method":  "resources/read",
+		"params": map[string]any{
+			"uri": "ui://widget/unknown.html",
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	require.Equal(t, "unknown resource", out["error"].(map[string]any)["message"])
 }
 
 func TestMCPAcceptsInitializedNotification(t *testing.T) {
@@ -532,6 +604,46 @@ func TestMCPCallListProviderCatalog(t *testing.T) {
 	require.Equal(t, "planned", byPlatform["instagram"]["status"])
 	require.Equal(t, false, byPlatform["instagram"]["configured"])
 	require.Contains(t, byPlatform["youtube"]["capabilities"].([]any), "MCP workflows")
+}
+
+func TestMCPCallRenderSchedulerWidget(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "render-widget",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": mcpToolRenderWidget,
+			"arguments": map[string]any{
+				"view":         "posts",
+				"title":        "Queue review",
+				"workspace_id": "ws-1",
+				"data": map[string]any{
+					"posts": []map[string]any{{
+						"id":     "post-1",
+						"status": "scheduled",
+					}},
+				},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	result := out["result"].(map[string]any)
+	content := result["content"].([]any)
+	require.Contains(t, content[0].(map[string]any)["text"], "Rendered OpenPost scheduler view")
+	structured := result["structuredContent"].(map[string]any)
+	require.Equal(t, "posts", structured["view"])
+	require.Equal(t, "Queue review", structured["title"])
+	require.Equal(t, "ws-1", structured["workspace_id"])
+	data := structured["data"].(map[string]any)
+	posts := data["posts"].([]any)
+	require.Len(t, posts, 1)
+	require.Equal(t, "post-1", posts[0].(map[string]any)["id"])
 }
 
 func TestMCPCallListAccounts(t *testing.T) {

@@ -42,11 +42,14 @@ const (
 	mcpToolCancelPost    = "cancel_post"
 	mcpToolSuggestSlot   = "suggest_next_slot"
 	mcpToolUploadURL     = "upload_media_from_url"
+	mcpToolRenderWidget  = "render_scheduler_widget"
 	mcpPromptPlanPost    = "plan_social_post"
 	mcpPromptRenditions  = "adapt_platform_renditions"
 	mcpPromptReviewQueue = "review_schedule"
 	mcpScopeFull         = apitokens.ScopeMCP
 	maxRemoteMediaBytes  = 50 * 1024 * 1024
+	mcpAppWidgetURI      = "ui://widget/openpost-scheduler-v1.html"
+	mcpAppWidgetMimeType = "text/html;profile=mcp-app"
 )
 
 type MCPHandler struct {
@@ -282,8 +285,9 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 				"version": "0.1.0",
 			},
 			"capabilities": map[string]any{
-				"tools":   map[string]any{"listChanged": false},
-				"prompts": map[string]any{"listChanged": false},
+				"tools":     map[string]any{"listChanged": false},
+				"prompts":   map[string]any{"listChanged": false},
+				"resources": map[string]any{"listChanged": false},
 			},
 		}, nil
 	case "ping":
@@ -305,7 +309,12 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 			mcpCancelPostTool(),
 			mcpSuggestNextSlotTool(),
 			mcpUploadMediaFromURLTool(),
+			mcpRenderSchedulerWidgetTool(),
 		}}, nil
+	case "resources/list":
+		return h.listMCPResources(), nil
+	case "resources/read":
+		return h.readMCPResource(req.Params)
 	case "prompts/list":
 		return map[string]any{"prompts": []map[string]any{
 			mcpPlanSocialPostPrompt(),
@@ -377,6 +386,203 @@ func mcpGetPrompt(raw json.RawMessage) (any, *mcpError) {
 	default:
 		return nil, &mcpError{Code: -32602, Message: "unknown prompt"}
 	}
+}
+
+func (h *MCPHandler) listMCPResources() any {
+	return map[string]any{
+		"resources": []map[string]any{{
+			"uri":         mcpAppWidgetURI,
+			"name":        "openpost_scheduler",
+			"title":       "OpenPost Scheduler",
+			"description": "Renders OpenPost workspaces, accounts, media, drafts, scheduled posts, provider status, and post details in ChatGPT.",
+			"mimeType":    mcpAppWidgetMimeType,
+			"_meta":       h.mcpAppWidgetResourceMeta(),
+		}},
+	}
+}
+
+func (h *MCPHandler) readMCPResource(raw json.RawMessage) (any, *mcpError) {
+	var params struct {
+		URI string `json:"uri"`
+	}
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return nil, &mcpError{Code: -32602, Message: "invalid resource params"}
+	}
+	if params.URI != mcpAppWidgetURI {
+		return nil, &mcpError{Code: -32602, Message: "unknown resource"}
+	}
+	return map[string]any{
+		"contents": []map[string]any{{
+			"uri":      mcpAppWidgetURI,
+			"mimeType": mcpAppWidgetMimeType,
+			"text":     mcpAppWidgetHTML(),
+			"_meta":    h.mcpAppWidgetResourceMeta(),
+		}},
+	}, nil
+}
+
+func (h *MCPHandler) mcpAppWidgetResourceMeta() map[string]any {
+	csp := map[string]any{
+		"connect_domains":  []string{},
+		"resource_domains": []string{},
+		"connectDomains":   []string{},
+		"resourceDomains":  []string{},
+	}
+	meta := map[string]any{
+		"ui": map[string]any{
+			"prefersBorder": true,
+			"csp":           csp,
+		},
+		"openai/widgetDescription":   "OpenPost scheduler view for workspaces, accounts, media, drafts, scheduled posts, provider status, and post details.",
+		"openai/widgetPrefersBorder": true,
+		"openai/widgetCSP":           csp,
+	}
+	if domain := mcpWidgetDomain(h.publicURL); domain != "" {
+		meta["openai/widgetDomain"] = domain
+		meta["ui"].(map[string]any)["domain"] = domain
+	}
+	return meta
+}
+
+func mcpWidgetDomain(publicURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(publicURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
+}
+
+func mcpAppWidgetHTML() string {
+	return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenPost Scheduler</title>
+<style>
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { margin: 0; background: #f8fafc; color: #102033; }
+.shell { min-height: 100vh; padding: 16px; box-sizing: border-box; }
+.panel { border: 1px solid #dce4ee; border-radius: 10px; background: #fff; box-shadow: 0 12px 32px rgba(15, 23, 42, .08); overflow: hidden; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; border-bottom: 1px solid #e7edf4; background: linear-gradient(135deg, #f7fff9 0%, #ffffff 46%, #f6f8ff 100%); }
+.brand { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.eyebrow { color: #0f8f5f; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
+h1 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: 0; }
+.workspace { color: #5a6b7d; font-size: 12px; white-space: nowrap; }
+.content { padding: 14px; display: grid; gap: 10px; }
+.grid { display: grid; gap: 10px; }
+.card { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 12px; display: grid; gap: 8px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #eef2f7; padding-top: 8px; }
+.row:first-child { border-top: 0; padding-top: 0; }
+.title { color: #102033; font-size: 14px; font-weight: 750; overflow-wrap: anywhere; }
+.muted { color: #64748b; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.pill { display: inline-flex; align-items: center; min-height: 22px; border-radius: 999px; padding: 0 8px; background: #ecfdf5; color: #067647; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.warn { background: #fff7ed; color: #b45309; }
+.idle { background: #f1f5f9; color: #475569; }
+.json { margin: 0; max-height: 280px; overflow: auto; border-radius: 8px; background: #0f172a; color: #e2e8f0; padding: 12px; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.empty { border: 1px dashed #cbd5e1; border-radius: 8px; padding: 18px; text-align: center; color: #64748b; font-size: 13px; }
+@media (min-width: 620px) { .grid.cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<div class="shell"><main class="panel" id="root"><div class="content"><div class="empty">Waiting for OpenPost scheduler data.</div></div></main></div>
+<script>
+(function () {
+  var root = document.getElementById("root");
+  function escapeHTML(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
+      return {"&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"}[char];
+    });
+  }
+  function array(value) { return Array.isArray(value) ? value : []; }
+  function payloadFromBridge() {
+    var bridge = window.openai || {};
+    if (bridge.toolOutput) return bridge.toolOutput;
+    if (bridge.structuredContent) return bridge.structuredContent;
+    if (bridge.response && bridge.response.structuredContent) return bridge.response.structuredContent;
+    return {};
+  }
+  function normalizePayload(payload) {
+    if (!payload) return {};
+    if (payload.structuredContent) return payload.structuredContent;
+    if (payload.toolOutput) return payload.toolOutput;
+    return payload;
+  }
+  function inferView(data) {
+    if (data.post) return "post";
+    if (data.posts) return "posts";
+    if (data.media) return "media";
+    if (data.accounts) return "accounts";
+    if (data.providers) return "providers";
+    if (data.workspaces) return "workspaces";
+    if (data.suggestion) return "suggestion";
+    if (data.renditions) return "renditions";
+    return "summary";
+  }
+  function statusClass(value) {
+    var status = String(value || "").toLowerCase();
+    if (status.indexOf("fail") >= 0 || status.indexOf("error") >= 0 || status.indexOf("needs") >= 0) return "pill warn";
+    if (!status) return "pill idle";
+    return "pill";
+  }
+  function itemTitle(item) {
+    return item.title || item.name || item.content || item.slug || item.original_filename || item.display_name || item.id || "Item";
+  }
+  function itemStatus(item) {
+    return item.status || item.role || item.platform || item.processing_status || item.provider || item.state || "";
+  }
+  function renderCards(items) {
+    if (!items.length) return '<div class="empty">No items to show.</div>';
+    return '<div class="grid cards">' + items.map(function (item) {
+      var title = escapeHTML(itemTitle(item));
+      var status = escapeHTML(itemStatus(item));
+      var secondary = item.scheduled_at || item.created_at || item.account_username || item.mime_type || item.description || item.message || "";
+      return '<section class="card"><div class="row"><div class="title">' + title + '</div><span class="' + statusClass(status) + '">' + (status || "ready") + '</span></div><div class="muted">' + escapeHTML(secondary) + '</div></section>';
+    }).join("") + '</div>';
+  }
+  function renderPost(post) {
+    if (!post) return '<div class="empty">No post data to show.</div>';
+    var destinations = array(post.destinations).map(function (dest) {
+      return '<div class="row"><span class="muted">' + escapeHTML(dest.platform || dest.social_account_id || "destination") + '</span><span class="' + statusClass(dest.status) + '">' + escapeHTML(dest.status || "pending") + '</span></div>';
+    }).join("");
+    var media = array(post.media).map(function (item) {
+      return '<div class="row"><span class="muted">' + escapeHTML(item.original_filename || item.media_id || "media") + '</span><span class="pill idle">' + escapeHTML(item.mime_type || "asset") + '</span></div>';
+    }).join("");
+    return '<section class="card"><div class="title">' + escapeHTML(post.content || post.id || "Post") + '</div><div class="muted">' + escapeHTML(post.scheduled_at || post.created_at || "") + '</div>' + destinations + media + '</section>';
+  }
+  function renderData(view, data) {
+    if (view === "post") return renderPost(data.post);
+    if (view === "posts") return renderCards(array(data.posts));
+    if (view === "media") return renderCards(array(data.media));
+    if (view === "accounts") return renderCards(array(data.accounts));
+    if (view === "providers") return renderCards(array(data.providers));
+    if (view === "workspaces") return renderCards(array(data.workspaces));
+    if (view === "suggestion") return renderCards(data.suggestion ? [data.suggestion] : []);
+    if (view === "renditions") return renderCards(array(data.renditions));
+    return '<pre class="json">' + escapeHTML(JSON.stringify(data, null, 2)) + '</pre>';
+  }
+  function render(payload) {
+    var state = normalizePayload(payload);
+    var data = state.data || {};
+    var view = state.view || inferView(data);
+    var title = state.title || "OpenPost Scheduler";
+    var workspace = state.workspace_id ? "Workspace " + state.workspace_id : "Agentic social scheduler";
+    root.innerHTML = '<header class="header"><div class="brand"><div class="eyebrow">OpenPost</div><h1>' + escapeHTML(title) + '</h1></div><div class="workspace">' + escapeHTML(workspace) + '</div></header><section class="content">' + renderData(view, data) + '</section>';
+  }
+  window.addEventListener("message", function (event) {
+    if (event.source !== window.parent) return;
+    var message = event.data || {};
+    if (message.jsonrpc === "2.0" && message.method === "ui/notifications/tool-result") {
+      render(message.params || {});
+      return;
+    }
+    if (message.structuredContent || message.toolOutput) render(message);
+  });
+  render(payloadFromBridge());
+}());
+</script>
+</body>
+</html>`
 }
 
 func mcpPromptResult(description, text string) map[string]any {
@@ -895,6 +1101,39 @@ func mcpUploadMediaFromURLTool() map[string]any {
 	}, false, true)
 }
 
+func mcpRenderSchedulerWidgetTool() map[string]any {
+	return mcpToolDescriptor(map[string]any{
+		"name":        mcpToolRenderWidget,
+		"title":       "Render scheduler widget",
+		"description": "Render OpenPost scheduler data in a ChatGPT Apps widget.",
+		"inputSchema": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"view": map[string]any{
+					"type":        "string",
+					"description": "Widget view to render. Defaults to a view inferred from the data keys.",
+					"enum":        mcpSchedulerWidgetViews(),
+				},
+				"title": map[string]any{
+					"type":        "string",
+					"description": "Optional title shown at the top of the widget.",
+				},
+				"workspace_id": map[string]any{
+					"type":        "string",
+					"description": "Optional workspace ID for the rendered data.",
+				},
+				"data": map[string]any{
+					"type":                 "object",
+					"description":          "Structured data returned by another OpenPost MCP tool.",
+					"additionalProperties": true,
+				},
+			},
+			"required":             []string{"data"},
+			"additionalProperties": false,
+		},
+	}, true, false)
+}
+
 func mcpToolDescriptor(tool map[string]any, readOnly, openWorld bool) map[string]any {
 	securitySchemes := []map[string]any{mcpOAuthSecurityScheme()}
 	toolName, _ := tool["name"].(string)
@@ -906,12 +1145,25 @@ func mcpToolDescriptor(tool map[string]any, readOnly, openWorld bool) map[string
 		"openWorldHint":   openWorld,
 	}
 	status := mcpToolInvocationStatus(toolName)
-	tool["_meta"] = map[string]any{
+	meta := map[string]any{
 		"securitySchemes":                securitySchemes,
 		"openai/toolInvocation/invoking": status.Invoking,
 		"openai/toolInvocation/invoked":  status.Invoked,
 	}
+	if mcpToolUsesAppWidget(toolName) {
+		meta["ui"] = map[string]any{
+			"resourceUri": mcpAppWidgetURI,
+			"visibility":  []string{"model", "app"},
+		}
+		meta["openai/outputTemplate"] = mcpAppWidgetURI
+		meta["openai/widgetAccessible"] = false
+	}
+	tool["_meta"] = meta
 	return tool
+}
+
+func mcpToolUsesAppWidget(toolName string) bool {
+	return toolName == mcpToolRenderWidget
 }
 
 type mcpToolStatus struct {
@@ -935,6 +1187,7 @@ var mcpToolStatuses = map[string]mcpToolStatus{
 	mcpToolCancelPost:    {Invoking: "Canceling post", Invoked: "Post canceled"},
 	mcpToolSuggestSlot:   {Invoking: "Finding next slot", Invoked: "Next slot found"},
 	mcpToolUploadURL:     {Invoking: "Uploading media", Invoked: "Media uploaded"},
+	mcpToolRenderWidget:  {Invoking: "Rendering view", Invoked: "View rendered"},
 }
 
 func mcpToolInvocationStatus(toolName string) mcpToolStatus {
@@ -983,6 +1236,13 @@ func mcpToolOutputSchema(toolName string) map[string]any {
 		return mcpStructuredOutputSchema(map[string]any{
 			"media": mcpOpenObjectSchema(),
 		}, "media")
+	case mcpToolRenderWidget:
+		return mcpStructuredOutputSchema(map[string]any{
+			"view":         map[string]any{"type": "string", "enum": mcpSchedulerWidgetViews()},
+			"title":        map[string]any{"type": "string"},
+			"workspace_id": map[string]any{"type": "string"},
+			"data":         mcpOpenObjectSchema(),
+		}, "view", "data")
 	default:
 		return mcpStructuredOutputSchema(map[string]any{})
 	}
@@ -1036,33 +1296,47 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 		result, rpcErr = h.callReadOnlyGlobalTool(ctx, principal.UserID, params.Name)
 	case mcpToolAccounts, mcpToolListMedia:
 		result, rpcErr = h.callReadOnlyWorkspaceTool(ctx, principal.UserID, params.Name, params.Arguments)
-	case mcpToolCreateDraft:
-		result, rpcErr = h.createDraft(ctx, principal.UserID, params.Arguments)
-	case mcpToolListDrafts:
-		result, rpcErr = h.listDrafts(ctx, principal.UserID, params.Arguments)
-	case mcpToolUpdateDraft:
-		result, rpcErr = h.updateDraft(ctx, principal.UserID, params.Arguments)
-	case mcpToolRenditions:
-		result, rpcErr = h.setPostRenditions(ctx, principal.UserID, params.Arguments)
-	case mcpToolSchedulePost:
-		result, rpcErr = h.schedulePost(ctx, principal.UserID, params.Arguments)
-	case mcpToolScheduleDraft:
-		result, rpcErr = h.scheduleDraft(ctx, principal.UserID, params.Arguments)
-	case mcpToolGetPost:
-		result, rpcErr = h.getPostStatus(ctx, principal.UserID, params.Arguments)
-	case mcpToolListPosts:
-		result, rpcErr = h.listScheduledPosts(ctx, principal.UserID, params.Arguments)
-	case mcpToolCancelPost:
-		result, rpcErr = h.cancelPost(ctx, principal.UserID, params.Arguments)
-	case mcpToolSuggestSlot:
-		result, rpcErr = h.suggestNextSlot(ctx, principal.UserID, params.Arguments)
-	case mcpToolUploadURL:
-		result, rpcErr = h.uploadMediaFromURL(ctx, principal.UserID, params.Arguments)
+	case mcpToolRenderWidget:
+		result, rpcErr = h.renderSchedulerWidget(params.Arguments)
+	case mcpToolCreateDraft, mcpToolListDrafts, mcpToolUpdateDraft,
+		mcpToolRenditions, mcpToolSchedulePost, mcpToolScheduleDraft,
+		mcpToolGetPost, mcpToolListPosts, mcpToolCancelPost,
+		mcpToolSuggestSlot, mcpToolUploadURL:
+		result, rpcErr = h.callWorkspaceActionTool(ctx, principal.UserID, params.Name, params.Arguments)
 	default:
 		rpcErr = &mcpError{Code: -32602, Message: "unknown tool"}
 	}
 	h.recordToolCall(ctx, principal, params.Name, workspaceIDFromMCPArguments(params.Arguments), time.Since(start), rpcErr)
 	return result, rpcErr
+}
+
+func (h *MCPHandler) callWorkspaceActionTool(ctx context.Context, userID, toolName string, args map[string]any) (any, *mcpError) {
+	switch toolName {
+	case mcpToolCreateDraft:
+		return h.createDraft(ctx, userID, args)
+	case mcpToolListDrafts:
+		return h.listDrafts(ctx, userID, args)
+	case mcpToolUpdateDraft:
+		return h.updateDraft(ctx, userID, args)
+	case mcpToolRenditions:
+		return h.setPostRenditions(ctx, userID, args)
+	case mcpToolSchedulePost:
+		return h.schedulePost(ctx, userID, args)
+	case mcpToolScheduleDraft:
+		return h.scheduleDraft(ctx, userID, args)
+	case mcpToolGetPost:
+		return h.getPostStatus(ctx, userID, args)
+	case mcpToolListPosts:
+		return h.listScheduledPosts(ctx, userID, args)
+	case mcpToolCancelPost:
+		return h.cancelPost(ctx, userID, args)
+	case mcpToolSuggestSlot:
+		return h.suggestNextSlot(ctx, userID, args)
+	case mcpToolUploadURL:
+		return h.uploadMediaFromURL(ctx, userID, args)
+	default:
+		return nil, &mcpError{Code: -32602, Message: "unknown tool"}
+	}
 }
 
 func (h *MCPHandler) callReadOnlyWorkspaceTool(ctx context.Context, userID, toolName string, args map[string]any) (any, *mcpError) {
@@ -1084,6 +1358,78 @@ func (h *MCPHandler) callReadOnlyGlobalTool(ctx context.Context, userID, toolNam
 		return h.listProviderCatalog(), nil
 	default:
 		return nil, &mcpError{Code: -32602, Message: "unknown tool"}
+	}
+}
+
+type mcpSchedulerWidgetInput struct {
+	View        string         `json:"view"`
+	Title       string         `json:"title"`
+	WorkspaceID string         `json:"workspace_id"`
+	Data        map[string]any `json:"data"`
+}
+
+func (h *MCPHandler) renderSchedulerWidget(args map[string]any) (any, *mcpError) {
+	var input mcpSchedulerWidgetInput
+	if err := decodeMCPArguments(args, &input); err != nil {
+		return nil, &mcpError{Code: -32602, Message: "invalid render_scheduler_widget arguments"}
+	}
+	if input.Data == nil {
+		return nil, &mcpError{Code: -32602, Message: "data is required"}
+	}
+	view := strings.TrimSpace(input.View)
+	if view == "" {
+		view = mcpInferSchedulerWidgetView(input.Data)
+	}
+	if !mcpValidSchedulerWidgetView(view) {
+		return nil, &mcpError{Code: -32602, Message: "unsupported widget view"}
+	}
+	return map[string]any{
+		"content": []mcpContent{{
+			Type: "text",
+			Text: "Rendered OpenPost scheduler view.",
+		}},
+		"structuredContent": map[string]any{
+			"view":         view,
+			"title":        strings.TrimSpace(input.Title),
+			"workspace_id": strings.TrimSpace(input.WorkspaceID),
+			"data":         input.Data,
+		},
+	}, nil
+}
+
+func mcpSchedulerWidgetViews() []string {
+	return []string{"summary", "workspaces", "providers", "accounts", "media", "post", "posts", "suggestion", "renditions"}
+}
+
+func mcpValidSchedulerWidgetView(view string) bool {
+	for _, candidate := range mcpSchedulerWidgetViews() {
+		if view == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func mcpInferSchedulerWidgetView(data map[string]any) string {
+	switch {
+	case data["post"] != nil:
+		return "post"
+	case data["posts"] != nil:
+		return "posts"
+	case data["media"] != nil:
+		return "media"
+	case data["accounts"] != nil:
+		return "accounts"
+	case data["providers"] != nil:
+		return "providers"
+	case data["workspaces"] != nil:
+		return "workspaces"
+	case data["suggestion"] != nil:
+		return "suggestion"
+	case data["renditions"] != nil:
+		return "renditions"
+	default:
+		return "summary"
 	}
 }
 
