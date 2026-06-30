@@ -30,6 +30,7 @@ All notable changes to this project are documented in this file.
 - Added MCP `suggest_next_slot` so assistants can pick the next free configured posting slot before scheduling.
 - Added an `openpost-mcp` CLI stdio proxy that reuses OpenPost CLI profiles and tokens to connect desktop MCP clients to the authenticated remote `/mcp` endpoint.
 - Added MCP `upload_media_from_url` with shared media ingestion, upload quota accounting, dedupe, and private/local-address SSRF protection.
+- Added persistent MCP tool-call auditing with user/workspace scope, status, error message, duration, and migration coverage.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

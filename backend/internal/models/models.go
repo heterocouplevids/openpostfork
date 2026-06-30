@@ -156,6 +156,19 @@ type BillingWebhookEvent struct {
 	ProcessedAt time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"processed_at"`
 }
 
+type MCPToolCall struct {
+	bun.BaseModel `bun:"table:mcp_tool_calls"`
+
+	ID           string    `bun:",pk" json:"id"`
+	UserID       string    `bun:",notnull" json:"user_id"`
+	WorkspaceID  string    `bun:",nullzero" json:"workspace_id"`
+	ToolName     string    `bun:",notnull" json:"tool_name"`
+	Status       string    `bun:",notnull" json:"status"`
+	ErrorMessage string    `json:"error_message"`
+	DurationMs   int64     `bun:",notnull,default:0" json:"duration_ms"`
+	CreatedAt    time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 type SocialAccount struct {
 	bun.BaseModel `bun:"table:social_accounts"`
 

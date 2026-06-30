@@ -384,26 +384,33 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 	if err := json.Unmarshal(raw, &params); err != nil {
 		return nil, &mcpError{Code: -32602, Message: "invalid tool call params"}
 	}
+	start := time.Now()
+	var (
+		result any
+		rpcErr *mcpError
+	)
 	switch params.Name {
 	case mcpToolWorkspaces:
-		return h.listWorkspaces(ctx, principal.UserID)
+		result, rpcErr = h.listWorkspaces(ctx, principal.UserID)
 	case mcpToolAccounts:
-		return h.listAccounts(ctx, principal.UserID, params.Arguments)
+		result, rpcErr = h.listAccounts(ctx, principal.UserID, params.Arguments)
 	case mcpToolCreateDraft:
-		return h.createDraft(ctx, principal.UserID, params.Arguments)
+		result, rpcErr = h.createDraft(ctx, principal.UserID, params.Arguments)
 	case mcpToolSchedulePost:
-		return h.schedulePost(ctx, principal.UserID, params.Arguments)
+		result, rpcErr = h.schedulePost(ctx, principal.UserID, params.Arguments)
 	case mcpToolGetPost:
-		return h.getPostStatus(ctx, principal.UserID, params.Arguments)
+		result, rpcErr = h.getPostStatus(ctx, principal.UserID, params.Arguments)
 	case mcpToolCancelPost:
-		return h.cancelPost(ctx, principal.UserID, params.Arguments)
+		result, rpcErr = h.cancelPost(ctx, principal.UserID, params.Arguments)
 	case mcpToolSuggestSlot:
-		return h.suggestNextSlot(ctx, principal.UserID, params.Arguments)
+		result, rpcErr = h.suggestNextSlot(ctx, principal.UserID, params.Arguments)
 	case mcpToolUploadURL:
-		return h.uploadMediaFromURL(ctx, principal.UserID, params.Arguments)
+		result, rpcErr = h.uploadMediaFromURL(ctx, principal.UserID, params.Arguments)
 	default:
-		return nil, &mcpError{Code: -32602, Message: "unknown tool"}
+		rpcErr = &mcpError{Code: -32602, Message: "unknown tool"}
 	}
+	h.recordToolCall(ctx, principal.UserID, params.Name, workspaceIDFromMCPArguments(params.Arguments), time.Since(start), rpcErr)
+	return result, rpcErr
 }
 
 func decodeMCPArguments(args map[string]any, dest any) error {
@@ -412,6 +419,35 @@ func decodeMCPArguments(args map[string]any, dest any) error {
 		return err
 	}
 	return json.Unmarshal(payload, dest)
+}
+
+func (h *MCPHandler) recordToolCall(ctx context.Context, userID, toolName, workspaceID string, duration time.Duration, rpcErr *mcpError) {
+	status := "success"
+	errorMessage := ""
+	if rpcErr != nil {
+		status = "error"
+		errorMessage = rpcErr.Message
+	}
+	_, _ = h.db.NewInsert().Model(&models.MCPToolCall{
+		ID:           newUUID(),
+		UserID:       userID,
+		WorkspaceID:  workspaceID,
+		ToolName:     toolName,
+		Status:       status,
+		ErrorMessage: errorMessage,
+		DurationMs:   duration.Milliseconds(),
+		CreatedAt:    time.Now().UTC(),
+	}).Exec(ctx)
+}
+
+func workspaceIDFromMCPArguments(args map[string]any) string {
+	if args == nil {
+		return ""
+	}
+	if workspaceID, ok := args["workspace_id"].(string); ok {
+		return strings.TrimSpace(workspaceID)
+	}
+	return ""
 }
 
 func (h *MCPHandler) ensureWorkspaceAccess(ctx context.Context, userID, workspaceID string) *mcpError {

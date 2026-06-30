@@ -43,6 +43,7 @@ func newMCPTestServerWithEntitlement(t *testing.T, entitlement entitlements.Serv
 		(*models.UsageCounter)(nil),
 		(*models.PostingSchedule)(nil),
 		(*models.MediaAttachment)(nil),
+		(*models.MCPToolCall)(nil),
 	)
 	ctx := context.Background()
 	workspaces := []models.Workspace{
@@ -220,6 +221,59 @@ func TestMCPCallListAccounts(t *testing.T) {
 	require.Len(t, accounts, 1)
 	require.Equal(t, "account-1", accounts[0].(map[string]any)["id"])
 	require.Equal(t, "x", accounts[0].(map[string]any)["platform"])
+}
+
+func TestMCPCallLogsSuccessfulToolCall(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-log-success",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_accounts",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var call models.MCPToolCall
+	require.NoError(t, srv.db.NewSelect().Model(&call).Where("tool_name = ?", "list_accounts").Scan(context.Background()))
+	require.Equal(t, "user-1", call.UserID)
+	require.Equal(t, "ws-1", call.WorkspaceID)
+	require.Equal(t, "success", call.Status)
+	require.Empty(t, call.ErrorMessage)
+	require.False(t, call.CreatedAt.IsZero())
+}
+
+func TestMCPCallLogsFailedToolCall(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-log-error",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_draft",
+			"arguments": map[string]any{
+				"workspace_id":       "ws-1",
+				"content":            "Draft from an agent",
+				"social_account_ids": []string{"account-other-workspace"},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var call models.MCPToolCall
+	require.NoError(t, srv.db.NewSelect().Model(&call).Where("tool_name = ?", "create_draft").Scan(context.Background()))
+	require.Equal(t, "user-1", call.UserID)
+	require.Equal(t, "ws-1", call.WorkspaceID)
+	require.Equal(t, "error", call.Status)
+	require.Contains(t, call.ErrorMessage, "outside this workspace")
 }
 
 func TestMCPCallCreateDraft(t *testing.T) {

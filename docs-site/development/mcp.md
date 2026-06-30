@@ -39,4 +39,5 @@ JSON-RPC frames to the remote `/mcp` endpoint.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
 - Rejects media URL fetches that resolve to private, loopback, link-local, multicast, or otherwise local addresses.
 - Enforces the same scheduled-post and media-upload entitlement and usage accounting as the web/API paths.
+- Records MCP tool calls in `mcp_tool_calls` with user, workspace, tool name, success/error status, error message, duration, and timestamp.
 - Returns structured content so assistants can inspect workspace, account, post, destination, media, and suggested slot IDs without parsing prose.
