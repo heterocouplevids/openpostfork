@@ -121,7 +121,7 @@ type mcpContent struct {
 func (h *MCPHandler) handle(c echo.Context) error {
 	principal, err := h.authenticate(c.Request())
 	if err != nil {
-		challenge := h.mcpWWWAuthenticate()
+		challenge := h.mcpWWWAuthenticate(c.Request())
 		c.Response().Header().Set("WWW-Authenticate", challenge)
 		return c.JSON(http.StatusUnauthorized, map[string]any{
 			"error": "unauthorized",
@@ -169,8 +169,12 @@ func (h *MCPHandler) protectedResourceMetadata(c echo.Context) error {
 }
 
 func (h *MCPHandler) externalBaseURL(r *http.Request) string {
-	if h.publicURL != "" {
-		return h.publicURL
+	return requestBaseURL(r, h.publicURL)
+}
+
+func requestBaseURL(r *http.Request, publicURL string) string {
+	if publicURL != "" {
+		return strings.TrimRight(publicURL, "/")
 	}
 	scheme := "http"
 	if r.TLS != nil {
@@ -186,15 +190,9 @@ func (h *MCPHandler) externalBaseURL(r *http.Request) string {
 	return strings.TrimRight(scheme+"://"+strings.TrimSpace(host), "/")
 }
 
-func (h *MCPHandler) mcpWWWAuthenticate() string {
-	return fmt.Sprintf(`Bearer realm="OpenPost MCP", resource_metadata="%s/.well-known/oauth-protected-resource", scope="%s"`, h.publicURLOrPlaceholder(), mcpScopeFull)
-}
-
-func (h *MCPHandler) publicURLOrPlaceholder() string {
-	if h.publicURL != "" {
-		return h.publicURL
-	}
-	return "http://localhost:8080"
+func (h *MCPHandler) mcpWWWAuthenticate(r *http.Request) string {
+	baseURL := requestBaseURL(r, h.publicURL)
+	return fmt.Sprintf(`Bearer realm="OpenPost MCP", resource_metadata="%s/.well-known/oauth-protected-resource", scope="%s"`, baseURL, mcpScopeFull)
 }
 
 func (h *MCPHandler) authenticate(r *http.Request) (*middleware.Principal, error) {
@@ -206,6 +204,9 @@ func (h *MCPHandler) authenticate(r *http.Request) (*middleware.Principal, error
 	principal, err := h.auth.AuthenticateBearer(r.Context(), token)
 	if err != nil {
 		return nil, err
+	}
+	if principal.Audience != "" && strings.TrimRight(principal.Audience, "/") != h.externalBaseURL(r)+"/mcp" {
+		return nil, fmt.Errorf("api token audience %q cannot access this mcp resource", principal.Audience)
 	}
 	if !mcpScopeAllowed(principal.Scope) {
 		return nil, fmt.Errorf("api token scope %q cannot access mcp", principal.Scope)

@@ -137,7 +137,9 @@ func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
 	}
 
 	tokenService := apitokens.NewService(db)
-	generated, err := tokenService.GenerateToken(ctx, "user-1", "ChatGPT", apitokens.ScopeMCP, nil)
+	generated, err := tokenService.GenerateTokenWithOptions(ctx, "user-1", "ChatGPT", apitokens.ScopeMCP, apitokens.GenerateOptions{
+		Audience: "https://app.openpost.test/mcp",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +151,9 @@ func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
 	}
 	if principal.Scope != apitokens.ScopeMCP {
 		t.Fatalf("expected scope %q, got %q", apitokens.ScopeMCP, principal.Scope)
+	}
+	if principal.Audience != "https://app.openpost.test/mcp" {
+		t.Fatalf("expected audience %q, got %q", "https://app.openpost.test/mcp", principal.Audience)
 	}
 	if principal.ClientID != generated.Model.ID {
 		t.Fatalf("expected client id %q, got %q", generated.Model.ID, principal.ClientID)

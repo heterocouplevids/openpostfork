@@ -567,6 +567,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mcp/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or deny an MCP OAuth authorization response */
+        post: operations["create-mcp-oauth-authorization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media": {
         parameters: {
             query?: never;
@@ -1249,6 +1266,42 @@ export interface components {
             readonly $schema?: string;
             /** @description Workspace ID */
             workspace_id: string;
+        };
+        CreateMCPOAuthAuthorizationInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateMCPOAuthAuthorizationInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the user approved the MCP OAuth request */
+            approved: boolean;
+            /** @description OAuth client ID or client metadata URL */
+            client_id: string;
+            /** @description PKCE S256 code challenge. Required when approved is true. */
+            code_challenge?: string;
+            /** @description PKCE method. Must be S256 when approved is true. */
+            code_challenge_method?: string;
+            /** @description OAuth redirect URI */
+            redirect_uri: string;
+            /** @description MCP protected resource URL */
+            resource?: string;
+            /** @description OAuth response type. Must be code. */
+            response_type: string;
+            /** @description Requested OAuth scope. Defaults to mcp:full. */
+            scope?: string;
+            /** @description Opaque client state to echo to the redirect URI */
+            state?: string;
+        };
+        CreateMCPOAuthAuthorizationOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateMCPOAuthAuthorizationOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description URL the browser should redirect to after authorization */
+            redirect_url: string;
         };
         CreatePostInputBody: {
             /**
@@ -4355,6 +4408,66 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-mcp-oauth-authorization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMCPOAuthAuthorizationInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateMCPOAuthAuthorizationOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

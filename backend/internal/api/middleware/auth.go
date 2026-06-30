@@ -34,6 +34,7 @@ type Principal struct {
 	UserID      string
 	Email       string
 	Scope       string
+	Audience    string
 	ClientID    string
 	ClientName  string
 	TokenPrefix string
@@ -88,6 +89,7 @@ func (s *CompositeService) AuthenticateBearer(ctx context.Context, token string)
 		UserID:      apiPrincipal.UserID,
 		Email:       apiPrincipal.Email,
 		Scope:       apiPrincipal.Scope,
+		Audience:    apiPrincipal.Audience,
 		ClientID:    apiPrincipal.TokenID,
 		ClientName:  apiPrincipal.TokenName,
 		TokenPrefix: apiPrincipal.TokenPrefix,

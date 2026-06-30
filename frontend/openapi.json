@@ -510,6 +510,74 @@
 				"required": ["workspace_id"],
 				"type": "object"
 			},
+			"CreateMCPOAuthAuthorizationInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateMCPOAuthAuthorizationInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"approved": {
+						"description": "Whether the user approved the MCP OAuth request",
+						"type": "boolean"
+					},
+					"client_id": {
+						"description": "OAuth client ID or client metadata URL",
+						"type": "string"
+					},
+					"code_challenge": {
+						"description": "PKCE S256 code challenge. Required when approved is true.",
+						"type": "string"
+					},
+					"code_challenge_method": {
+						"description": "PKCE method. Must be S256 when approved is true.",
+						"type": "string"
+					},
+					"redirect_uri": {
+						"description": "OAuth redirect URI",
+						"type": "string"
+					},
+					"resource": {
+						"description": "MCP protected resource URL",
+						"type": "string"
+					},
+					"response_type": {
+						"description": "OAuth response type. Must be code.",
+						"type": "string"
+					},
+					"scope": {
+						"description": "Requested OAuth scope. Defaults to mcp:full.",
+						"type": "string"
+					},
+					"state": {
+						"description": "Opaque client state to echo to the redirect URI",
+						"type": "string"
+					}
+				},
+				"required": ["approved", "response_type", "client_id", "redirect_uri"],
+				"type": "object"
+			},
+			"CreateMCPOAuthAuthorizationOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/CreateMCPOAuthAuthorizationOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"redirect_url": {
+						"description": "URL the browser should redirect to after authorization",
+						"type": "string"
+					}
+				},
+				"required": ["redirect_url"],
+				"type": "object"
+			},
 			"CreatePostInputBody": {
 				"additionalProperties": false,
 				"properties": {
@@ -5150,6 +5218,75 @@
 				},
 				"summary": "List recent MCP tool calls",
 				"tags": ["MCP"]
+			}
+		},
+		"/mcp/oauth/authorize": {
+			"post": {
+				"operationId": "create-mcp-oauth-authorization",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CreateMCPOAuthAuthorizationInputBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CreateMCPOAuthAuthorizationOutputBody"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Bad Request"
+					},
+					"401": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unauthorized"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Create or deny an MCP OAuth authorization response",
+				"tags": ["Auth"]
 			}
 		},
 		"/media": {

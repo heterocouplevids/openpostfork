@@ -43,6 +43,7 @@ type Principal struct {
 	UserID      string
 	Email       string
 	Scope       string
+	Audience    string
 	TokenID     string
 	TokenName   string
 	TokenPrefix string
@@ -53,11 +54,20 @@ type GeneratedToken struct {
 	Model *models.APIToken
 }
 
+type GenerateOptions struct {
+	ExpiresAt *time.Time
+	Audience  string
+}
+
 func NewService(db *bun.DB) *Service {
 	return &Service{db: db}
 }
 
 func (s *Service) GenerateToken(ctx context.Context, userID, name, scope string, expiresAt *time.Time) (*GeneratedToken, error) {
+	return s.GenerateTokenWithOptions(ctx, userID, name, scope, GenerateOptions{ExpiresAt: expiresAt})
+}
+
+func (s *Service) GenerateTokenWithOptions(ctx context.Context, userID, name, scope string, options GenerateOptions) (*GeneratedToken, error) {
 	scope, err := NormalizeScope(scope)
 	if err != nil {
 		return nil, err
@@ -74,8 +84,8 @@ func (s *Service) GenerateToken(ctx context.Context, userID, name, scope string,
 	rawToken := strings.Join([]string{TokenPrefix, tokenPrefix, secret}, "_")
 
 	var expiry time.Time
-	if expiresAt != nil {
-		expiry = expiresAt.UTC()
+	if options.ExpiresAt != nil {
+		expiry = options.ExpiresAt.UTC()
 	} else {
 		expiry = time.Now().UTC().Add(DefaultExpiration)
 	}
@@ -87,6 +97,7 @@ func (s *Service) GenerateToken(ctx context.Context, userID, name, scope string,
 		TokenHash:   tokenHash,
 		TokenPrefix: tokenPrefix,
 		Scope:       scope,
+		Audience:    strings.TrimSpace(options.Audience),
 		ExpiresAt:   expiry,
 		CreatedAt:   time.Now().UTC(),
 	}
@@ -205,6 +216,7 @@ func (s *Service) validateMatchedToken(ctx context.Context, token *models.APITok
 		UserID:      user.ID,
 		Email:       user.Email,
 		Scope:       token.Scope,
+		Audience:    token.Audience,
 		TokenID:     token.ID,
 		TokenName:   token.Name,
 		TokenPrefix: token.TokenPrefix,

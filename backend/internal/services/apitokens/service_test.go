@@ -45,7 +45,9 @@ func TestGenerateTokenStoresHashOnlyAndDefaultExpiry(t *testing.T) {
 	seedServiceUser(ctx, t, db, "user-1", "user@example.com")
 
 	service := NewService(db)
-	generated, err := service.GenerateToken(ctx, "user-1", "Laptop", "", nil)
+	generated, err := service.GenerateTokenWithOptions(ctx, "user-1", "Laptop", "", GenerateOptions{
+		Audience: "https://app.openpost.test/mcp",
+	})
 	require.NoError(t, err)
 	require.NotEmpty(t, generated.Token)
 	require.NotContains(t, generated.Model.TokenHash, generated.Token)
@@ -101,7 +103,9 @@ func TestValidateTokenReturnsPrincipalAndTouchesLastUsed(t *testing.T) {
 	seedServiceUser(ctx, t, db, "user-1", "user@example.com")
 
 	service := NewService(db)
-	generated, err := service.GenerateToken(ctx, "user-1", "Laptop", "", nil)
+	generated, err := service.GenerateTokenWithOptions(ctx, "user-1", "Laptop", "", GenerateOptions{
+		Audience: "https://app.openpost.test/mcp",
+	})
 	require.NoError(t, err)
 
 	principal, err := service.ValidateToken(ctx, generated.Token)
@@ -109,6 +113,7 @@ func TestValidateTokenReturnsPrincipalAndTouchesLastUsed(t *testing.T) {
 	require.Equal(t, "user-1", principal.UserID)
 	require.Equal(t, "user@example.com", principal.Email)
 	require.Equal(t, DefaultScope, principal.Scope)
+	require.Equal(t, "https://app.openpost.test/mcp", principal.Audience)
 	require.Equal(t, generated.Model.ID, principal.TokenID)
 	require.Equal(t, "Laptop", principal.TokenName)
 	require.Equal(t, generated.Model.TokenPrefix, principal.TokenPrefix)

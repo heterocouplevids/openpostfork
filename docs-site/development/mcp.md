@@ -13,15 +13,24 @@ Authorization: Bearer <jwt-or-api-token>
 ```
 
 For ChatGPT Apps and other OAuth-aware MCP clients, OpenPost also publishes
-protected-resource metadata:
+protected-resource and authorization-server metadata:
 
 ```txt
 GET /.well-known/oauth-protected-resource
+GET /.well-known/oauth-authorization-server
 ```
 
 Tool descriptors include OAuth security schemes, mirrored `_meta.securitySchemes`,
 and tool annotations so clients can distinguish read-only tools from actions that
 write OpenPost state or reach external URLs.
+
+OAuth-aware clients can start account linking at the browser authorization page,
+then exchange the returned code for an MCP-scoped bearer token:
+
+```txt
+GET /oauth/authorize
+POST /oauth/token
+```
 
 Desktop MCP clients can use the local stdio proxy from the CLI module:
 
@@ -61,7 +70,10 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Uses the same Bearer authentication path as the CLI and API tokens.
 - Dedicated `mcp:full` tokens can be created in Settings for ChatGPT, Claude, and other MCP clients. Existing `cli:full` tokens also remain accepted by `/mcp` so `openpost-mcp` profiles continue to work.
 - Publishes MCP protected-resource metadata and returns `WWW-Authenticate` plus `_meta["mcp/www_authenticate"]` challenges for unauthenticated MCP requests.
-- Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. A dedicated OAuth authorization-server flow for ChatGPT account linking is still planned.
+- Publishes OAuth authorization-server metadata for public PKCE clients, including `S256`, `mcp:full`, and client ID metadata document support.
+- Provides a browser approval page at `/oauth/authorize` and a form-encoded `/oauth/token` code exchange that mints `mcp:full` API tokens.
+- Validates client metadata redirect URIs for URL-based client IDs, accepts ChatGPT fallback redirects for predefined clients, and binds OAuth-issued MCP tokens to the `/mcp` resource audience.
+- Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. Fine-grained per-session scopes are still planned.
 - Provides `openpost-mcp` for local stdio clients without duplicating server tool logic.
 - Validates workspace membership and account ownership before returning, creating, scheduling, canceling, or uploading data.
 - Keeps draft iteration agent-friendly: assistants can list drafts, update draft copy/destinations, set per-destination renditions, and schedule the same draft when it is ready.

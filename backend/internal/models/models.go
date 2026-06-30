@@ -83,10 +83,29 @@ type APIToken struct {
 	TokenHash   string    `bun:",unique,notnull" json:"-"`
 	TokenPrefix string    `bun:",notnull" json:"token_prefix"`
 	Scope       string    `bun:",notnull,default:'cli:full'" json:"scope"`
+	Audience    string    `json:"audience"`
 	ExpiresAt   time.Time `bun:",nullzero" json:"expires_at"`
 	LastUsedAt  time.Time `bun:",nullzero" json:"last_used_at"`
 	RevokedAt   time.Time `bun:",nullzero" json:"revoked_at"`
 	CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+type MCPOAuthCode struct {
+	bun.BaseModel `bun:"table:mcp_oauth_codes"`
+
+	ID                  string    `bun:",pk" json:"id"`
+	CodeHash            string    `bun:",unique,notnull" json:"-"`
+	UserID              string    `bun:",notnull" json:"user_id"`
+	ClientID            string    `bun:",notnull" json:"client_id"`
+	ClientName          string    `json:"client_name"`
+	RedirectURI         string    `bun:",notnull" json:"redirect_uri"`
+	Scope               string    `bun:",notnull,default:'mcp:full'" json:"scope"`
+	Resource            string    `json:"resource"`
+	CodeChallenge       string    `bun:",notnull" json:"code_challenge"`
+	CodeChallengeMethod string    `bun:",notnull" json:"code_challenge_method"`
+	ExpiresAt           time.Time `bun:",notnull" json:"expires_at"`
+	ConsumedAt          time.Time `bun:",nullzero" json:"consumed_at"`
+	CreatedAt           time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 type CLIAuthSession struct {

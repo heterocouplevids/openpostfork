@@ -30,6 +30,7 @@
 		'/demo',
 		'/demo/paraglide',
 		'/cli/authorize',
+		'/oauth/authorize',
 		'/accounts/mastodon/callback',
 		'/accounts/callback'
 	];
@@ -38,6 +39,7 @@
 		'/onboarding',
 		'/connect',
 		'/cli/authorize',
+		'/oauth/authorize',
 		'/accounts/mastodon/callback',
 		'/accounts/callback'
 	];

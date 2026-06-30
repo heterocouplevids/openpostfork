@@ -207,6 +207,27 @@ func TestMCPAuthenticatesSupportedTokenScopes(t *testing.T) {
 	require.Contains(t, resp.Header().Get("WWW-Authenticate"), `scope="mcp:full"`)
 }
 
+func TestMCPRejectsAudienceMismatch(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	srv.handler.auth = mcpScopeAuthenticator{
+		"wrong-audience": {
+			UserID:   "user-1",
+			Email:    "user@example.com",
+			Scope:    "mcp:full",
+			Audience: "https://other.openpost.test/mcp",
+		},
+	}
+
+	resp := srv.request(t, "wrong-audience", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "wrong-audience",
+		"method":  "tools/list",
+	})
+	require.Equal(t, http.StatusUnauthorized, resp.Code)
+}
+
 func TestMCPToolsList(t *testing.T) {
 	t.Parallel()
 

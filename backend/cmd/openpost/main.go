@@ -31,6 +31,7 @@ import (
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/mastodonapps"
+	"github.com/openpost/backend/internal/services/mcpoauth"
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/mfa"
@@ -84,6 +85,7 @@ func main() {
 	}
 	authenticator := apimiddleware.NewCompositeService(authService, apiTokenService)
 	cliAuthService := cliauth.NewService(db, apiTokenService)
+	mcpOAuthService := mcpoauth.NewService(db, apiTokenService)
 	mediaSigner := mediasigner.New(cfg.EncryptionKey)
 	mfaService, err := mfa.NewService("OpenPost", mfa.RelyingPartyConfig{
 		Name:    "OpenPost",
@@ -194,6 +196,7 @@ func main() {
 	mcpHandler.SetPublicURL(cfg.PublicURL)
 	mcpHandler.RegisterRoutes(e)
 	handlers.NewMCPActivityHandler(db, authenticator).RegisterRoutes(api)
+	handlers.NewMCPOAuthHandler(mcpOAuthService, authenticator, cfg.PublicURL).RegisterRoutes(e, api)
 
 	workspaceHandler := handlers.NewWorkspaceHandler(db, authenticator, entitlementService)
 	workspaceHandler.CreateWorkspace(api)
