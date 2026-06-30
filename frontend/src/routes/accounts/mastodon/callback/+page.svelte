@@ -17,6 +17,7 @@
 
 	let code = $state('');
 	let serverName = $state('');
+	let instanceURL = $state('');
 	let workspaceId = $state('');
 	let loading = $state(false);
 	let error = $state('');
@@ -27,9 +28,11 @@
 		const params = new URLSearchParams(window.location.search);
 		const storedWorkspace = localStorage.getItem('oauth_workspace_id');
 		const storedServer = localStorage.getItem('oauth_mastodon_server');
+		const storedInstanceURL = localStorage.getItem('oauth_mastodon_instance_url');
 
 		if (storedWorkspace) workspaceId = storedWorkspace;
 		if (storedServer) serverName = storedServer;
+		if (storedInstanceURL) instanceURL = storedInstanceURL;
 
 		const codeFromUrl = params.get('code');
 		if (codeFromUrl) {
@@ -47,8 +50,8 @@
 			error = 'Workspace ID not found. Please start the connection from the accounts page.';
 			return;
 		}
-		if (!serverName) {
-			error = 'Server name not found. Please start the connection from the accounts page.';
+		if (!serverName && !instanceURL) {
+			error = 'Mastodon instance not found. Please start the connection from the accounts page.';
 			return;
 		}
 
@@ -57,11 +60,17 @@
 
 		try {
 			const { error: err } = await client.POST('/accounts/mastodon/exchange', {
-				body: { workspace_id: workspaceId, server_name: serverName, code: code.trim() }
+				body: {
+					workspace_id: workspaceId,
+					server_name: serverName,
+					instance_url: instanceURL,
+					code: code.trim()
+				}
 			});
 			if (err) throw new Error(err.detail || 'Exchange failed');
 			localStorage.removeItem('oauth_workspace_id');
 			localStorage.removeItem('oauth_mastodon_server');
+			localStorage.removeItem('oauth_mastodon_instance_url');
 			success = true;
 			setTimeout(() => goto('/accounts/callback?status=success&platform=mastodon'), 500);
 		} catch (e) {
@@ -99,9 +108,9 @@
 	>
 		<Card>
 			<CardContent class="pt-6">
-				{#if serverName}
+				{#if serverName || instanceURL}
 					<p class="mb-4 text-sm text-muted-foreground">
-						Connecting to server: <strong>{serverName}</strong>
+						Connecting to server: <strong>{serverName || instanceURL}</strong>
 					</p>
 				{/if}
 				<form

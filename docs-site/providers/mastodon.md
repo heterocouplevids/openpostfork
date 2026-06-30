@@ -1,14 +1,27 @@
 # Mastodon
 
-Mastodon is configured per instance. Each instance you support needs its own app credentials.
+Mastodon can be connected in two ways:
+
+- **Custom instance from the Accounts screen:** enter a public instance such as `mastodon.social`. OpenPost registers an app with that instance, encrypts the client secret, and reuses it for later connections.
+- **Preconfigured instances:** operators can still pin known instance app credentials with `MASTODON_SERVERS`.
 
 ## What you need
 
-- One Mastodon app per instance
-- `MASTODON_SERVERS` JSON
-- Callback URL: `https://your-domain.com/api/v1/accounts/mastodon/callback`
+- For custom instances: no static env entry is required, but the instance must be public HTTPS and allow app registration.
+- For preconfigured instances: one Mastodon app per instance and `MASTODON_SERVERS` JSON.
+- Redirect URI: `urn:ietf:wg:oauth:2.0:oob` by default.
 
-## Example configuration
+## Custom instance flow
+
+1. Open **Accounts**.
+2. Choose **Mastodon / Custom instance**.
+3. Enter an instance host or URL.
+4. Authorize OpenPost on that instance.
+5. Paste the authorization code into the OpenPost callback page.
+
+OpenPost rejects custom Mastodon hosts that resolve to private, loopback, link-local, multicast, or otherwise local addresses.
+
+## Example preconfigured instance
 
 ```sh
 MASTODON_SERVERS='[
@@ -42,6 +55,6 @@ MASTODON_SERVERS='[
 
 ## Notes
 
-- The current backend config default for `MASTODON_REDIRECT_URI` is `http://localhost:8080/api/v1/accounts/mastodon/callback`.
+- The current backend config default for `MASTODON_REDIRECT_URI` is `urn:ietf:wg:oauth:2.0:oob`.
 - OpenPost may show the config `name` in the UI, but the persisted provider identity is the full `instance_url`.
 - The stored `instance_url` needs to stay consistent with the configured provider entry.

@@ -60,6 +60,8 @@
 
 	let providerEntries = $state.raw<ProviderInfo[]>([]);
 	let providersLoading = $state(false);
+	let customMastodonInstance = $state('');
+	let customMastodonLoading = $state(false);
 	let selectedWorkspaceName = $derived(
 		workspaces?.find((workspace) => workspace.id === selectedWorkspaceId)?.name ||
 			'Select workspace'
@@ -362,7 +364,7 @@
 		}
 	}
 
-	async function connectMastodon(serverName: string) {
+	async function connectMastodon(options: { serverName?: string; instanceURL?: string }) {
 		if (!selectedWorkspaceId) {
 			alert('Please create a workspace first');
 			return;
@@ -370,17 +372,42 @@
 
 		try {
 			localStorage.setItem('oauth_workspace_id', selectedWorkspaceId);
-			localStorage.setItem('oauth_mastodon_server', serverName);
+			if (options.instanceURL) {
+				localStorage.setItem('oauth_mastodon_instance_url', options.instanceURL);
+				localStorage.removeItem('oauth_mastodon_server');
+			} else if (options.serverName) {
+				localStorage.setItem('oauth_mastodon_server', options.serverName);
+				localStorage.removeItem('oauth_mastodon_instance_url');
+			}
 
 			const { data, error: err } = await client.GET('/accounts/{platform}/auth-url', {
 				params: {
 					path: { platform: 'mastodon' },
-					query: { workspace_id: selectedWorkspaceId, server_name: serverName }
+					query: {
+						workspace_id: selectedWorkspaceId,
+						server_name: options.serverName,
+						instance_url: options.instanceURL
+					}
 				}
 			});
+			if (err) throw new Error((err as any).detail || 'Failed to get Mastodon auth URL');
 			if (data?.url) window.location.href = data.url;
 		} catch (e) {
 			error = (e as Error).message;
+		}
+	}
+
+	async function connectCustomMastodon() {
+		const instanceURL = customMastodonInstance.trim();
+		if (!instanceURL) {
+			error = 'Enter a Mastodon instance URL';
+			return;
+		}
+		customMastodonLoading = true;
+		try {
+			await connectMastodon({ instanceURL });
+		} finally {
+			customMastodonLoading = false;
 		}
 	}
 
@@ -479,6 +506,9 @@
 
 	function providerDescription(provider: ProviderInfo): string {
 		if (!provider.configured) return 'Not configured';
+		if (isCustomMastodonProvider(provider)) {
+			return 'Connect any public Mastodon instance';
+		}
 		if (provider.platform === 'mastodon' && provider.instance_url) {
 			return provider.instance_url.replace('https://', '');
 		}
@@ -496,6 +526,28 @@
 		}
 	}
 
+	function isCustomMastodonProvider(provider: ProviderInfo): boolean {
+		return provider.platform === 'mastodon' && provider.configured && !provider.instance_url;
+	}
+
+	function rememberMastodonProvider(provider: ProviderInfo) {
+		if (!selectedWorkspaceId) return;
+		localStorage.setItem('oauth_workspace_id', selectedWorkspaceId);
+		if (isCustomMastodonProvider(provider)) {
+			const instanceURL = customMastodonInstance.trim();
+			if (instanceURL) {
+				localStorage.setItem('oauth_mastodon_instance_url', instanceURL);
+				localStorage.removeItem('oauth_mastodon_server');
+			}
+			return;
+		}
+		const serverName = provider.name || provider.instance_url || '';
+		if (serverName) {
+			localStorage.setItem('oauth_mastodon_server', serverName);
+			localStorage.removeItem('oauth_mastodon_instance_url');
+		}
+	}
+
 	function connectProvider(provider: ProviderInfo) {
 		if (!provider.configured) return;
 		switch (provider.platform) {
@@ -503,7 +555,11 @@
 				connectTwitter();
 				break;
 			case 'mastodon':
-				connectMastodon(provider.name || provider.instance_url || '');
+				if (isCustomMastodonProvider(provider)) {
+					connectCustomMastodon();
+				} else {
+					connectMastodon({ serverName: provider.name || provider.instance_url || '' });
+				}
 				break;
 			case 'threads':
 				connectThreads();
@@ -817,41 +873,73 @@
 					{#each providerEntries as provider (providerKey(provider))}
 						<div
 							data-testid={`provider-card-${provider.platform}`}
-							class="group flex items-center gap-3 rounded-lg border bg-card p-4 transition-all hover:shadow-sm {provider.configured
+							class="group rounded-lg border bg-card p-4 transition-all hover:shadow-sm {provider.configured
 								? ''
 								: 'opacity-60'}"
 						>
-							<div
-								class="flex h-10 w-10 items-center justify-center rounded-full {getPlatformColor(
-									provider.platform
-								)}"
-							>
-								<PlatformIcon platform={provider.platform} class="h-4 w-4 text-white" />
+							<div class="flex items-center gap-3">
+								<div
+									class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full {getPlatformColor(
+										provider.platform
+									)}"
+								>
+									<PlatformIcon platform={provider.platform} class="h-4 w-4 text-white" />
+								</div>
+								<div class="min-w-0 flex-1">
+									<h3 class="text-sm font-medium">{providerTitle(provider)}</h3>
+									<p class="truncate text-sm text-muted-foreground">
+										{providerDescription(provider)}
+									</p>
+								</div>
+								{#if provider.platform === 'mastodon' && provider.configured && !isCustomMastodonProvider(provider)}
+									<div class="flex gap-1.5">
+										<Button
+											href="/accounts/mastodon/callback"
+											variant="outline"
+											size="sm"
+											class="text-xs"
+											onclick={() => rememberMastodonProvider(provider)}>Code</Button
+										>
+										<Button onclick={() => connectProvider(provider)} size="sm">Connect</Button>
+									</div>
+								{:else if !isCustomMastodonProvider(provider)}
+									<Button
+										onclick={() => connectProvider(provider)}
+										size="sm"
+										disabled={!provider.configured}
+									>
+										{provider.configured ? 'Connect' : 'Unavailable'}
+									</Button>
+								{/if}
 							</div>
-							<div class="min-w-0 flex-1">
-								<h3 class="text-sm font-medium">{providerTitle(provider)}</h3>
-								<p class="truncate text-sm text-muted-foreground">
-									{providerDescription(provider)}
-								</p>
-							</div>
-							{#if provider.platform === 'mastodon' && provider.configured}
-								<div class="flex gap-1.5">
+							{#if isCustomMastodonProvider(provider)}
+								<form
+									class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]"
+									onsubmit={(e: SubmitEvent) => {
+										e.preventDefault();
+										connectCustomMastodon();
+									}}
+								>
+									<div class="space-y-1.5">
+										<Label for="custom-mastodon-instance" class="text-xs">Instance URL</Label>
+										<Input
+											id="custom-mastodon-instance"
+											bind:value={customMastodonInstance}
+											placeholder="mastodon.social"
+											autocomplete="url"
+										/>
+									</div>
 									<Button
 										href="/accounts/mastodon/callback"
 										variant="outline"
 										size="sm"
-										class="text-xs">Code</Button
+										class="self-end"
+										onclick={() => rememberMastodonProvider(provider)}>Code</Button
 									>
-									<Button onclick={() => connectProvider(provider)} size="sm">Connect</Button>
-								</div>
-							{:else}
-								<Button
-									onclick={() => connectProvider(provider)}
-									size="sm"
-									disabled={!provider.configured}
-								>
-									{provider.configured ? 'Connect' : 'Unavailable'}
-								</Button>
+									<Button type="submit" size="sm" class="self-end" disabled={customMastodonLoading}>
+										{customMastodonLoading ? 'Connecting...' : 'Connect'}
+									</Button>
+								</form>
 							{/if}
 						</div>
 					{/each}

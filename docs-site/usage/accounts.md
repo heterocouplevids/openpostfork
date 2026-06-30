@@ -15,3 +15,4 @@ Connected accounts are provider-specific identities inside a workspace.
 - Stored OAuth tokens are encrypted at rest.
 - Each provider has its own callback and permission requirements.
 - Authenticated clients can call `GET /api/v1/accounts/providers` to discover which provider apps are configured before showing connect actions.
+- Mastodon can use either preconfigured instances or the custom instance field on the Accounts screen. Custom instances must be public HTTPS servers.

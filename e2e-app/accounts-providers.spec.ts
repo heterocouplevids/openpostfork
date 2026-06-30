@@ -86,3 +86,74 @@ test("accounts page shows configured and unavailable providers", async ({
     ).toBeDisabled();
   }
 });
+
+test("accounts page starts custom Mastodon instance connection", async ({
+  page,
+  request,
+}) => {
+  const unique = Date.now().toString(36);
+  const email = `mastodon-custom-${unique}@example.com`;
+  const password = "password-1234";
+
+  const register = await request.post("/api/v1/auth/register", {
+    data: { email, password },
+  });
+  expect(register.ok()).toBeTruthy();
+  const auth = await register.json();
+  expect(auth.token).toBeTruthy();
+
+  const workspace = await request.post("/api/v1/workspaces", {
+    headers: { Authorization: `Bearer ${auth.token}` },
+    data: { name: "Custom Mastodon E2E" },
+  });
+  expect(workspace.ok()).toBeTruthy();
+
+  await page.addInitScript((token) => {
+    window.localStorage.setItem("token", token);
+  }, auth.token);
+  await page.route("**/api/v1/accounts/providers", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: [
+        {
+          platform: "mastodon",
+          display_name: "Mastodon",
+          auth_mode: "oauth_oob",
+          configured: true,
+          name: "Custom instance",
+        },
+      ],
+    });
+  });
+
+  let authURLRequest:
+    | {
+        workspaceId: string | null;
+        instanceURL: string | null;
+        serverName: string | null;
+      }
+    | undefined;
+  await page.route("**/api/v1/accounts/mastodon/auth-url?**", async (route) => {
+    const url = new URL(route.request().url());
+    authURLRequest = {
+      workspaceId: url.searchParams.get("workspace_id"),
+      instanceURL: url.searchParams.get("instance_url"),
+      serverName: url.searchParams.get("server_name"),
+    };
+    await route.fulfill({
+      contentType: "application/json",
+      json: { url: "/accounts/mastodon/callback" },
+    });
+  });
+
+  await page.goto("/accounts");
+  const card = page.getByTestId("provider-card-mastodon");
+  await expect(card).toContainText("Connect any public Mastodon instance");
+  await card.getByLabel("Instance URL").fill("mastodon.social");
+  await card.getByRole("button", { name: "Connect" }).click();
+
+  await expect(page).toHaveURL(/\/accounts\/mastodon\/callback/);
+  expect(authURLRequest?.workspaceId).toBeTruthy();
+  expect(authURLRequest?.instanceURL).toBe("mastodon.social");
+  expect(authURLRequest?.serverName).toBeNull();
+});
