@@ -12,6 +12,7 @@ All notable changes to this project are documented in this file.
 ### Changed
 - Removed the user-facing Publications surface from the web app, CLI, public API, MCP tools, and docs so drafts/posts plus per-platform renditions remain the canonical workflow.
 - Split Settings into Workspace, Account, Organization, and Admin tabs so user-owned and workspace-owned preferences are clearer.
+- Clarified user, self-hosting, and developer docs around Settings ownership, provider app management, and organization billing.
 - Moved workspace switching into the sidebar footer and clarified Provider Apps settings around Mastodon custom instances and optional provider OAuth key overrides.
 - Made billing subscription snapshots organization-scoped while preserving legacy workspace billing metadata for compatibility.
 

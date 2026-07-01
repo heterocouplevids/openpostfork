@@ -65,7 +65,7 @@ changes live in [Developer Docs](/development/).
 - [ ] Create the first admin account.
 - [ ] Decide whether to set `OPENPOST_DISABLE_REGISTRATIONS=true`.
 - [ ] Create a workspace.
-- [ ] Invite a second user, accept the link, and confirm both members appear in Settings > Team.
+- [ ] Invite a second user, accept the link, and confirm both members appear in **Settings -> Organization**.
 - [ ] Connect at least one social account.
 - [ ] Upload a small image and confirm it appears in the media library.
 - [ ] Create a draft and scheduled post from the web app.

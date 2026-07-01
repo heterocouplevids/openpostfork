@@ -20,7 +20,7 @@ Use the remote MCP endpoint from your OpenPost instance:
 https://your-openpost-host.example/mcp
 ```
 
-OAuth-aware clients can use OpenPost's browser account-linking flow. Clients that need a manual token can use a dedicated `mcp:full` token from **Settings -> CLI Devices & API Tokens**.
+OAuth-aware clients can use OpenPost's browser account-linking flow. Clients that need a manual token can use a dedicated `mcp:full` token from **Settings -> Account -> CLI Devices & API Tokens**.
 
 When approving OAuth or creating a manual token, prefer the current-workspace boundary unless the client truly needs every workspace you can access.
 
@@ -66,6 +66,6 @@ MCP tools validate workspace membership, optional token workspace boundaries, an
 
 ## Activity and revocation
 
-Recent MCP tool calls appear in **Settings -> CLI Devices & API Tokens** with client attribution when the request used a dedicated MCP or CLI token. Revoke the token there to disconnect a client.
+Recent MCP tool calls appear in **Settings -> Account -> CLI Devices & API Tokens** with client attribution when the request used a dedicated MCP or CLI token. Revoke the token there to disconnect a client.
 
 For protocol details, Apps SDK metadata, OAuth discovery, and implementation notes, see [MCP And ChatGPT App](/development/mcp) in the developer docs.

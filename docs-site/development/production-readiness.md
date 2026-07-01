@@ -34,14 +34,16 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 ### 2. Billing And Plans
 
-- Use Polar for OpenPost Cloud checkout, subscriptions, customer portal, and webhooks. Cloud mode now requires the Polar access token, webhook secret, checkout/return URLs, and Starter/Creator/Pro product IDs at startup.
-- Store local subscription state and entitlement snapshots; do not call Polar on every request. The Polar checkout, customer portal, and webhook foundation now creates hosted billing sessions, verifies signed events, deduplicates webhook deliveries, and upserts workspace subscription snapshots.
+- Use Polar for OpenPost Cloud checkout, subscriptions, customer portal, and webhooks. Cloud mode now requires the Polar access token, webhook secret, checkout/return URLs, and Starter/Creator/Pro/Team/Agency product IDs at startup.
+- Store local subscription state and entitlement snapshots; do not call Polar on every request. The Polar checkout, customer portal, and webhook foundation now creates hosted billing sessions, verifies signed events, deduplicates webhook deliveries, and upserts organization subscription snapshots.
 - Keep self-hosted entitlement defaults permissive and configurable.
-- Keep cloud pre-checkout access constrained. Cloud mode now allows a first bootstrap workspace, then evaluates workspace expansion from active user subscription snapshots instead of falling back to self-hosted unlimited behavior.
+- Keep cloud pre-checkout access constrained. Cloud mode now allows a first bootstrap workspace, then evaluates workspace expansion from active organization subscription snapshots instead of falling back to self-hosted unlimited behavior.
 - Suggested launch plans:
   - Starter: 3 open-web connections, Bluesky/Mastodon first, 1 workspace, 100 scheduled posts/month, 1 GB media.
   - Creator: 6 connections, X/LinkedIn/Threads/Bluesky/Mastodon, 3 workspaces, 500 scheduled posts/month, 5 GB media.
-  - Pro: 15 connections, larger media/history limits, team support when ready.
+  - Pro: 15 connections, larger media/history limits, and solo power-user volume.
+  - Team: seat-based collaboration for small teams and multi-brand operators.
+  - Agency: higher workspace/account limits for client portfolio management.
 - Avoid a hosted free tier at launch; use trial/beta access instead.
 
 ### 3. Provider Readiness
@@ -68,7 +70,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Keep **Post** and **Draft** as the user-facing units of work.
 - Use **Renditions** as destination-specific versions with format-specific validation.
 - Keep the composer centered on base content, destinations, media, per-platform renditions, and release timing.
-- Leave old publication tables in place only as compatibility storage until a migration can safely remove or repurpose them.
+- Leave old source-idea compatibility tables in place only until a migration can safely remove or repurpose them.
 - Support release choreography: same time, staggered posts, platform-first launches, and follow-up threads.
 
 ### 6. MCP And ChatGPT App

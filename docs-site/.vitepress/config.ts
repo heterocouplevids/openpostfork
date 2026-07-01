@@ -20,6 +20,7 @@ const docsSidebar = [
 		items: [
 			{ text: 'Overview', link: '/usage/' },
 			{ text: 'Workspaces', link: '/usage/workspaces' },
+			{ text: 'Settings', link: '/usage/settings' },
 			{ text: 'Accounts', link: '/usage/accounts' },
 			{ text: 'Composing Posts', link: '/usage/composing-posts' },
 			{ text: 'Threads', link: '/usage/threads' },

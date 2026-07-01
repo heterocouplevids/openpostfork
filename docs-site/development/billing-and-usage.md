@@ -6,14 +6,15 @@ OpenPost Cloud billing is built around local entitlement snapshots and durable u
 
 - `entitlements.Service`: evaluates plan limits and keeps self-hosted defaults unlimited.
 - `usage_counters`: monthly durable counters keyed by workspace, metric, and UTC month.
-- `billing_subscriptions`: local Polar subscription snapshots keyed by workspace.
+- `billing_subscriptions`: local Polar subscription snapshots keyed by organization, with legacy workspace metadata preserved for compatibility.
 - `billing_webhook_events`: webhook event ledger for idempotent Polar processing.
-- `GET /api/v1/billing/status`: returns the local subscription snapshot and current-month usage counters for a workspace.
-- `POST /api/v1/billing/checkout`: creates a Polar checkout for the requested plan and workspace.
-- `POST /api/v1/billing/portal`: creates a Polar customer portal session for the workspace.
+- `GET /api/v1/organizations/{id}/billing/status`: returns the local subscription snapshot and current-month usage counters for an organization.
+- `POST /api/v1/organizations/{id}/billing/checkout`: creates a Polar checkout for the requested plan and organization.
+- `POST /api/v1/organizations/{id}/billing/portal`: creates a Polar customer portal session for the organization.
+- Legacy workspace billing endpoints remain for compatibility while clients move to organization routes.
 - `POST /api/v1/billing/polar/webhook`: verifies Standard Webhooks signatures and upserts local subscription state.
-- Cloud mode reads `billing_subscriptions.entitlement_snapshot` for workspace-scoped quota checks.
-- Workspace creation checks `LimitWorkspaces` before inserting a new workspace. In cloud mode, users get a one-workspace bootstrap allowance before checkout; after a subscription is active, workspace creation uses the highest active workspace limit from that user's existing subscribed workspaces.
+- Cloud mode reads `billing_subscriptions.entitlement_snapshot` for organization-scoped quota checks.
+- Workspace creation checks `LimitWorkspaces` before inserting a new workspace. In cloud mode, users get a one-workspace bootstrap allowance before checkout; after a subscription is active, workspace creation uses the active organization subscription snapshot.
 - Provider connection flows check `social_accounts` before inserting a new active social account.
 - Workspace invitation creation checks `team_members` before issuing a link. The check counts active members plus non-expired pending invitations so a plan cannot over-reserve seats.
 - Media uploads check `media_bytes_uploaded_monthly` and `media_bytes_stored`; successful new uploads increment monthly uploaded-byte usage.
@@ -49,8 +50,10 @@ Set these only on hosted/cloud deployments:
 - `OPENPOST_POLAR_STARTER_PRODUCT_ID`
 - `OPENPOST_POLAR_CREATOR_PRODUCT_ID`
 - `OPENPOST_POLAR_PRO_PRODUCT_ID`
+- `OPENPOST_POLAR_TEAM_PRODUCT_ID`
+- `OPENPOST_POLAR_AGENCY_PRODUCT_ID`
 
-`OPENPOST_POLAR_RETURN_URL` is the OpenPost app URL Polar should return users to after hosted checkout or customer portal flows, usually the billing settings page. `OPENPOST_POLAR_CUSTOMER_PORTAL_URL` is still accepted as a legacy alias.
+`OPENPOST_POLAR_RETURN_URL` is the OpenPost app URL Polar should return users to after hosted checkout or customer portal flows, usually `Settings -> Organization -> Billing`. `OPENPOST_POLAR_CUSTOMER_PORTAL_URL` is still accepted as a legacy alias.
 
 `OPENPOST_POLAR_API_BASE_URL` defaults to `https://api.polar.sh/v1`. Set it to `https://sandbox-api.polar.sh/v1` for Polar sandbox testing.
 

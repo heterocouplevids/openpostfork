@@ -3,12 +3,12 @@
 Mastodon can be connected in two ways:
 
 - **Custom instance from the Accounts screen:** enter a public instance such as `mastodon.social`. OpenPost registers an app with that instance, encrypts the client secret, and reuses it for later connections.
-- **Preconfigured instances:** operators can still pin known instance app credentials with `MASTODON_SERVERS`.
+- **Preconfigured instances:** operators can still pin known instance app credentials with `MASTODON_SERVERS` or **Settings -> Admin -> Provider Apps**.
 
 ## What you need
 
 - For custom instances: no static env entry is required, but the instance must be public HTTPS and allow app registration.
-- For preconfigured instances: one Mastodon app per instance and `MASTODON_SERVERS` JSON.
+- For preconfigured instances: one Mastodon app per instance and either `MASTODON_SERVERS` JSON or a Mastodon Provider App row.
 - Redirect URI: `urn:ietf:wg:oauth:2.0:oob` by default.
 
 ## Custom instance flow
@@ -33,6 +33,10 @@ MASTODON_SERVERS='[
   }
 ]'
 ```
+
+## Admin Provider Apps
+
+Instance admins can add a Mastodon Provider App from **Settings -> Admin -> Provider Apps**. Use this when a specific instance does not allow dynamic app registration or when you want OpenPost to use credentials you already created on that instance.
 
 ## Multiple instances
 

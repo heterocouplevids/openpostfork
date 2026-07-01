@@ -26,7 +26,7 @@ The CLI prints the verification URL and user code. Open that URL on another devi
 
 ## Token Login
 
-For automation, create an API token in **Settings -> CLI Devices & API Tokens**, then pass it through stdin:
+For automation, create an API token in **Settings -> Account -> CLI Devices & API Tokens**, then pass it through stdin:
 
 ```sh
 printf '%s\n' "$OPENPOST_TOKEN" | openpost auth login http://localhost:8080 --with-token
@@ -42,4 +42,4 @@ If a keyring is unavailable, `--insecure-storage` writes credentials to an XDG-a
 
 CLI tokens currently use the `cli:full` scope. It grants read and write access to workspaces, social accounts, posts, media, jobs, and API tokens for every workspace the approving user can access. Fine-grained per-workspace scopes are planned for a later release.
 
-Use **Settings -> CLI Devices & API Tokens** to inspect token prefixes, last-used timestamps, and revoke devices or automation tokens.
+Use **Settings -> Account -> CLI Devices & API Tokens** to inspect token prefixes, last-used timestamps, and revoke devices or automation tokens.

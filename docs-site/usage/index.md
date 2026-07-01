@@ -7,6 +7,7 @@ Use these docs when you want to operate OpenPost as a product: connect accounts,
 The web app is the main editorial surface.
 
 - [Workspaces](/usage/workspaces) keep brands, accounts, prompts, schedules, and media separate.
+- [Settings](/usage/settings) explains the Workspace, Account, Organization, and Admin split.
 - [Accounts](/usage/accounts) explains how connected provider identities appear in a workspace.
 - [Composing Posts](/usage/composing-posts) covers destination selection, media, variants, and the composer.
 - [Threads](/usage/threads) covers multi-post sequences.
