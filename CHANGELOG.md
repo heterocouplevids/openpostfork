@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.20] - 2026-07-01
+
 ### Fixed
 - Fixed backend lint configuration drift between local macOS and Linux release runners by excluding noisy `goconst` findings.
 
