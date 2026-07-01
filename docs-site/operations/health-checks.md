@@ -71,10 +71,12 @@ openpost instance diagnostics \
 
 Diagnostics includes the CLI version, OS/architecture, profile, instance URL,
 config paths, liveness/readiness/database status, token presence/source, and
-authenticated user/workspace counts when a token is available. Optional
-`--deployment`, `--provider`, and `--logs-file` fields capture the deployment
-method, provider being tested, and a redacted last-100-line log tail. It never
-prints raw API tokens or server secrets.
+authenticated user/workspace counts when a token is available. With a token, it
+also includes account-provider readiness counts and the requested provider
+status when `--provider` is set. Optional `--deployment`, `--provider`, and
+`--logs-file` fields capture the deployment method, provider being tested, and a
+redacted last-100-line log tail. It never prints raw API tokens or server
+secrets.
 
 ## Recommended probes
 

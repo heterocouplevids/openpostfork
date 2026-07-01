@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -196,27 +197,30 @@ func newInstanceHealthCmd() *cobra.Command {
 }
 
 type instanceDiagnostics struct {
-	CLIVersion      string   `json:"cli_version"`
-	Platform        string   `json:"platform"`
-	Profile         string   `json:"profile"`
-	Instance        string   `json:"instance"`
-	ConfigPath      string   `json:"config_path"`
-	CredentialPath  string   `json:"credential_path"`
-	Deployment      string   `json:"deployment_method,omitempty"`
-	Provider        string   `json:"provider,omitempty"`
-	Token           bool     `json:"token"`
-	TokenSource     string   `json:"token_source,omitempty"`
-	Health          string   `json:"health"`
-	Ready           string   `json:"ready"`
-	Database        string   `json:"database"`
-	Authenticated   bool     `json:"authenticated"`
-	UserEmail       string   `json:"user_email,omitempty"`
-	Workspace       string   `json:"workspace,omitempty"`
-	WorkspaceCount  int      `json:"workspace_count"`
-	LogFile         string   `json:"log_file,omitempty"`
-	LogTailLineCap  int      `json:"log_tail_line_cap,omitempty"`
-	RedactedLogTail []string `json:"redacted_log_tail,omitempty"`
-	Errors          []string `json:"errors,omitempty"`
+	CLIVersion      string             `json:"cli_version"`
+	Platform        string             `json:"platform"`
+	Profile         string             `json:"profile"`
+	Instance        string             `json:"instance"`
+	ConfigPath      string             `json:"config_path"`
+	CredentialPath  string             `json:"credential_path"`
+	Deployment      string             `json:"deployment_method,omitempty"`
+	Provider        string             `json:"provider,omitempty"`
+	Token           bool               `json:"token"`
+	TokenSource     string             `json:"token_source,omitempty"`
+	Health          string             `json:"health"`
+	Ready           string             `json:"ready"`
+	Database        string             `json:"database"`
+	Authenticated   bool               `json:"authenticated"`
+	UserEmail       string             `json:"user_email,omitempty"`
+	Workspace       string             `json:"workspace,omitempty"`
+	WorkspaceCount  int                `json:"workspace_count"`
+	ProviderSummary string             `json:"provider_summary,omitempty"`
+	ProviderStatus  string             `json:"provider_status,omitempty"`
+	ProviderCatalog []api.ProviderInfo `json:"provider_catalog,omitempty"`
+	LogFile         string             `json:"log_file,omitempty"`
+	LogTailLineCap  int                `json:"log_tail_line_cap,omitempty"`
+	RedactedLogTail []string           `json:"redacted_log_tail,omitempty"`
+	Errors          []string           `json:"errors,omitempty"`
 }
 
 type instanceDiagnosticsFlags struct {
@@ -288,6 +292,15 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 				} else {
 					out.WorkspaceCount = len(workspaces)
 				}
+				if providers, err := authClient.ListAccountProviders(cmd.Context()); err != nil {
+					out.Errors = append(out.Errors, "provider catalog: "+err.Error())
+				} else {
+					out.ProviderCatalog = providers
+					out.ProviderSummary = summarizeProviderCatalog(providers)
+					if out.Provider != "" {
+						out.ProviderStatus = providerStatusFor(providers, out.Provider)
+					}
+				}
 			}
 
 			if flags.logsFile != "" {
@@ -323,6 +336,8 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 				{"User email", emptyDash(out.UserEmail)},
 				{"Workspace", emptyDash(out.Workspace)},
 				{"Workspace count", fmt.Sprintf("%d", out.WorkspaceCount)},
+				{"Provider catalog", emptyDash(out.ProviderSummary)},
+				{"Provider status", emptyDash(out.ProviderStatus)},
 				{"Log file", emptyDash(out.LogFile)},
 				{"Redacted log lines", fmt.Sprintf("%d", len(out.RedactedLogTail))},
 			})
@@ -346,6 +361,98 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.provider, "provider", "", "social provider being tested, such as x, mastodon, youtube, or tiktok")
 	cmd.Flags().StringVar(&flags.logsFile, "logs-file", "", "local OpenPost log file to include as a redacted last-100-line tail")
 	return cmd
+}
+
+func summarizeProviderCatalog(providers []api.ProviderInfo) string {
+	if len(providers) == 0 {
+		return ""
+	}
+	counts := map[string]int{}
+	for _, provider := range providers {
+		status := strings.TrimSpace(provider.Status)
+		if status == "" {
+			status = "unknown"
+		}
+		counts[status]++
+	}
+	parts := []string{}
+	knownStatuses := map[string]bool{}
+	for _, status := range []string{"available", "needs_configuration", "planned", "unknown"} {
+		knownStatuses[status] = true
+		if count := counts[status]; count > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", status, count))
+		}
+	}
+	extraStatuses := []string{}
+	for status, count := range counts {
+		if knownStatuses[status] || count == 0 {
+			continue
+		}
+		extraStatuses = append(extraStatuses, status)
+	}
+	sort.Strings(extraStatuses)
+	for _, status := range extraStatuses {
+		parts = append(parts, fmt.Sprintf("%s=%d", status, counts[status]))
+	}
+	return strings.Join(parts, " ")
+}
+
+func providerStatusFor(providers []api.ProviderInfo, requested string) string {
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return ""
+	}
+	for _, provider := range providers {
+		if !providerMatches(provider, requested) {
+			continue
+		}
+		status := strings.TrimSpace(provider.Status)
+		if status == "" {
+			status = "unknown"
+		}
+		configured := "not configured"
+		if provider.Configured {
+			configured = "configured"
+		}
+		return fmt.Sprintf("%s: %s (%s)", providerDisplayName(provider), status, configured)
+	}
+	return fmt.Sprintf("%s: not found", requested)
+}
+
+func providerMatches(provider api.ProviderInfo, requested string) bool {
+	needle := normalizedProviderLookup(requested)
+	if needle == "" {
+		return false
+	}
+	if needle == "twitter" && provider.Platform == "x" {
+		return true
+	}
+	for _, value := range []string{provider.Platform, provider.DisplayName, provider.Name, provider.InstanceURL} {
+		if normalizedProviderLookup(value) == needle {
+			return true
+		}
+	}
+	return false
+}
+
+func providerDisplayName(provider api.ProviderInfo) string {
+	if provider.DisplayName != "" {
+		return provider.DisplayName
+	}
+	if provider.Name != "" {
+		return provider.Name
+	}
+	return provider.Platform
+}
+
+func normalizedProviderLookup(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	replacer := strings.NewReplacer(" ", "", "-", "", "_", "", "/", "", ":", "")
+	value = replacer.Replace(value)
+	if value == "twitter" {
+		return "x"
+	}
+	return value
 }
 
 func diagnosticsToken(cfg *config.Runtime) (token string, source string, ok bool) {

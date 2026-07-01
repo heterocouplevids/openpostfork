@@ -78,6 +78,35 @@ func TestListAccounts_WireFormat(t *testing.T) {
 	}
 }
 
+func TestListAccountProviders_WireFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/accounts/providers" {
+			t.Fatalf("path = %s, want /api/v1/accounts/providers", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"platform":"bluesky","display_name":"Bluesky","auth_mode":"app_password","configured":true,"status":"available","capabilities":["Text posts"]},
+			{"platform":"youtube","display_name":"YouTube","auth_mode":"oauth","configured":false,"status":"needs_configuration","description":"Requires a Google OAuth provider app."}
+		]`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "op_cli_test")
+	got, err := c.ListAccountProviders(context.Background())
+	if err != nil {
+		t.Fatalf("ListAccountProviders returned error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 providers, got %d", len(got))
+	}
+	if got[0].Platform != "bluesky" || !got[0].Configured || got[0].Status != "available" {
+		t.Errorf("provider[0] wrong: %+v", got[0])
+	}
+	if got[1].Platform != "youtube" || got[1].Configured || got[1].Status != "needs_configuration" {
+		t.Errorf("provider[1] wrong: %+v", got[1])
+	}
+}
+
 func TestUpdateAccount_WireFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch {

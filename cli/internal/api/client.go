@@ -321,8 +321,28 @@ type SocialAccount struct {
 	ThreadRepliesSupported bool   `json:"thread_replies_supported"`
 }
 
+type ProviderInfo struct {
+	Platform     string   `json:"platform"`
+	DisplayName  string   `json:"display_name"`
+	AuthMode     string   `json:"auth_mode"`
+	Name         string   `json:"name,omitempty"`
+	InstanceURL  string   `json:"instance_url,omitempty"`
+	Configured   bool     `json:"configured"`
+	Status       string   `json:"status,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
+}
+
 type UpdateAccountInput struct {
 	Slug string `json:"slug"`
+}
+
+func (c *Client) ListAccountProviders(ctx context.Context) ([]ProviderInfo, error) {
+	var out []ProviderInfo
+	if err := c.GetJSON(ctx, "/api/v1/accounts/providers", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *Client) ListAccounts(ctx context.Context, workspaceID string) ([]SocialAccount, error) {

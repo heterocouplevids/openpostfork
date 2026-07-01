@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/openpost/cli/internal/api"
 )
 
 func TestInstanceHealthChecksLivenessAndReadiness(t *testing.T) {
@@ -133,6 +135,9 @@ func TestInstanceDiagnosticsWithTokenIncludesAuthSummary(t *testing.T) {
 		case "/api/v1/workspaces":
 			authHeaders = append(authHeaders, r.Header.Get("Authorization"))
 			_, _ = w.Write([]byte(`[{"id":"ws-1","name":"Production","created_at":"2026-01-01T00:00:00Z"}]`))
+		case "/api/v1/accounts/providers":
+			authHeaders = append(authHeaders, r.Header.Get("Authorization"))
+			_, _ = w.Write([]byte(`[]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -158,6 +163,79 @@ func TestInstanceDiagnosticsWithTokenIncludesAuthSummary(t *testing.T) {
 		if header != "Bearer op_cli_test" {
 			t.Fatalf("authorization header = %q, want bearer token", header)
 		}
+	}
+}
+
+func TestInstanceDiagnosticsIncludesProviderCatalog(t *testing.T) {
+	t.Setenv("OPENPOST_CONFIG_DIR", t.TempDir())
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/health":
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		case "/api/v1/ready":
+			_, _ = w.Write([]byte(`{"status":"ready","database":"ok"}`))
+		case "/api/v1/auth/me":
+			_, _ = w.Write([]byte(`{"id":"user-1","email":"operator@example.com","created_at":"2026-01-01T00:00:00Z"}`))
+		case "/api/v1/workspaces":
+			_, _ = w.Write([]byte(`[{"id":"ws-1","name":"Production","created_at":"2026-01-01T00:00:00Z"}]`))
+		case "/api/v1/accounts/providers":
+			_, _ = w.Write([]byte(`[
+				{"platform":"bluesky","display_name":"Bluesky","auth_mode":"app_password","configured":true,"status":"available"},
+				{"platform":"youtube","display_name":"YouTube","auth_mode":"oauth","configured":false,"status":"needs_configuration"},
+				{"platform":"pinterest","display_name":"Pinterest","auth_mode":"oauth","configured":false,"status":"planned"}
+			]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := executeRootCaptureStdout(
+		t,
+		"--instance", srv.URL,
+		"--token", "op_cli_test",
+		"--json",
+		"instance", "diagnostics",
+		"--provider", "youtube",
+	)
+	if err != nil {
+		t.Fatalf("instance diagnostics returned error: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode json output: %v\noutput:\n%s", err, out)
+	}
+	if got["provider_summary"] != "available=1 needs_configuration=1 planned=1" {
+		t.Fatalf("provider_summary = %#v", got["provider_summary"])
+	}
+	if got["provider_status"] != "YouTube: needs_configuration (not configured)" {
+		t.Fatalf("provider_status = %#v", got["provider_status"])
+	}
+	catalog, ok := got["provider_catalog"].([]any)
+	if !ok || len(catalog) != 3 {
+		t.Fatalf("provider_catalog = %#v, want 3 entries", got["provider_catalog"])
+	}
+}
+
+func TestProviderCatalogSummaryAndLookupHelpers(t *testing.T) {
+	providers := []api.ProviderInfo{
+		{Platform: "x", DisplayName: "X", Configured: true, Status: "available"},
+		{Platform: "youtube", DisplayName: "YouTube", Configured: false, Status: "needs_configuration"},
+		{Platform: "pinterest", DisplayName: "Pinterest", Configured: false, Status: "planned"},
+		{Platform: "instagram", DisplayName: "Instagram", Configured: false, Status: "disabled"},
+	}
+
+	if got := summarizeProviderCatalog(providers); got != "available=1 needs_configuration=1 planned=1 disabled=1" {
+		t.Fatalf("summarizeProviderCatalog() = %q", got)
+	}
+	if got := providerStatusFor(providers, "twitter"); got != "X: available (configured)" {
+		t.Fatalf("providerStatusFor(twitter) = %q", got)
+	}
+	if got := providerStatusFor(providers, "not-a-provider"); got != "not-a-provider: not found" {
+		t.Fatalf("providerStatusFor(not-a-provider) = %q", got)
 	}
 }
 
