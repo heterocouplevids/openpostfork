@@ -63,13 +63,12 @@ This is the implementation map for turning OpenPost into a production-ready self
   URLs for Threads, Instagram, Facebook, and TikTok.
 - Keep Threads and other public-URL providers working through signed/public media URLs.
 
-### 5. Publication Model
+### 5. Draft And Rendition Model
 
-- Introduce **Publication** as the user-facing unit of intent.
-- The first schema and API foundation is in place with `publications`, `publication_assets`, optional `posts.publication_id` links, authenticated create/list/get/update publication endpoints, and post API/MCP draft/schedule flows that preserve source-publication links.
-- Keep **Renditions** as destination-specific versions with format-specific validation.
-- Keep current `posts` flow working while adding publication tables behind tests.
-- Migrate the composer toward source idea, destinations, renditions, and release plan. The composer now shows linked source-publication context, can reapply source copy/media, and hydrates publication media metadata for downstream provider checks.
+- Keep **Post** and **Draft** as the user-facing units of work.
+- Use **Renditions** as destination-specific versions with format-specific validation.
+- Keep the composer centered on base content, destinations, media, per-platform renditions, and release timing.
+- Leave old publication tables in place only as compatibility storage until a migration can safely remove or repurpose them.
 - Support release choreography: same time, staggered posts, platform-first launches, and follow-up threads.
 
 ### 6. MCP And ChatGPT App
@@ -78,7 +77,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Keep the MCP server backend-owned, not frontend-owned.
 - Add a local `openpost-mcp` stdio binary for desktop/self-hosted clients. The CLI now includes a stdio proxy that loads the active OpenPost profile/token and forwards frames to `/mcp`.
 - Reuse CLI/API client behavior where possible, but keep MCP stdout strict.
-- Start with safe semantic tools and prompts: list workspaces, list accounts, create/list source publications, create/list/update draft, set post renditions, upload media from URL, schedule post or draft, cancel post, get post status, suggest next slot, and prompt templates for planning posts, adapting renditions, and reviewing the queue. The remote MCP foundation now supports workspace/account listing, source publication creation/review, draft creation/review/revision, destination-specific rendition updates, guarded URL media upload, quota-checked scheduling for new posts and existing drafts, post status reads, scheduled-post queue inspection/cancellation, next-slot suggestions, and agentic scheduling prompt templates.
+- Start with safe semantic tools and prompts: list workspaces, list accounts, create/list/update drafts, set post renditions, upload media from URL, schedule post or draft, cancel post, get post status, suggest next slot, and prompt templates for planning posts, adapting renditions, and reviewing the queue. The remote MCP foundation now supports workspace/account listing, draft creation/review/revision, destination-specific rendition updates, guarded URL media upload, quota-checked scheduling for new posts and existing drafts, post status reads, scheduled-post queue inspection/cancellation, next-slot suggestions, and agentic scheduling prompt templates.
 - Require auth for remote MCP, scope sessions, log tool calls, and expose revocation in settings. Tool-call logging is now persisted in `mcp_tool_calls`, recent calls are visible in settings with API-token client attribution, Apps SDK-facing protected-resource/tool security metadata, invocation status labels, and output schemas are in place, Settings can create/revoke dedicated `mcp:full` tokens, OAuth authorization-code + PKCE account linking now mints audience-bound MCP tokens, and both manual tokens and OAuth approvals can be limited to one workspace.
 
 ### 7. Marketing, SEO, And Docs
@@ -91,7 +90,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 ### 8. Verification
 
-- Add Playwright smoke tests for marketing, login, onboarding, composer, scheduling, accounts, settings, and media. Coverage is now in place for marketing, docs audience separation, browser registration/login/onboarding, app settings/billing/MCP activity/session revocation, Activity job pagination, provider discovery, custom Mastodon connect, plan onboarding, publication handoff, account-specific composer previews, composer scheduling through suggested slots, and media-library upload/listing.
+- Add Playwright smoke tests for marketing, login, onboarding, composer, scheduling, accounts, settings, and media. Coverage is now in place for marketing, docs audience separation, browser registration/login/onboarding, app settings/billing/MCP activity/session revocation, Activity job pagination, provider discovery, custom Mastodon connect, plan onboarding, account-specific composer previews, composer scheduling through suggested slots, and media-library upload/listing.
 - Add backend regression tests before each schema/service change.
 - Keep `devenv shell -- lint` as the push gate.
 - For hosted deployment work, verify the real app URL, docs URL, marketing URL, release workflow, database backups, and logs.

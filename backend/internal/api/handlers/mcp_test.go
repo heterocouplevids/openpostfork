@@ -48,8 +48,6 @@ func newMCPTestServerWithEntitlement(t *testing.T, entitlement entitlements.Serv
 		(*models.UsageCounter)(nil),
 		(*models.PostingSchedule)(nil),
 		(*models.MediaAttachment)(nil),
-		(*models.Publication)(nil),
-		(*models.PublicationAsset)(nil),
 		(*models.MCPToolCall)(nil),
 	)
 	ctx := context.Background()
@@ -140,40 +138,6 @@ func insertMCPTestMedia(t *testing.T, srv *mcpTestServer, media models.MediaAtta
 		media.CreatedAt = time.Date(2026, 6, 30, 15, 0, 0, 0, time.UTC)
 	}
 	_, err := srv.db.NewInsert().Model(&media).Exec(context.Background())
-	require.NoError(t, err)
-}
-
-func insertMCPTestPublication(t *testing.T, srv *mcpTestServer, publication models.Publication) {
-	t.Helper()
-
-	if publication.ID == "" {
-		publication.ID = "pub-1"
-	}
-	if publication.WorkspaceID == "" {
-		publication.WorkspaceID = "ws-1"
-	}
-	if publication.CreatedByID == "" {
-		publication.CreatedByID = "user-1"
-	}
-	if publication.Title == "" {
-		publication.Title = publication.ID
-	}
-	if publication.SourceContent == "" {
-		publication.SourceContent = "Source content"
-	}
-	if publication.Status == "" {
-		publication.Status = models.PublicationStatusDraft
-	}
-	if publication.ReleasePlanJSON == "" {
-		publication.ReleasePlanJSON = "{}"
-	}
-	if publication.CreatedAt.IsZero() {
-		publication.CreatedAt = time.Date(2026, 6, 30, 15, 30, 0, 0, time.UTC)
-	}
-	if publication.UpdatedAt.IsZero() {
-		publication.UpdatedAt = publication.CreatedAt
-	}
-	_, err := srv.db.NewInsert().Model(&publication).Exec(context.Background())
 	require.NoError(t, err)
 }
 
@@ -309,33 +273,29 @@ func TestMCPToolsList(t *testing.T) {
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	require.Len(t, tools, 18)
+	require.Len(t, tools, 16)
 	require.Equal(t, "list_workspaces", tools[0].(map[string]any)["name"])
 	require.Equal(t, "list_provider_catalog", tools[1].(map[string]any)["name"])
-	require.Equal(t, "list_publications", tools[2].(map[string]any)["name"])
-	require.Equal(t, "list_accounts", tools[3].(map[string]any)["name"])
-	require.Equal(t, "list_media", tools[4].(map[string]any)["name"])
-	require.Equal(t, "create_publication", tools[5].(map[string]any)["name"])
-	require.Equal(t, "create_draft", tools[6].(map[string]any)["name"])
-	require.Equal(t, "list_drafts", tools[7].(map[string]any)["name"])
-	require.Equal(t, "update_draft", tools[8].(map[string]any)["name"])
-	require.Equal(t, "set_post_renditions", tools[9].(map[string]any)["name"])
-	require.Equal(t, "schedule_post", tools[10].(map[string]any)["name"])
-	require.Equal(t, "schedule_draft", tools[11].(map[string]any)["name"])
-	require.Equal(t, "get_post_status", tools[12].(map[string]any)["name"])
-	require.Equal(t, "list_scheduled_posts", tools[13].(map[string]any)["name"])
-	require.Equal(t, "cancel_post", tools[14].(map[string]any)["name"])
-	require.Equal(t, "suggest_next_slot", tools[15].(map[string]any)["name"])
-	require.Equal(t, "upload_media_from_url", tools[16].(map[string]any)["name"])
-	require.Equal(t, "render_scheduler_widget", tools[17].(map[string]any)["name"])
+	require.Equal(t, "list_accounts", tools[2].(map[string]any)["name"])
+	require.Equal(t, "list_media", tools[3].(map[string]any)["name"])
+	require.Equal(t, "create_draft", tools[4].(map[string]any)["name"])
+	require.Equal(t, "list_drafts", tools[5].(map[string]any)["name"])
+	require.Equal(t, "update_draft", tools[6].(map[string]any)["name"])
+	require.Equal(t, "set_post_renditions", tools[7].(map[string]any)["name"])
+	require.Equal(t, "schedule_post", tools[8].(map[string]any)["name"])
+	require.Equal(t, "schedule_draft", tools[9].(map[string]any)["name"])
+	require.Equal(t, "get_post_status", tools[10].(map[string]any)["name"])
+	require.Equal(t, "list_scheduled_posts", tools[11].(map[string]any)["name"])
+	require.Equal(t, "cancel_post", tools[12].(map[string]any)["name"])
+	require.Equal(t, "suggest_next_slot", tools[13].(map[string]any)["name"])
+	require.Equal(t, "upload_media_from_url", tools[14].(map[string]any)["name"])
+	require.Equal(t, "render_scheduler_widget", tools[15].(map[string]any)["name"])
 
 	requiredOutputKeys := map[string][]any{
 		mcpToolWorkspaces:    {"workspaces"},
 		mcpToolProviders:     {"providers"},
-		mcpToolPublications:  {"publications"},
 		mcpToolAccounts:      {"accounts"},
 		mcpToolListMedia:     {"media"},
-		mcpToolCreatePub:     {"publication"},
 		mcpToolCreateDraft:   {"post"},
 		mcpToolListDrafts:    {"posts"},
 		mcpToolUpdateDraft:   {"post"},
@@ -398,7 +358,7 @@ func TestMCPInitializeAdvertisesPrompts(t *testing.T) {
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
-	require.Contains(t, result["instructions"], "List workspaces, accounts, and providers")
+	require.Contains(t, result["instructions"], "List workspaces, accounts, providers, and media")
 	require.Contains(t, result["instructions"], "render_scheduler_widget")
 	capabilities := result["capabilities"].(map[string]any)
 	require.Contains(t, capabilities, "tools")
@@ -766,122 +726,6 @@ func TestMCPCallRenderSchedulerWidget(t *testing.T) {
 	require.Equal(t, "post-1", posts[0].(map[string]any)["id"])
 }
 
-func TestMCPCallCreatePublication(t *testing.T) {
-	t.Parallel()
-
-	srv := newMCPTestServer(t)
-	insertMCPTestMedia(t, srv, models.MediaAttachment{
-		ID:               "media-publication",
-		OriginalFilename: "publication.png",
-	})
-	resp := srv.request(t, "web-token", map[string]any{
-		"jsonrpc": "2.0",
-		"id":      "create-publication",
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name": mcpToolCreatePub,
-			"arguments": map[string]any{
-				"workspace_id":   "ws-1",
-				"title":          "MCP launch",
-				"source_content": "OpenPost now supports agentic scheduling through MCP and ChatGPT Apps.",
-				"source_url":     "https://openpost.social/blog/mcp-launch",
-				"goal":           "announce",
-				"audience":       "builders",
-				"media_ids":      []string{"media-publication"},
-			},
-		},
-	})
-
-	require.Equal(t, http.StatusOK, resp.Code)
-	var out map[string]any
-	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
-	result := out["result"].(map[string]any)
-	content := result["content"].([]any)
-	require.Contains(t, content[0].(map[string]any)["text"], "Publication created:")
-	structured := result["structuredContent"].(map[string]any)
-	publication := structured["publication"].(map[string]any)
-	require.NotEmpty(t, publication["id"])
-	require.Equal(t, "ws-1", publication["workspace_id"])
-	require.Equal(t, "MCP launch", publication["title"])
-	require.Equal(t, "draft", publication["status"])
-	require.Equal(t, "announce", publication["goal"])
-	require.Equal(t, "builders", publication["audience"])
-	require.Equal(t, []any{"media-publication"}, publication["media_ids"])
-
-	var assetCount int
-	require.NoError(t, srv.db.NewSelect().
-		ColumnExpr("COUNT(*)").
-		TableExpr("publication_assets").
-		Where("media_id = ?", "media-publication").
-		Scan(context.Background(), &assetCount))
-	require.Equal(t, 1, assetCount)
-}
-
-func TestMCPCallListPublications(t *testing.T) {
-	t.Parallel()
-
-	srv := newMCPTestServer(t)
-	insertMCPTestMedia(t, srv, models.MediaAttachment{ID: "media-list-publication"})
-	ctx := context.Background()
-	_, err := srv.db.NewInsert().Model(&models.Publication{
-		ID:              "pub-list",
-		WorkspaceID:     "ws-1",
-		CreatedByID:     "user-1",
-		Title:           "Queue polish",
-		SourceContent:   "Improve the queue review flow.",
-		Status:          models.PublicationStatusDraft,
-		ReleasePlanJSON: "{}",
-		CreatedAt:       time.Date(2026, 6, 30, 18, 0, 0, 0, time.UTC),
-		UpdatedAt:       time.Date(2026, 6, 30, 18, 0, 0, 0, time.UTC),
-	}).Exec(ctx)
-	require.NoError(t, err)
-	_, err = srv.db.NewInsert().Model(&models.Publication{
-		ID:              "pub-ready",
-		WorkspaceID:     "ws-1",
-		CreatedByID:     "user-1",
-		Title:           "Ready launch",
-		SourceContent:   "Already ready.",
-		Status:          models.PublicationStatusReady,
-		ReleasePlanJSON: "{}",
-		CreatedAt:       time.Date(2026, 6, 30, 19, 0, 0, 0, time.UTC),
-		UpdatedAt:       time.Date(2026, 6, 30, 19, 0, 0, 0, time.UTC),
-	}).Exec(ctx)
-	require.NoError(t, err)
-	_, err = srv.db.NewInsert().Model(&models.PublicationAsset{
-		PublicationID: "pub-list",
-		MediaID:       "media-list-publication",
-		DisplayOrder:  0,
-	}).Exec(ctx)
-	require.NoError(t, err)
-
-	resp := srv.request(t, "web-token", map[string]any{
-		"jsonrpc": "2.0",
-		"id":      "list-publications",
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name": mcpToolPublications,
-			"arguments": map[string]any{
-				"workspace_id": "ws-1",
-				"status":       "draft",
-			},
-		},
-	})
-
-	require.Equal(t, http.StatusOK, resp.Code)
-	var out map[string]any
-	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
-	result := out["result"].(map[string]any)
-	content := result["content"].([]any)
-	require.Contains(t, content[0].(map[string]any)["text"], "Found 1 publications.")
-	structured := result["structuredContent"].(map[string]any)
-	publications := structured["publications"].([]any)
-	require.Len(t, publications, 1)
-	publication := publications[0].(map[string]any)
-	require.Equal(t, "pub-list", publication["id"])
-	require.Equal(t, "Queue polish", publication["title"])
-	require.Equal(t, []any{"media-list-publication"}, publication["media_ids"])
-}
-
 func TestMCPCallListAccounts(t *testing.T) {
 	t.Parallel()
 
@@ -1060,7 +904,6 @@ func TestMCPCallCreateDraft(t *testing.T) {
 	t.Parallel()
 
 	srv := newMCPTestServer(t)
-	insertMCPTestPublication(t, srv, models.Publication{ID: "pub-draft"})
 	insertMCPTestMedia(t, srv, models.MediaAttachment{
 		ID:               "media-draft",
 		OriginalFilename: "draft.png",
@@ -1075,7 +918,6 @@ func TestMCPCallCreateDraft(t *testing.T) {
 			"arguments": map[string]any{
 				"workspace_id":       "ws-1",
 				"content":            "Draft from an agent",
-				"publication_id":     "pub-draft",
 				"social_account_ids": []string{"account-1"},
 				"media_ids":          []string{"media-draft"},
 			},
@@ -1090,7 +932,6 @@ func TestMCPCallCreateDraft(t *testing.T) {
 	post := structured["post"].(map[string]any)
 	require.Equal(t, "draft", post["status"])
 	require.Equal(t, "ws-1", post["workspace_id"])
-	require.Equal(t, "pub-draft", post["publication_id"])
 	require.Equal(t, []any{"media-draft"}, post["media_ids"])
 	media := post["media"].([]any)
 	require.Len(t, media, 1)
@@ -1103,7 +944,6 @@ func TestMCPCallCreateDraft(t *testing.T) {
 	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("id = ?", postID).Scan(context.Background()))
 	require.Equal(t, "Draft from an agent", stored.Content)
 	require.Equal(t, "user-1", stored.CreatedByID)
-	require.Equal(t, "pub-draft", stored.PublicationID)
 	var destinationCount int
 	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("post_destinations").Where("post_id = ?", postID).Scan(context.Background(), &destinationCount))
 	require.Equal(t, 1, destinationCount)
@@ -1111,40 +951,6 @@ func TestMCPCallCreateDraft(t *testing.T) {
 	require.NoError(t, srv.db.NewSelect().Model(&postMedia).Where("post_id = ?", postID).Scan(context.Background()))
 	require.Equal(t, "media-draft", postMedia.MediaID)
 	require.Equal(t, 0, postMedia.DisplayOrder)
-}
-
-func TestMCPCallCreateDraftRejectsOutsidePublication(t *testing.T) {
-	t.Parallel()
-
-	srv := newMCPTestServer(t)
-	insertMCPTestPublication(t, srv, models.Publication{
-		ID:          "pub-other-workspace",
-		WorkspaceID: "ws-2",
-		CreatedByID: "other-user",
-	})
-	resp := srv.request(t, "web-token", map[string]any{
-		"jsonrpc": "2.0",
-		"id":      "call-draft-outside-publication",
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name": "create_draft",
-			"arguments": map[string]any{
-				"workspace_id":       "ws-1",
-				"content":            "Draft from an agent",
-				"publication_id":     "pub-other-workspace",
-				"social_account_ids": []string{"account-1"},
-			},
-		},
-	})
-
-	require.Equal(t, http.StatusOK, resp.Code)
-	var out map[string]any
-	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
-	rpcErr := out["error"].(map[string]any)
-	require.Contains(t, rpcErr["message"], "publication_id")
-	var count int
-	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &count))
-	require.Equal(t, 0, count)
 }
 
 func TestMCPCallCreateDraftRejectsOutsideAccount(t *testing.T) {
@@ -1552,7 +1358,6 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 	t.Parallel()
 
 	srv := newMCPTestServer(t)
-	insertMCPTestPublication(t, srv, models.Publication{ID: "pub-schedule"})
 	insertMCPTestMedia(t, srv, models.MediaAttachment{
 		ID:               "media-schedule",
 		OriginalFilename: "schedule.png",
@@ -1568,7 +1373,6 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 			"arguments": map[string]any{
 				"workspace_id":       "ws-1",
 				"content":            "Ship agentic scheduling",
-				"publication_id":     "pub-schedule",
 				"scheduled_at":       scheduledAt,
 				"social_account_ids": []string{"account-1"},
 				"media_ids":          []string{"media-schedule"},
@@ -1585,7 +1389,6 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 	require.Equal(t, "scheduled", post["status"])
 	require.Equal(t, scheduledAt, post["scheduled_at"])
 	require.Equal(t, "Ship agentic scheduling", post["content"])
-	require.Equal(t, "pub-schedule", post["publication_id"])
 	destinations := post["destinations"].([]any)
 	require.Len(t, destinations, 1)
 	require.Equal(t, "account-1", destinations[0].(map[string]any)["social_account_id"])
@@ -1599,7 +1402,6 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 	require.NoError(t, srv.db.NewSelect().Model(&storedPost).Where("id = ?", postID).Scan(context.Background()))
 	require.Equal(t, statusScheduled, storedPost.Status)
 	require.Equal(t, "user-1", storedPost.CreatedByID)
-	require.Equal(t, "pub-schedule", storedPost.PublicationID)
 	require.Equal(t, time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC), storedPost.ScheduledAt)
 	require.Equal(t, storedPost.ScheduledAt, storedPost.ActualRunAt)
 

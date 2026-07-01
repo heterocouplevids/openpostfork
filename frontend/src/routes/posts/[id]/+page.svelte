@@ -27,7 +27,6 @@
 		id: string;
 		workspace_id: string;
 		created_by: string;
-		publication_id?: string;
 		content: string;
 		status: string;
 		scheduled_at: string;

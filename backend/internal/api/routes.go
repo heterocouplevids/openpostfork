@@ -123,12 +123,6 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	postHandler.GetVariants(api)
 	postHandler.DeleteVariants(api)
 
-	publicationHandler := handlers.NewPublicationHandler(deps.DB, deps.Authenticator)
-	publicationHandler.CreatePublication(api)
-	publicationHandler.ListPublications(api)
-	publicationHandler.GetPublication(api)
-	publicationHandler.UpdatePublication(api)
-
 	setHandler := handlers.NewSetHandler(deps.DB, deps.Authenticator)
 	setHandler.CreateSet(api)
 	setHandler.ListSets(api)

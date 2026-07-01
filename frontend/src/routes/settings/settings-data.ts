@@ -79,44 +79,52 @@ export const cleanupDaysOptions = [
 
 export const providerAppOptions = [
 	{
-		value: 'x',
-		label: 'X / Twitter',
-		description: 'OAuth app for X publishing and account connection.'
-	},
-	{
 		value: 'mastodon',
 		label: 'Mastodon',
-		description: 'OAuth app for one federated Mastodon instance.'
+		description: 'Primary use case: add app credentials for any Mastodon instance you support.',
+		guideHref: 'https://docs.openpost.social/providers/mastodon'
+	},
+	{
+		value: 'x',
+		label: 'X / Twitter',
+		description: 'Optional override for X account connections and publishing.',
+		guideHref: 'https://docs.openpost.social/providers/x'
 	},
 	{
 		value: 'linkedin',
 		label: 'LinkedIn',
-		description: 'LinkedIn app for company and member posting.'
+		description: 'Optional override for LinkedIn company and member posting.',
+		guideHref: 'https://docs.openpost.social/providers/linkedin'
 	},
 	{
 		value: 'threads',
 		label: 'Threads',
-		description: 'Meta app credentials for Threads publishing.'
+		description: 'Optional Meta app override for Threads publishing.',
+		guideHref: 'https://docs.openpost.social/providers/threads'
 	},
 	{
 		value: 'facebook',
 		label: 'Facebook Pages',
-		description: 'Meta app credentials for Facebook Page publishing.'
+		description: 'Optional Meta app override for Facebook Page publishing.',
+		guideHref: 'https://docs.openpost.social/providers/facebook'
 	},
 	{
 		value: 'instagram',
 		label: 'Instagram Business',
-		description: 'Meta app credentials for Instagram media publishing.'
+		description: 'Optional Meta app override for Instagram media publishing.',
+		guideHref: 'https://docs.openpost.social/providers/instagram'
 	},
 	{
 		value: 'youtube',
 		label: 'YouTube',
-		description: 'Google OAuth app for YouTube channel uploads.'
+		description: 'Optional Google OAuth override for YouTube channel uploads.',
+		guideHref: 'https://docs.openpost.social/providers/youtube'
 	},
 	{
 		value: 'tiktok',
 		label: 'TikTok',
-		description: 'TikTok developer app for video publishing.'
+		description: 'Optional TikTok developer app override for video publishing.',
+		guideHref: 'https://docs.openpost.social/providers/tiktok'
 	}
 ];
 

@@ -7,7 +7,6 @@ import { getApiBase } from '$lib/stores/instance.svelte';
 export type User = components['schemas']['UserProfile'];
 export type Workspace = components['schemas']['Item'];
 export type Post = components['schemas']['PostResponse'];
-export type Publication = components['schemas']['PublicationResponse'];
 export type SocialAccount = components['schemas']['AccountResponse'];
 export type ScheduleOverview = components['schemas']['ScheduleOverviewOutputBody'];
 export type AuthResponse = components['schemas']['AuthOutputBody'];

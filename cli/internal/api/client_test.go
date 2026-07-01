@@ -382,90 +382,6 @@ func TestListMedia_EmptyResponse(t *testing.T) {
 	}
 }
 
-func TestPublicationEndpoints_WireFormat(t *testing.T) {
-	var sawCreate, sawList, sawGet, sawUpdate bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/publications":
-			sawCreate = true
-			var body CreatePublicationInput
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode create body: %v", err)
-			}
-			if body.WorkspaceID != "ws_1" || body.Title != "Launch" || body.SourceContent != "Ship the CLI publication flow" || len(body.MediaIDs) != 1 || body.MediaIDs[0] != "med_1" {
-				t.Errorf("create body wrong: %+v", body)
-			}
-			_, _ = w.Write([]byte(`{"id":"pub_1","workspace_id":"ws_1","created_by":"u_1","title":"Launch","source_content":"Ship the CLI publication flow","status":"draft","release_plan_json":"{}","media_ids":["med_1"],"created_at":"2026-06-30T10:00:00Z","updated_at":"2026-06-30T10:00:00Z"}`))
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/publications":
-			sawList = true
-			if got := r.URL.Query().Get("workspace_id"); got != "ws_1" {
-				t.Errorf("workspace_id = %q, want ws_1", got)
-			}
-			if got := r.URL.Query().Get("status"); got != "draft" {
-				t.Errorf("status = %q, want draft", got)
-			}
-			if got := r.URL.Query().Get("limit"); got != "25" {
-				t.Errorf("limit = %q, want 25", got)
-			}
-			if got := r.URL.Query().Get("offset"); got != "10" {
-				t.Errorf("offset = %q, want 10", got)
-			}
-			_, _ = w.Write([]byte(`[{"id":"pub_1","workspace_id":"ws_1","created_by":"u_1","title":"Launch","source_content":"Ship the CLI publication flow","status":"draft","release_plan_json":"{}","media_ids":["med_1"],"created_at":"2026-06-30T10:00:00Z","updated_at":"2026-06-30T10:00:00Z"}]`))
-		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/publications/pub_1":
-			sawGet = true
-			_, _ = w.Write([]byte(`{"id":"pub_1","workspace_id":"ws_1","created_by":"u_1","title":"Launch","source_content":"Ship the CLI publication flow","status":"draft","release_plan_json":"{}","media_ids":["med_1"],"created_at":"2026-06-30T10:00:00Z","updated_at":"2026-06-30T10:00:00Z"}`))
-		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/publications/pub_1":
-			sawUpdate = true
-			var body UpdatePublicationInput
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode update body: %v", err)
-			}
-			if body.Status == nil || *body.Status != "ready" {
-				t.Errorf("status body wrong: %+v", body.Status)
-			}
-			if body.MediaIDs == nil || len(*body.MediaIDs) != 0 {
-				t.Errorf("media_ids body wrong: %+v", body.MediaIDs)
-			}
-			_, _ = w.Write([]byte(`{"id":"pub_1","workspace_id":"ws_1","created_by":"u_1","title":"Launch","source_content":"Ship the CLI publication flow","status":"ready","release_plan_json":"{}","created_at":"2026-06-30T10:00:00Z","updated_at":"2026-06-30T11:00:00Z"}`))
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
-		}
-	}))
-	defer srv.Close()
-
-	c := New(srv.URL, "")
-	if _, err := c.CreatePublication(context.Background(), CreatePublicationInput{WorkspaceID: "ws_1", Title: "Launch", SourceContent: "Ship the CLI publication flow", MediaIDs: []string{"med_1"}}); err != nil {
-		t.Fatalf("CreatePublication returned error: %v", err)
-	}
-	listed, err := c.ListPublications(context.Background(), ListPublicationsInput{WorkspaceID: "ws_1", Status: "draft", Limit: 25, Offset: 10})
-	if err != nil {
-		t.Fatalf("ListPublications returned error: %v", err)
-	}
-	if len(listed) != 1 || listed[0].ID != "pub_1" || listed[0].MediaIDs[0] != "med_1" {
-		t.Fatalf("listed publication wrong: %+v", listed)
-	}
-	got, err := c.GetPublication(context.Background(), "pub_1")
-	if err != nil {
-		t.Fatalf("GetPublication returned error: %v", err)
-	}
-	if got.ID != "pub_1" || got.Title != "Launch" {
-		t.Fatalf("publication wrong: %+v", got)
-	}
-	status := "ready"
-	emptyMedia := []string{}
-	updated, err := c.UpdatePublication(context.Background(), "pub_1", UpdatePublicationInput{Status: &status, MediaIDs: &emptyMedia})
-	if err != nil {
-		t.Fatalf("UpdatePublication returned error: %v", err)
-	}
-	if updated.Status != "ready" {
-		t.Fatalf("updated status = %q, want ready", updated.Status)
-	}
-	if !sawCreate || !sawList || !sawGet || !sawUpdate {
-		t.Fatalf("missing request create=%t list=%t get=%t update=%t", sawCreate, sawList, sawGet, sawUpdate)
-	}
-}
-
 // TestListPosts_WireFormat: server returns a raw array of posts.
 func TestListPosts_WireFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -596,7 +512,7 @@ func TestNextAvailableSlot_WireFormat(t *testing.T) {
 func TestCreatePost_WireFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"p_new","workspace_id":"ws_1","created_by":"u_1","publication_id":"pub_1","content":"Hi","status":"draft","scheduled_at":"","created_at":"2026-06-15T10:00:00Z","random_delay_minutes":0}`))
+		_, _ = w.Write([]byte(`{"id":"p_new","workspace_id":"ws_1","created_by":"u_1","content":"Hi","status":"draft","scheduled_at":"","created_at":"2026-06-15T10:00:00Z","random_delay_minutes":0}`))
 	}))
 	defer srv.Close()
 
@@ -614,9 +530,6 @@ func TestCreatePost_WireFormat(t *testing.T) {
 	}
 	if got.Content != "Hi" {
 		t.Errorf("expected content Hi, got %q", got.Content)
-	}
-	if got.PublicationID != "pub_1" {
-		t.Errorf("expected publication_id pub_1, got %q", got.PublicationID)
 	}
 }
 

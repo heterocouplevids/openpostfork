@@ -71,7 +71,6 @@ type CreatePostInput struct {
 		ScheduledAt        *time.Time `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
 		SocialAccountIDs   []string   `json:"social_account_ids" doc:"Social account IDs to publish to"`
 		MediaIDs           []string   `json:"media_ids,omitempty" doc:"Media attachment IDs to include"`
-		PublicationID      string     `json:"publication_id,omitempty" doc:"Optional source publication ID this post was derived from"`
 		RandomDelayMinutes int        `json:"random_delay_minutes,omitempty" doc:"Random delay in minutes (±N) to add for natural posting"`
 		ThreadDraft        *string    `json:"thread_draft,omitempty" doc:"Optional thread draft JSON (encoded with __openpost_thread__: prefix) for a parent post that drafts a multi-post thread. Mutually exclusive with a thread blob in content: the new field is preferred."`
 	}
@@ -92,7 +91,6 @@ type PostResponse struct {
 	ID                 string                    `json:"id" doc:"Post ID"`
 	WorkspaceID        string                    `json:"workspace_id" doc:"Workspace ID"`
 	CreatedByID        string                    `json:"created_by" doc:"Creator user ID"`
-	PublicationID      string                    `json:"publication_id,omitempty" doc:"Source publication ID"`
 	Content            string                    `json:"content" doc:"Post content"`
 	Status             string                    `json:"status" doc:"Post status (draft, scheduled, publishing, published, failed)"`
 	ScheduledAt        string                    `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
@@ -389,25 +387,6 @@ func postMediaIDs(ctx context.Context, db *bun.DB, postID string) ([]string, err
 	return mediaIDs, nil
 }
 
-func (h *PostHandler) validatePublicationBelongsToWorkspace(ctx context.Context, workspaceID, publicationID string) (string, error) {
-	publicationID = strings.TrimSpace(publicationID)
-	if publicationID == "" {
-		return "", nil
-	}
-	count, err := h.db.NewSelect().
-		Model((*models.Publication)(nil)).
-		Where("workspace_id = ?", workspaceID).
-		Where("id = ?", publicationID).
-		Count(ctx)
-	if err != nil {
-		return "", huma.Error500InternalServerError("failed to validate publication")
-	}
-	if count == 0 {
-		return "", huma.Error400BadRequest("publication_id is invalid or outside this workspace")
-	}
-	return publicationID, nil
-}
-
 func (h *PostHandler) checkScheduledPostQuota(ctx context.Context, workspaceID string, amount int64, scheduledAt time.Time) error {
 	current, err := h.usage.CurrentMonthly(ctx, workspaceID, entitlements.LimitScheduledPostsMonthly, scheduledAt)
 	if err != nil {
@@ -485,10 +464,6 @@ func (h *PostHandler) CreatePost(api huma.API) {
 		if err := h.validateMediaBelongsToWorkspace(ctx, input.Body.WorkspaceID, input.Body.MediaIDs); err != nil {
 			return nil, err
 		}
-		publicationID, err := h.validatePublicationBelongsToWorkspace(ctx, input.Body.WorkspaceID, input.Body.PublicationID)
-		if err != nil {
-			return nil, err
-		}
 
 		status := statusDraft
 		if input.Body.ScheduledAt != nil {
@@ -507,7 +482,6 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			ID:                 uuid.New().String(),
 			WorkspaceID:        input.Body.WorkspaceID,
 			CreatedByID:        userID,
-			PublicationID:      publicationID,
 			Content:            input.Body.Content,
 			Status:             status,
 			RandomDelayMinutes: input.Body.RandomDelayMinutes,
@@ -543,7 +517,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			})
 		}
 
-		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 			if _, err := tx.NewInsert().Model(post).Exec(txCtx); err != nil {
 				return err
 			}
@@ -597,7 +571,6 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			ID:                 post.ID,
 			WorkspaceID:        post.WorkspaceID,
 			CreatedByID:        post.CreatedByID,
-			PublicationID:      post.PublicationID,
 			Content:            post.Content,
 			Status:             post.Status,
 			ScheduledAt:        post.ScheduledAt.Format(time.RFC3339),
@@ -805,7 +778,6 @@ func postResponseForList(p models.Post, destinations []PostDestinationResponse, 
 		ID:                 p.ID,
 		WorkspaceID:        p.WorkspaceID,
 		CreatedByID:        p.CreatedByID,
-		PublicationID:      p.PublicationID,
 		Content:            p.Content,
 		Status:             p.Status,
 		ScheduledAt:        p.ScheduledAt.Format(time.RFC3339),
@@ -1130,7 +1102,6 @@ type CreateThreadInput struct {
 		WorkspaceID        string            `json:"workspace_id" doc:"Target workspace ID"`
 		ScheduledAt        *time.Time        `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Omit for draft."`
 		SocialAccountIDs   []string          `json:"social_account_ids" doc:"Social account IDs to publish to"`
-		PublicationID      string            `json:"publication_id,omitempty" doc:"Optional source publication ID this thread was derived from"`
 		Posts              []ThreadPostInput `json:"posts" minItems:"2" doc:"Thread posts in order"`
 		RandomDelayMinutes int               `json:"random_delay_minutes,omitempty" doc:"Random delay in minutes (±N) to add for natural posting"`
 	}
@@ -1171,10 +1142,6 @@ func (h *PostHandler) CreateThread(api huma.API) {
 		if err := h.validateAccountsBelongToWorkspace(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs); err != nil {
 			return nil, err
 		}
-		publicationID, err := h.validatePublicationBelongsToWorkspace(ctx, input.Body.WorkspaceID, input.Body.PublicationID)
-		if err != nil {
-			return nil, err
-		}
 
 		if len(input.Body.Posts) < 2 {
 			return nil, huma.Error400BadRequest("a thread must have at least 2 posts")
@@ -1204,7 +1171,6 @@ func (h *PostHandler) CreateThread(api huma.API) {
 				ID:                 uuid.New().String(),
 				WorkspaceID:        input.Body.WorkspaceID,
 				CreatedByID:        userID,
-				PublicationID:      publicationID,
 				Content:            threadPost.Content,
 				Status:             status,
 				ThreadSequence:     i,
@@ -1237,7 +1203,7 @@ func (h *PostHandler) CreateThread(api huma.API) {
 			}
 		}
 
-		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 			for _, post := range posts {
 				if _, err := tx.NewInsert().Model(post).Exec(txCtx); err != nil {
 					return err
@@ -1319,7 +1285,6 @@ type PostDetailResponse struct {
 	ID                 string                    `json:"id" doc:"Post ID"`
 	WorkspaceID        string                    `json:"workspace_id" doc:"Workspace ID"`
 	CreatedByID        string                    `json:"created_by" doc:"Creator user ID"`
-	PublicationID      string                    `json:"publication_id,omitempty" doc:"Source publication ID"`
 	Content            string                    `json:"content" doc:"Post content"`
 	Status             string                    `json:"status" doc:"Post status"`
 	ScheduledAt        string                    `json:"scheduled_at" doc:"Scheduled time (ISO 8601)"`
@@ -1419,7 +1384,6 @@ func (h *PostHandler) GetPost(api huma.API) {
 			ID:                 post.ID,
 			WorkspaceID:        post.WorkspaceID,
 			CreatedByID:        post.CreatedByID,
-			PublicationID:      post.PublicationID,
 			Content:            post.Content,
 			Status:             post.Status,
 			ScheduledAt:        post.ScheduledAt.Format(time.RFC3339),
@@ -1457,7 +1421,6 @@ type UpdatePostInput struct {
 		ScheduledAt        *string  `json:"scheduled_at,omitempty" doc:"Schedule time (ISO 8601). Set to empty string to unschedule (make draft)."`
 		SocialAccountIDs   []string `json:"social_account_ids,omitempty" doc:"Social account IDs to publish to (replace all)"`
 		MediaIDs           []string `json:"media_ids,omitempty" doc:"Media attachment IDs to include (replace all)"`
-		PublicationID      *string  `json:"publication_id,omitempty" doc:"Source publication ID to link. Send an empty string to clear it."`
 		RandomDelayMinutes *int     `json:"random_delay_minutes,omitempty" doc:"Random delay in minutes (±N) to add for natural posting"`
 		ThreadDraft        *string  `json:"thread_draft,omitempty" doc:"Thread draft JSON (encoded with __openpost_thread__: prefix). Send a non-null value to set or replace the draft; send an empty string to clear it and revert to a single post. Send null (or omit) to leave the existing draft unchanged."`
 	}
@@ -1641,13 +1604,6 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 				return nil, err
 			}
 		}
-		if input.Body.PublicationID != nil {
-			publicationID, err := h.validatePublicationBelongsToWorkspace(ctx, post.WorkspaceID, *input.Body.PublicationID)
-			if err != nil {
-				return nil, err
-			}
-			post.PublicationID = publicationID
-		}
 		if input.Body.Content != nil && isThreadDraft(*input.Body.Content) {
 			// Legacy fallback: a client that still packs the thread into
 			// `content` instead of using the explicit `thread_draft`
@@ -1708,25 +1664,6 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 		}
 
 		err = h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
-			if input.Body.PublicationID != nil {
-				if _, err := tx.NewUpdate().Model(&post).Column("publication_id").Where("id = ?", post.ID).Exec(txCtx); err != nil {
-					return fmt.Errorf("failed to update publication link: %w", err)
-				}
-				descendantIDs, err := getThreadPostIDsTx(txCtx, tx, post.ID, false)
-				if err != nil {
-					return err
-				}
-				if len(descendantIDs) > 0 {
-					if _, err := tx.NewUpdate().
-						Model((*models.Post)(nil)).
-						Set("publication_id = ?", post.PublicationID).
-						Where("id IN (?)", bun.List(descendantIDs)).
-						Exec(txCtx); err != nil {
-						return fmt.Errorf("failed to sync thread publication links: %w", err)
-					}
-				}
-			}
-
 			// Compute the new content and the thread_drafts row, if any.
 			// resolveThreadDraftInput prefers the explicit field and
 			// falls back to detecting the legacy blob in `content`.
@@ -1979,7 +1916,6 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			ID:                 respPost.ID,
 			WorkspaceID:        respPost.WorkspaceID,
 			CreatedByID:        respPost.CreatedByID,
-			PublicationID:      respPost.PublicationID,
 			Content:            respPost.Content,
 			Status:             respPost.Status,
 			ScheduledAt:        respPost.ScheduledAt.Format(time.RFC3339),

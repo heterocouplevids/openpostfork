@@ -13,27 +13,25 @@ team seats until they are accepted, revoked, or expire.
 
 A connected provider account, such as one X account or one Mastodon profile.
 
-## Publication
-
-The top-level unit of intent: one update, launch, idea, link, or asset set that
-can be adapted into platform-native posts.
-
-See [Publications](/usage/publications) for the web-app workflow and
-[CLI Publications](/cli/publications) for terminal automation.
-
 ## Post
 
-A scheduled or published artifact that can belong to a publication. Today a post
-can target one or multiple providers; over time posts become the platform-facing
-renditions created from a publication.
+A scheduled or published artifact that can target one or multiple provider
+accounts. A post starts from base content and can carry destination-specific
+renditions when one copy does not fit every platform.
+
+## Draft
+
+An editable post before it is scheduled or published. Drafts can be created
+from the web app, CLI, API, or MCP tools.
 
 ## Thread
 
 A chain of posts published in sequence. OpenPost maps thread replies to each provider's API model.
 
-## Variant
+## Rendition
 
-Account-specific content for a post when one message does not fit every connected destination equally well.
+Account-specific content for a post when one message does not fit every
+connected destination equally well.
 
 ## Media
 

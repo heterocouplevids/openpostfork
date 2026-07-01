@@ -1,6 +1,6 @@
 # Posting with the CLI
 
-Use `openpost post` for single posts, `openpost thread` for markdown threads, and `openpost media` for uploads. Use `--publication <id>` when a post or thread should stay linked to a canonical source publication.
+Use `openpost post` for single posts, `openpost thread` for markdown threads, and `openpost media` for uploads.
 
 ## Choose Accounts or Social Sets
 
@@ -37,7 +37,7 @@ Natural language and RFC3339 are supported:
 ```sh
 openpost post create --accounts x --content 'Shipping today.' --schedule 'tomorrow 2pm'
 openpost post create --accounts x --file launch.md --schedule '2026-06-15T09:00:00+01:00'
-openpost post create --set launch --content 'Shipping today.' --publication <publication-id> --schedule next-slot
+openpost post create --set launch --content 'Shipping today.' --schedule next-slot
 ```
 
 Use the next available workspace posting slot:
@@ -72,7 +72,6 @@ Create a markdown file with optional front matter and `---` separators:
 ---
 set: launch
 schedule: next-slot
-publication: <publication-id>
 ---
 
 We shipped the OpenPost CLI today.

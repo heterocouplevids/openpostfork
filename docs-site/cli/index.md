@@ -4,7 +4,7 @@ The OpenPost CLI controls a running OpenPost instance from a terminal or automat
 
 Use it when you want to:
 
-- Create source publications, drafts, scheduled posts, and threads from scripts
+- Create drafts, scheduled posts, and threads from scripts
 - Upload media from a terminal
 - Manage workspaces, account slugs, social sets, jobs, and API tokens
 - Run OpenPost from CI, cron, deploy hooks, or a personal shell workflow
@@ -24,15 +24,13 @@ Then create a default social set so posting commands do not need repeated accoun
 ```sh
 openpost account list
 openpost set create launch --accounts main-x,linkedin --default
-openpost publication create --title "Launch notes" --file launch.md
-openpost post create --content "Hello from OpenPost" --publication <publication-id> --schedule next-slot
+openpost post create --content "Hello from OpenPost" --schedule next-slot
 ```
 
 ## Docs
 
 - [Installation](/cli/installation)
 - [Authentication](/cli/authentication)
-- [Publications](/cli/publications)
 - [Posting and social sets](/cli/posting)
 - [Automation](/cli/automation)
 - [Generated command reference](/reference/cli)

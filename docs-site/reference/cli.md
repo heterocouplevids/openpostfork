@@ -47,7 +47,6 @@ openpost [flags]
 | `openpost jobs` | List background jobs |
 | `openpost media` | Upload and list media attachments |
 | `openpost post` | Create, list, view, update, and delete posts |
-| `openpost publication` | Create and manage source publications |
 | `openpost set` | Manage workspace social sets |
 | `openpost thread` | Create multi-post threads |
 | `openpost version` | Print the openpost CLI version |
@@ -866,7 +865,6 @@ openpost post create [flags]
 | `--file` | `-` | read post content from a file |
 | `--media` | `[]` | media id or local file path; repeatable |
 | `--media-alt` | `[]` | alt text for the matching uploaded --media |
-| `--publication` | `-` | source publication ID |
 | `--random-delay` | `0` | random delay in minutes |
 | `--schedule` | `-` | natural-language, RFC3339, next-slot, now, or draft |
 | `--set` | `-` | social set name or ID to publish to |
@@ -955,7 +953,6 @@ openpost post update &lt;post-id&gt; [flags]
 | --- | --- | --- |
 | `--accounts` | `-` | comma-separated account selectors |
 | `--content` | `-` | post content |
-| `--publication` | `-` | source publication ID; pass an empty string to clear |
 | `--random-delay` | `0` | random delay in minutes |
 | `--schedule` | `-` | natural-language, RFC3339, next-slot, now, or draft; empty string unschedules |
 | `--set` | `-` | social set name or ID to publish to |
@@ -981,168 +978,6 @@ View a post
 
 ```text
 openpost post view &lt;post-id&gt;
-```
-
-**Inherited Flags**
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
-| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
-| `--no-color` | `false` | disable ANSI colors |
-| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
-| `--quiet` | `false` | suppress non-error output |
-| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
-| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
-| `--yes` | `false` | skip interactive confirmations |
-
-### `openpost publication`
-
-Create and manage source publications
-
-Create and manage source publications: the canonical idea, brief, or source material that posts, threads, and assistant workflows can reference through --publication.
-
-**Usage**
-
-```text
-openpost publication
-```
-
-**Inherited Flags**
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
-| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
-| `--no-color` | `false` | disable ANSI colors |
-| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
-| `--quiet` | `false` | suppress non-error output |
-| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
-| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
-| `--yes` | `false` | skip interactive confirmations |
-
-**Subcommands**
-
-| Command | Description |
-| --- | --- |
-| `openpost publication create` | Create a source publication |
-| `openpost publication list` | List source publications |
-| `openpost publication update` | Update a source publication |
-| `openpost publication view` | View a source publication |
-
-### `openpost publication create`
-
-Create a source publication
-
-**Usage**
-
-```text
-openpost publication create [flags]
-```
-
-**Flags**
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--audience` | `-` | intended audience |
-| `--content` | `-` | source idea, brief, announcement, notes, or canonical material |
-| `--file` | `-` | read source content from a file |
-| `--goal` | `-` | goal such as announce, explain, launch, ask for feedback, or promote article |
-| `--media` | `[]` | media id or local file path to attach; repeatable |
-| `--media-alt` | `[]` | alt text for the matching uploaded --media |
-| `--source-url` | `-` | source URL related to the publication |
-| `--title` | `-` | short internal title |
-
-**Inherited Flags**
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
-| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
-| `--no-color` | `false` | disable ANSI colors |
-| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
-| `--quiet` | `false` | suppress non-error output |
-| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
-| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
-| `--yes` | `false` | skip interactive confirmations |
-
-### `openpost publication list`
-
-List source publications
-
-**Usage**
-
-```text
-openpost publication list [flags]
-```
-
-**Flags**
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--limit` | `0` | maximum number of publications to return |
-| `--offset` | `0` | pagination offset |
-| `--status` | `-` | filter by status: draft, ready, scheduled, published, failed |
-
-**Inherited Flags**
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
-| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
-| `--no-color` | `false` | disable ANSI colors |
-| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
-| `--quiet` | `false` | suppress non-error output |
-| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
-| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
-| `--yes` | `false` | skip interactive confirmations |
-
-### `openpost publication update`
-
-Update a source publication
-
-**Usage**
-
-```text
-openpost publication update &lt;publication-id&gt; [flags]
-```
-
-**Flags**
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--audience` | `-` | intended audience |
-| `--clear-media` | `false` | remove all source media attachments |
-| `--content` | `-` | source idea, brief, announcement, notes, or canonical material |
-| `--file` | `-` | read source content from a file |
-| `--goal` | `-` | goal such as announce, explain, launch, ask for feedback, or promote article |
-| `--media` | `[]` | media id or local file path to attach; repeatable |
-| `--media-alt` | `[]` | alt text for the matching uploaded --media |
-| `--source-url` | `-` | source URL related to the publication |
-| `--status` | `-` | status: draft, ready, scheduled, published, failed |
-| `--title` | `-` | short internal title |
-
-**Inherited Flags**
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
-| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
-| `--no-color` | `false` | disable ANSI colors |
-| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
-| `--quiet` | `false` | suppress non-error output |
-| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
-| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
-| `--yes` | `false` | skip interactive confirmations |
-
-### `openpost publication view`
-
-View a source publication
-
-**Usage**
-
-```text
-openpost publication view &lt;publication-id&gt;
 ```
 
 **Inherited Flags**
@@ -1426,7 +1261,6 @@ openpost thread create &lt;file&gt; [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--accounts` | `-` | comma-separated account selectors |
-| `--publication` | `-` | source publication ID |
 | `--random-delay` | `0` | random delay in minutes |
 | `--schedule` | `-` | natural-language, RFC3339, next-slot, now, or draft |
 | `--set` | `-` | social set name or ID to publish to |

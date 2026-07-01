@@ -29,10 +29,8 @@ const (
 	mcpProtocolVersion   = "2025-06-18"
 	mcpToolWorkspaces    = "list_workspaces"
 	mcpToolProviders     = "list_provider_catalog"
-	mcpToolPublications  = "list_publications"
 	mcpToolAccounts      = "list_accounts"
 	mcpToolListMedia     = "list_media"
-	mcpToolCreatePub     = "create_publication"
 	mcpToolCreateDraft   = "create_draft"
 	mcpToolListDrafts    = "list_drafts"
 	mcpToolUpdateDraft   = "update_draft"
@@ -305,7 +303,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 				"name":    "openpost",
 				"version": "0.1.0",
 			},
-			"instructions": "OpenPost schedules social posts from source ideas. List workspaces, accounts, and providers when IDs are unknown; create publications for reusable source material; create or update drafts before scheduling; use render_scheduler_widget when a visual summary helps.",
+			"instructions": "OpenPost schedules social posts from drafts and platform-specific renditions. List workspaces, accounts, providers, and media when IDs are unknown; create or update drafts before scheduling; use set_post_renditions when a platform needs custom copy or media; use render_scheduler_widget when a visual summary helps.",
 			"capabilities": map[string]any{
 				"tools":     map[string]any{"listChanged": false},
 				"prompts":   map[string]any{"listChanged": false},
@@ -318,10 +316,8 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 		return map[string]any{"tools": []map[string]any{
 			mcpListWorkspacesTool(),
 			mcpListProviderCatalogTool(),
-			mcpListPublicationsTool(),
 			mcpListAccountsTool(),
 			mcpListMediaTool(),
-			mcpCreatePublicationTool(),
 			mcpCreateDraftTool(),
 			mcpListDraftsTool(),
 			mcpUpdateDraftTool(),
@@ -540,8 +536,6 @@ h1 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: 0; }
     return payload;
   }
   function inferView(data) {
-    if (data.publication) return "publication";
-    if (data.publications) return "publications";
     if (data.post) return "post";
     if (data.posts) return "posts";
     if (data.media) return "media";
@@ -584,8 +578,6 @@ h1 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: 0; }
     return '<section class="card"><div class="title">' + escapeHTML(post.content || post.id || "Post") + '</div><div class="muted">' + escapeHTML(post.scheduled_at || post.created_at || "") + '</div>' + destinations + media + '</section>';
   }
   function renderData(view, data) {
-    if (view === "publication") return renderCards(data.publication ? [data.publication] : []);
-    if (view === "publications") return renderCards(array(data.publications));
     if (view === "post") return renderPost(data.post);
     if (view === "posts") return renderCards(array(data.posts));
     if (view === "media") return renderCards(array(data.media));
@@ -724,36 +716,6 @@ func mcpListProviderCatalogTool() map[string]any {
 	}, true, false)
 }
 
-func mcpListPublicationsTool() map[string]any {
-	return mcpToolDescriptor(map[string]any{
-		"name":        mcpToolPublications,
-		"title":       "List publications",
-		"description": "List source publications in an OpenPost workspace before creating more drafts.",
-		"inputSchema": map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"workspace_id": map[string]any{
-					"type":        "string",
-					"description": "Workspace ID returned by list_workspaces.",
-				},
-				"status": map[string]any{
-					"type":        "string",
-					"enum":        []string{"draft", "ready", "scheduled", "published", "failed"},
-					"description": "Optional publication status filter.",
-				},
-				"limit": map[string]any{
-					"type":        "integer",
-					"minimum":     1,
-					"maximum":     100,
-					"description": "Maximum publications to return. Defaults to 20.",
-				},
-			},
-			"required":             []string{"workspace_id"},
-			"additionalProperties": false,
-		},
-	}, true, false)
-}
-
 func mcpListAccountsTool() map[string]any {
 	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolAccounts,
@@ -803,51 +765,6 @@ func mcpListMediaTool() map[string]any {
 	}, true, false)
 }
 
-func mcpCreatePublicationTool() map[string]any {
-	return mcpToolDescriptor(map[string]any{
-		"name":        mcpToolCreatePub,
-		"title":       "Create publication",
-		"description": "Create a source publication from an idea, link, goal, audience, and optional workspace media.",
-		"inputSchema": map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"workspace_id": map[string]any{
-					"type":        "string",
-					"description": "Workspace ID returned by list_workspaces.",
-				},
-				"title": map[string]any{
-					"type":        "string",
-					"description": "Short internal title for the publication.",
-				},
-				"source_content": map[string]any{
-					"type":        "string",
-					"description": "Canonical idea, brief, announcement, link notes, or draft source material.",
-				},
-				"source_url": map[string]any{
-					"type":        "string",
-					"format":      "uri",
-					"description": "Optional source URL related to the publication.",
-				},
-				"goal": map[string]any{
-					"type":        "string",
-					"description": "Optional goal such as announce, explain, launch, ask for feedback, or promote article.",
-				},
-				"audience": map[string]any{
-					"type":        "string",
-					"description": "Optional intended audience.",
-				},
-				"media_ids": map[string]any{
-					"type":        "array",
-					"description": "Optional workspace media IDs returned by list_media.",
-					"items":       map[string]any{"type": "string"},
-				},
-			},
-			"required":             []string{"workspace_id", "title", "source_content"},
-			"additionalProperties": false,
-		},
-	}, false, false)
-}
-
 func mcpCreateDraftTool() map[string]any {
 	return mcpToolDescriptor(map[string]any{
 		"name":        mcpToolCreateDraft,
@@ -863,10 +780,6 @@ func mcpCreateDraftTool() map[string]any {
 				"content": map[string]any{
 					"type":        "string",
 					"description": "Draft post content.",
-				},
-				"publication_id": map[string]any{
-					"type":        "string",
-					"description": "Optional source publication ID returned by list_publications or create_publication.",
 				},
 				"social_account_ids": map[string]any{
 					"type":        "array",
@@ -1010,10 +923,6 @@ func mcpSchedulePostTool() map[string]any {
 				"content": map[string]any{
 					"type":        "string",
 					"description": "Post content.",
-				},
-				"publication_id": map[string]any{
-					"type":        "string",
-					"description": "Optional source publication ID returned by list_publications or create_publication.",
 				},
 				"scheduled_at": map[string]any{
 					"type":        "string",
@@ -1296,10 +1205,8 @@ type mcpToolStatus struct {
 var mcpToolStatuses = map[string]mcpToolStatus{
 	mcpToolWorkspaces:    {Invoking: "Loading workspaces", Invoked: "Workspaces loaded"},
 	mcpToolProviders:     {Invoking: "Loading providers", Invoked: "Providers loaded"},
-	mcpToolPublications:  {Invoking: "Loading publications", Invoked: "Publications loaded"},
 	mcpToolAccounts:      {Invoking: "Loading accounts", Invoked: "Accounts loaded"},
 	mcpToolListMedia:     {Invoking: "Loading media", Invoked: "Media loaded"},
-	mcpToolCreatePub:     {Invoking: "Creating publication", Invoked: "Publication created"},
 	mcpToolCreateDraft:   {Invoking: "Creating draft", Invoked: "Draft created"},
 	mcpToolListDrafts:    {Invoking: "Loading drafts", Invoked: "Drafts loaded"},
 	mcpToolUpdateDraft:   {Invoking: "Updating draft", Invoked: "Draft updated"},
@@ -1331,10 +1238,6 @@ func mcpToolOutputSchema(toolName string) map[string]any {
 		return mcpStructuredOutputSchema(map[string]any{
 			"providers": mcpArraySchema(mcpOpenObjectSchema()),
 		}, "providers")
-	case mcpToolPublications:
-		return mcpStructuredOutputSchema(map[string]any{
-			"publications": mcpArraySchema(mcpOpenObjectSchema()),
-		}, "publications")
 	case mcpToolAccounts:
 		return mcpStructuredOutputSchema(map[string]any{
 			"accounts": mcpArraySchema(mcpOpenObjectSchema()),
@@ -1364,10 +1267,6 @@ func mcpToolOutputSchema(toolName string) map[string]any {
 		return mcpStructuredOutputSchema(map[string]any{
 			"media": mcpOpenObjectSchema(),
 		}, "media")
-	case mcpToolCreatePub:
-		return mcpStructuredOutputSchema(map[string]any{
-			"publication": mcpOpenObjectSchema(),
-		}, "publication")
 	case mcpToolRenderWidget:
 		return mcpStructuredOutputSchema(map[string]any{
 			"view":         map[string]any{"type": "string", "enum": mcpSchedulerWidgetViews()},
@@ -1426,11 +1325,11 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 	switch params.Name {
 	case mcpToolWorkspaces, mcpToolProviders:
 		result, rpcErr = h.callReadOnlyGlobalTool(ctx, principal.UserID, params.Name)
-	case mcpToolPublications, mcpToolAccounts, mcpToolListMedia:
+	case mcpToolAccounts, mcpToolListMedia:
 		result, rpcErr = h.callReadOnlyWorkspaceTool(ctx, principal.UserID, params.Name, params.Arguments)
 	case mcpToolRenderWidget:
 		result, rpcErr = h.renderSchedulerWidget(params.Arguments)
-	case mcpToolCreatePub, mcpToolCreateDraft, mcpToolListDrafts, mcpToolUpdateDraft,
+	case mcpToolCreateDraft, mcpToolListDrafts, mcpToolUpdateDraft,
 		mcpToolRenditions, mcpToolSchedulePost, mcpToolScheduleDraft,
 		mcpToolGetPost, mcpToolListPosts, mcpToolCancelPost,
 		mcpToolSuggestSlot, mcpToolUploadURL:
@@ -1444,8 +1343,6 @@ func (h *MCPHandler) callTool(ctx context.Context, principal *middleware.Princip
 
 func (h *MCPHandler) callWorkspaceActionTool(ctx context.Context, userID, toolName string, args map[string]any) (any, *mcpError) {
 	switch toolName {
-	case mcpToolCreatePub:
-		return h.createPublication(ctx, userID, args)
 	case mcpToolCreateDraft:
 		return h.createDraft(ctx, userID, args)
 	case mcpToolListDrafts:
@@ -1475,8 +1372,6 @@ func (h *MCPHandler) callWorkspaceActionTool(ctx context.Context, userID, toolNa
 
 func (h *MCPHandler) callReadOnlyWorkspaceTool(ctx context.Context, userID, toolName string, args map[string]any) (any, *mcpError) {
 	switch toolName {
-	case mcpToolPublications:
-		return h.listPublications(ctx, userID, args)
 	case mcpToolAccounts:
 		return h.listAccounts(ctx, userID, args)
 	case mcpToolListMedia:
@@ -1534,7 +1429,7 @@ func (h *MCPHandler) renderSchedulerWidget(args map[string]any) (any, *mcpError)
 }
 
 func mcpSchedulerWidgetViews() []string {
-	return []string{"summary", "workspaces", "providers", "publications", "publication", "accounts", "media", "post", "posts", "suggestion", "renditions"}
+	return []string{"summary", "workspaces", "providers", "accounts", "media", "post", "posts", "suggestion", "renditions"}
 }
 
 func mcpValidSchedulerWidgetView(view string) bool {
@@ -1548,10 +1443,6 @@ func mcpValidSchedulerWidgetView(view string) bool {
 
 func mcpInferSchedulerWidgetView(data map[string]any) string {
 	switch {
-	case data["publication"] != nil:
-		return "publication"
-	case data["publications"] != nil:
-		return "publications"
 	case data["post"] != nil:
 		return "post"
 	case data["posts"] != nil:
@@ -1728,243 +1619,6 @@ func (h *MCPHandler) listProviderCatalog() any {
 	}
 }
 
-type mcpPublication struct {
-	ID              string   `json:"id"`
-	WorkspaceID     string   `json:"workspace_id"`
-	Title           string   `json:"title"`
-	SourceContent   string   `json:"source_content"`
-	SourceURL       string   `json:"source_url,omitempty"`
-	Goal            string   `json:"goal,omitempty"`
-	Audience        string   `json:"audience,omitempty"`
-	Status          string   `json:"status"`
-	ReleasePlanJSON string   `json:"release_plan_json"`
-	MediaIDs        []string `json:"media_ids,omitempty"`
-	CreatedAt       string   `json:"created_at"`
-	UpdatedAt       string   `json:"updated_at"`
-}
-
-type mcpListPublicationsInput struct {
-	WorkspaceID string `json:"workspace_id"`
-	Status      string `json:"status"`
-	Limit       int    `json:"limit"`
-}
-
-func (h *MCPHandler) listPublications(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
-	var input mcpListPublicationsInput
-	if err := decodeMCPArguments(args, &input); err != nil {
-		return nil, &mcpError{Code: -32602, Message: "invalid list_publications arguments"}
-	}
-	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
-		return nil, rpcErr
-	}
-	status := strings.TrimSpace(input.Status)
-	if status != "" && !mcpValidPublicationStatus(status) {
-		return nil, &mcpError{Code: -32602, Message: "status must be one of draft, ready, scheduled, published, or failed"}
-	}
-	limit := input.Limit
-	if limit == 0 {
-		limit = 20
-	}
-	if limit < 1 || limit > 100 {
-		return nil, &mcpError{Code: -32602, Message: "limit must be between 1 and 100"}
-	}
-
-	var rows []models.Publication
-	query := h.db.NewSelect().
-		Model(&rows).
-		Where("workspace_id = ?", input.WorkspaceID).
-		Order("created_at DESC").
-		Limit(limit)
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-	if err := query.Scan(ctx); err != nil && err != sql.ErrNoRows {
-		return nil, &mcpError{Code: -32603, Message: "failed to list publications"}
-	}
-
-	ids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		ids = append(ids, row.ID)
-	}
-	mediaIDsByPublication, rpcErr := h.loadMCPPublicationMediaIDs(ctx, ids)
-	if rpcErr != nil {
-		return nil, rpcErr
-	}
-	publications := make([]mcpPublication, 0, len(rows))
-	for _, row := range rows {
-		publications = append(publications, mcpPublicationFromModel(row, mediaIDsByPublication[row.ID]))
-	}
-
-	return map[string]any{
-		"content": []mcpContent{{
-			Type: "text",
-			Text: fmt.Sprintf("Found %d publications.", len(publications)),
-		}},
-		"structuredContent": map[string]any{
-			"publications": publications,
-		},
-	}, nil
-}
-
-type mcpCreatePublicationInput struct {
-	WorkspaceID   string   `json:"workspace_id"`
-	Title         string   `json:"title"`
-	SourceContent string   `json:"source_content"`
-	SourceURL     string   `json:"source_url"`
-	Goal          string   `json:"goal"`
-	Audience      string   `json:"audience"`
-	MediaIDs      []string `json:"media_ids"`
-}
-
-func (h *MCPHandler) createPublication(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
-	var input mcpCreatePublicationInput
-	if err := decodeMCPArguments(args, &input); err != nil {
-		return nil, &mcpError{Code: -32602, Message: "invalid create_publication arguments"}
-	}
-	if rpcErr := h.ensureWorkspaceAccess(ctx, userID, input.WorkspaceID); rpcErr != nil {
-		return nil, rpcErr
-	}
-	title := strings.TrimSpace(input.Title)
-	sourceContent := strings.TrimSpace(input.SourceContent)
-	if title == "" {
-		return nil, &mcpError{Code: -32602, Message: "title is required"}
-	}
-	if sourceContent == "" {
-		return nil, &mcpError{Code: -32602, Message: "source_content is required"}
-	}
-	sourceURL := strings.TrimSpace(input.SourceURL)
-	if sourceURL != "" {
-		if _, err := url.ParseRequestURI(sourceURL); err != nil {
-			return nil, &mcpError{Code: -32602, Message: "source_url must be a valid URI"}
-		}
-	}
-	mediaIDs, rpcErr := normalizeMCPIDs(input.MediaIDs, "media_ids")
-	if rpcErr != nil {
-		return nil, rpcErr
-	}
-	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, input.WorkspaceID, mediaIDs); rpcErr != nil {
-		return nil, rpcErr
-	}
-
-	now := time.Now().UTC()
-	publication := &models.Publication{
-		ID:              newUUID(),
-		WorkspaceID:     input.WorkspaceID,
-		CreatedByID:     userID,
-		Title:           title,
-		SourceContent:   sourceContent,
-		SourceURL:       sourceURL,
-		Goal:            strings.TrimSpace(input.Goal),
-		Audience:        strings.TrimSpace(input.Audience),
-		Status:          models.PublicationStatusDraft,
-		ReleasePlanJSON: "{}",
-		CreatedAt:       now,
-		UpdatedAt:       now,
-	}
-	assets := make([]models.PublicationAsset, 0, len(mediaIDs))
-	for i, mediaID := range mediaIDs {
-		assets = append(assets, models.PublicationAsset{
-			PublicationID: publication.ID,
-			MediaID:       mediaID,
-			DisplayOrder:  i,
-			CreatedAt:     now,
-		})
-	}
-	err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
-		if _, err := tx.NewInsert().Model(publication).Exec(txCtx); err != nil {
-			return err
-		}
-		if len(assets) > 0 {
-			if _, err := tx.NewInsert().Model(&assets).Exec(txCtx); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, &mcpError{Code: -32603, Message: "failed to create publication"}
-	}
-
-	out, rpcErr := h.loadMCPPublication(ctx, publication.ID)
-	if rpcErr != nil {
-		return nil, rpcErr
-	}
-	return mcpPublicationToolResult("Publication created: "+publication.ID, out), nil
-}
-
-func (h *MCPHandler) loadMCPPublication(ctx context.Context, publicationID string) (mcpPublication, *mcpError) {
-	var row models.Publication
-	if err := h.db.NewSelect().Model(&row).Where("id = ?", publicationID).Scan(ctx); err != nil {
-		if err == sql.ErrNoRows {
-			return mcpPublication{}, &mcpError{Code: -32602, Message: "publication not found"}
-		}
-		return mcpPublication{}, &mcpError{Code: -32603, Message: "failed to load publication"}
-	}
-	mediaIDsByPublication, rpcErr := h.loadMCPPublicationMediaIDs(ctx, []string{publicationID})
-	if rpcErr != nil {
-		return mcpPublication{}, rpcErr
-	}
-	return mcpPublicationFromModel(row, mediaIDsByPublication[row.ID]), nil
-}
-
-func (h *MCPHandler) loadMCPPublicationMediaIDs(ctx context.Context, publicationIDs []string) (map[string][]string, *mcpError) {
-	mediaIDsByPublication := make(map[string][]string, len(publicationIDs))
-	if len(publicationIDs) == 0 {
-		return mediaIDsByPublication, nil
-	}
-	var rows []models.PublicationAsset
-	if err := h.db.NewSelect().
-		Model(&rows).
-		Where("publication_id IN (?)", bun.List(publicationIDs)).
-		Order("publication_id ASC").
-		Order("display_order ASC").
-		Scan(ctx); err != nil && err != sql.ErrNoRows {
-		return nil, &mcpError{Code: -32603, Message: "failed to load publication media"}
-	}
-	for _, row := range rows {
-		mediaIDsByPublication[row.PublicationID] = append(mediaIDsByPublication[row.PublicationID], row.MediaID)
-	}
-	return mediaIDsByPublication, nil
-}
-
-func mcpPublicationFromModel(row models.Publication, mediaIDs []string) mcpPublication {
-	return mcpPublication{
-		ID:              row.ID,
-		WorkspaceID:     row.WorkspaceID,
-		Title:           row.Title,
-		SourceContent:   row.SourceContent,
-		SourceURL:       row.SourceURL,
-		Goal:            row.Goal,
-		Audience:        row.Audience,
-		Status:          row.Status,
-		ReleasePlanJSON: row.ReleasePlanJSON,
-		MediaIDs:        mediaIDs,
-		CreatedAt:       row.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       row.UpdatedAt.Format(time.RFC3339),
-	}
-}
-
-func mcpPublicationToolResult(text string, publication mcpPublication) map[string]any {
-	return map[string]any{
-		"content": []mcpContent{{
-			Type: "text",
-			Text: text,
-		}},
-		"structuredContent": map[string]any{
-			"publication": publication,
-		},
-	}
-}
-
-func mcpValidPublicationStatus(status string) bool {
-	switch status {
-	case models.PublicationStatusDraft, models.PublicationStatusReady, models.PublicationStatusScheduled, models.PublicationStatusPublished, models.PublicationStatusFailed:
-		return true
-	default:
-		return false
-	}
-}
-
 type mcpAccount struct {
 	ID              string `json:"id"`
 	Platform        string `json:"platform"`
@@ -2029,7 +1683,6 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 	var input struct {
 		WorkspaceID      string   `json:"workspace_id"`
 		Content          string   `json:"content"`
-		PublicationID    string   `json:"publication_id"`
 		SocialAccountIDs []string `json:"social_account_ids"`
 		MediaIDs         []string `json:"media_ids"`
 	}
@@ -2052,20 +1705,14 @@ func (h *MCPHandler) createDraft(ctx context.Context, userID string, args map[st
 	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, input.WorkspaceID, mediaIDs); rpcErr != nil {
 		return nil, rpcErr
 	}
-	publicationID, rpcErr := h.normalizeMCPPublicationID(ctx, input.WorkspaceID, input.PublicationID)
-	if rpcErr != nil {
-		return nil, rpcErr
-	}
-
 	now := time.Now().UTC()
 	post := &models.Post{
-		ID:            newUUID(),
-		WorkspaceID:   input.WorkspaceID,
-		CreatedByID:   userID,
-		PublicationID: publicationID,
-		Content:       input.Content,
-		Status:        statusDraft,
-		CreatedAt:     now,
+		ID:          newUUID(),
+		WorkspaceID: input.WorkspaceID,
+		CreatedByID: userID,
+		Content:     input.Content,
+		Status:      statusDraft,
+		CreatedAt:   now,
 	}
 	destinations := make([]models.PostDestination, 0, len(input.SocialAccountIDs))
 	for _, accountID := range input.SocialAccountIDs {
@@ -2475,7 +2122,6 @@ type mcpPostMedia struct {
 type mcpPostStatus struct {
 	ID                 string               `json:"id"`
 	WorkspaceID        string               `json:"workspace_id"`
-	PublicationID      string               `json:"publication_id,omitempty"`
 	Content            string               `json:"content"`
 	Status             string               `json:"status"`
 	ScheduledAt        string               `json:"scheduled_at,omitempty"`
@@ -2490,7 +2136,6 @@ type mcpPostStatus struct {
 type mcpSchedulePostInput struct {
 	WorkspaceID      string   `json:"workspace_id"`
 	Content          string   `json:"content"`
-	PublicationID    string   `json:"publication_id"`
 	ScheduledAt      string   `json:"scheduled_at"`
 	SocialAccountIDs []string `json:"social_account_ids"`
 	MediaIDs         []string `json:"media_ids"`
@@ -2524,11 +2169,6 @@ func (h *MCPHandler) validateSchedulePostInput(ctx context.Context, userID strin
 	if rpcErr := h.ensureMediaBelongsToWorkspace(ctx, input.WorkspaceID, mediaIDs); rpcErr != nil {
 		return input, nil, nil, time.Time{}, rpcErr
 	}
-	publicationID, rpcErr := h.normalizeMCPPublicationID(ctx, input.WorkspaceID, input.PublicationID)
-	if rpcErr != nil {
-		return input, nil, nil, time.Time{}, rpcErr
-	}
-	input.PublicationID = publicationID
 	scheduledAt, err := time.Parse(time.RFC3339, input.ScheduledAt)
 	if err != nil {
 		return input, nil, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at must be an RFC3339 timestamp"}
@@ -2553,15 +2193,14 @@ func (h *MCPHandler) schedulePost(ctx context.Context, userID string, args map[s
 
 	now := time.Now().UTC()
 	post := &models.Post{
-		ID:            newUUID(),
-		WorkspaceID:   input.WorkspaceID,
-		CreatedByID:   userID,
-		PublicationID: input.PublicationID,
-		Content:       input.Content,
-		Status:        statusScheduled,
-		ScheduledAt:   scheduledAt,
-		ActualRunAt:   scheduledAt,
-		CreatedAt:     now,
+		ID:          newUUID(),
+		WorkspaceID: input.WorkspaceID,
+		CreatedByID: userID,
+		Content:     input.Content,
+		Status:      statusScheduled,
+		ScheduledAt: scheduledAt,
+		ActualRunAt: scheduledAt,
+		CreatedAt:   now,
 	}
 	destinations := make([]models.PostDestination, 0, len(accountIDs))
 	for _, accountID := range accountIDs {
@@ -3411,7 +3050,6 @@ func (h *MCPHandler) loadMCPPostStatus(ctx context.Context, postID string) (mcpP
 	status := mcpPostStatus{
 		ID:                 post.ID,
 		WorkspaceID:        post.WorkspaceID,
-		PublicationID:      post.PublicationID,
 		Content:            post.Content,
 		Status:             post.Status,
 		RandomDelayMinutes: post.RandomDelayMinutes,
@@ -3678,25 +3316,6 @@ func (h *MCPHandler) ensureMediaBelongsToWorkspace(ctx context.Context, workspac
 		return &mcpError{Code: -32602, Message: "one or more media_ids are invalid or outside this workspace"}
 	}
 	return nil
-}
-
-func (h *MCPHandler) normalizeMCPPublicationID(ctx context.Context, workspaceID, publicationID string) (string, *mcpError) {
-	publicationID = strings.TrimSpace(publicationID)
-	if publicationID == "" {
-		return "", nil
-	}
-	count, err := h.db.NewSelect().
-		Model((*models.Publication)(nil)).
-		Where("workspace_id = ?", workspaceID).
-		Where("id = ?", publicationID).
-		Count(ctx)
-	if err != nil {
-		return "", &mcpError{Code: -32603, Message: "failed to validate publication"}
-	}
-	if count == 0 {
-		return "", &mcpError{Code: -32602, Message: "publication_id is invalid or outside this workspace"}
-	}
-	return publicationID, nil
 }
 
 func normalizeMCPIDs(ids []string, field string) ([]string, *mcpError) {

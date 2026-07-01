@@ -68,7 +68,7 @@ changes live in [Developer Docs](/development/).
 - [ ] Invite a second user, accept the link, and confirm both members appear in Settings > Team.
 - [ ] Connect at least one social account.
 - [ ] Upload a small image and confirm it appears in the media library.
-- [ ] Create a publication, draft, and scheduled post from the web app.
+- [ ] Create a draft and scheduled post from the web app.
 - [ ] Create a draft or scheduled post through the CLI.
 - [ ] Create a draft or scheduled post through MCP if assistant access is enabled.
 - [ ] Confirm scheduled publishing creates and completes a background job.

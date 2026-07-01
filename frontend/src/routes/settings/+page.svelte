@@ -966,7 +966,31 @@
 	function formatSessionUserAgent(value: string): string {
 		const trimmed = value.trim();
 		if (!trimmed) return 'Unknown browser';
-		return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+
+		const browser = sessionBrowserName(trimmed);
+		const device = sessionDeviceName(trimmed);
+		return `${browser} on ${device}`;
+	}
+
+	function sessionBrowserName(userAgent: string): string {
+		if (/Edg\//.test(userAgent)) return 'Edge';
+		if (/OPR\//.test(userAgent) || /Opera\//.test(userAgent)) return 'Opera';
+		if (/Firefox\//.test(userAgent)) return 'Firefox';
+		if (/CriOS\//.test(userAgent)) return 'Chrome';
+		if (/Chrome\//.test(userAgent) || /Chromium\//.test(userAgent)) return 'Chrome';
+		if (/Safari\//.test(userAgent)) return 'Safari';
+		return 'Browser';
+	}
+
+	function sessionDeviceName(userAgent: string): string {
+		if (/iPad/.test(userAgent)) return 'iPad';
+		if (/iPhone/.test(userAgent)) return 'iPhone';
+		if (/Android/.test(userAgent))
+			return /Mobile/.test(userAgent) ? 'Android phone' : 'Android tablet';
+		if (/Macintosh|Mac OS X/.test(userAgent)) return 'Mac';
+		if (/Windows NT/.test(userAgent)) return 'Windows';
+		if (/Linux/.test(userAgent)) return 'Linux';
+		return 'device';
 	}
 
 	function formatSessionTime(value: string): string {
@@ -1402,7 +1426,9 @@
 							Provider Apps
 						</h2>
 						<p class="mt-2 text-sm text-muted-foreground">
-							Manage encrypted OAuth app credentials used for new social account connections.
+							Mastodon apps let users connect any instance you support. Other providers can use
+							environment defaults, or you can store your own OAuth keys here for branded apps,
+							separate callback ownership, or provider review credentials.
 						</p>
 					</div>
 					<Button variant="outline" onclick={loadProviderApps} disabled={providerAppsLoading}>
@@ -1432,14 +1458,46 @@
 					</div>
 				{/if}
 
+				<div class="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+					<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+						<div>
+							<p class="font-medium">Most installs only need this for Mastodon.</p>
+							<p class="mt-1 text-muted-foreground">
+								Add one Mastodon provider app per instance you want to offer. For X, Meta, LinkedIn,
+								YouTube, and TikTok, leave this empty unless you want to override the server-level
+								credentials.
+							</p>
+						</div>
+						<a
+							class="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
+							href="https://docs.openpost.social/providers/mastodon"
+							target="_blank"
+							rel="noreferrer"
+						>
+							Mastodon guide
+							<ExternalLinkIcon class="h-3.5 w-3.5" />
+						</a>
+					</div>
+				</div>
+
 				<form onsubmit={saveProviderApp} class="mb-6 rounded-lg border bg-muted/20 p-4">
 					<div class="mb-4 flex flex-col gap-1">
 						<h3 class="text-sm font-semibold">
 							{editingProviderAppID ? 'Edit provider app' : 'Add provider app'}
 						</h3>
 						<p class="text-sm text-muted-foreground">
-							Secrets are write-only. Leave the secret blank while editing to keep the stored value.
+							{selectedProviderAppOption.description} Secrets are write-only. Leave the secret blank while
+							editing to keep the stored value.
 						</p>
+						<a
+							class="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
+							href={selectedProviderAppOption.guideHref}
+							target="_blank"
+							rel="noreferrer"
+						>
+							Open {selectedProviderAppOption.label} setup guide
+							<ExternalLinkIcon class="h-3.5 w-3.5" />
+						</a>
 					</div>
 
 					<div class="grid gap-4 lg:grid-cols-2">
@@ -1737,7 +1795,7 @@
 									>
 										<div class="min-w-0">
 											<div class="flex flex-wrap items-center gap-2">
-												<p class="text-sm font-medium break-words">
+												<p class="truncate text-sm font-medium" title={session.user_agent}>
 													{formatSessionUserAgent(session.user_agent)}
 												</p>
 												{#if session.current}

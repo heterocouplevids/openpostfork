@@ -17,7 +17,6 @@ type threadFrontMatter struct {
 	Accounts    string
 	Set         string
 	Schedule    string
-	Publication string
 	RandomDelay int
 }
 
@@ -78,7 +77,6 @@ func newThreadCreateCmd() *cobra.Command {
 				accountCSV = ""
 			}
 			scheduleRaw := firstSet(flags.schedule, fm.Schedule)
-			publicationID := firstSet(flags.publication, fm.Publication)
 			randomDelay := flags.randomDelay
 			if !cmd.Flags().Changed("random-delay") {
 				randomDelay = fm.RandomDelay
@@ -103,7 +101,6 @@ func newThreadCreateCmd() *cobra.Command {
 				Posts:              posts,
 				ScheduledAt:        scheduledAt,
 				SocialAccountIDs:   targets.AccountIDs,
-				PublicationID:      strings.TrimSpace(publicationID),
 				RandomDelayMinutes: randomDelay,
 			})
 			if err != nil {
@@ -117,11 +114,10 @@ func newThreadCreateCmd() *cobra.Command {
 			if len(out.PostIDs) > 0 {
 				parentID = out.PostIDs[0]
 			}
-			p.Table([]string{"POSTS", "PARENT_ID", "SCHEDULED", "PUBLICATION"}, [][]string{{
+			p.Table([]string{"POSTS", "PARENT_ID", "SCHEDULED"}, [][]string{{
 				strconv.Itoa(len(out.PostIDs)),
 				parentID,
 				scheduleTimeLabel(scheduledAt),
-				emptyDash(publicationID),
 			}})
 			return nil
 		},
@@ -129,7 +125,6 @@ func newThreadCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
 	cmd.Flags().StringVar(&flags.set, "set", "", "social set name or ID to publish to")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language, RFC3339, next-slot, now, or draft")
-	cmd.Flags().StringVar(&flags.publication, "publication", "", "source publication ID")
 	cmd.Flags().IntVar(&flags.randomDelay, "random-delay", 0, "random delay in minutes")
 	return cmd
 }
@@ -195,8 +190,6 @@ func parseFrontMatter(raw string) threadFrontMatter {
 			fm.Set = val
 		case "schedule":
 			fm.Schedule = val
-		case "publication":
-			fm.Publication = val
 		case "random_delay":
 			fm.RandomDelay, _ = strconv.Atoi(val)
 		}

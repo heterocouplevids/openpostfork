@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { client, type ScheduleOverview, type Post } from '$lib/api/client';
+	import { client, type ScheduleOverview, type Post, type Workspace } from '$lib/api/client';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Avatar from '$lib/components/ui/avatar';
@@ -18,7 +18,6 @@
 	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import TrashIcon from 'lucide-svelte/icons/trash-2';
 	import ScrollTextIcon from 'lucide-svelte/icons/scroll-text';
-	import NotebookTextIcon from 'lucide-svelte/icons/notebook-text';
 	import { auth } from '$lib/stores/auth';
 	import { goto } from '$app/navigation';
 	import { toggleMode } from 'mode-watcher';
@@ -47,6 +46,7 @@
 	// Drafts state
 	let drafts = $state<Post[]>([]);
 	let loadingDrafts = $state(false);
+	const currentWorkspaceName = $derived(workspaceCtx.currentWorkspace?.name ?? 'Select workspace');
 
 	const monthString = $derived.by(() => {
 		const jsDate = calendarPlaceholder.toDate(getLocalTimeZone());
@@ -205,6 +205,12 @@
 		instanceStore().clearInstanceUrl();
 		recreateClient();
 		goto('/connect');
+	}
+
+	async function switchWorkspace(workspace: Workspace) {
+		if (workspace.id === workspaceCtx.currentWorkspace?.id) return;
+		await workspaceCtx.setWorkspace(workspace);
+		await Promise.all([loadOverview(), loadDrafts()]);
 	}
 
 	type DayMarkerArgs = {
@@ -383,8 +389,66 @@
 
 	<Sidebar.Footer>
 		<Sidebar.Separator />
-		<!-- User Menu -->
 		<Sidebar.Menu>
+			<Sidebar.MenuItem>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Sidebar.MenuButton
+								{...props}
+								size="lg"
+								class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+							>
+								<div
+									class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-foreground"
+								>
+									<UsersIcon class="size-4" />
+								</div>
+								<div class="grid flex-1 text-start text-sm leading-tight">
+									<span class="truncate font-medium text-sidebar-foreground">
+										{currentWorkspaceName}
+									</span>
+									<span class="truncate text-xs text-sidebar-foreground/70">Workspace</span>
+								</div>
+								<ChevronsUpDownIcon class="ms-auto size-4 text-sidebar-foreground" />
+							</Sidebar.MenuButton>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content
+						class="w-64 rounded-lg"
+						side={sidebar.isMobile ? 'bottom' : 'right'}
+						align="start"
+						sideOffset={4}
+					>
+						<DropdownMenu.Label>Switch workspace</DropdownMenu.Label>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Group>
+							{#each workspaceCtx.workspaces as workspace (workspace.id)}
+								<DropdownMenu.Item onclick={() => switchWorkspace(workspace)}>
+									<CircleDotIcon
+										class={`mr-2 size-4 ${
+											workspace.id === workspaceCtx.currentWorkspace?.id
+												? 'text-primary'
+												: 'text-muted-foreground'
+										}`}
+									/>
+									<span class="truncate">{workspace.name}</span>
+								</DropdownMenu.Item>
+							{/each}
+							{#if workspaceCtx.workspaces.length === 0}
+								<DropdownMenu.Item disabled>No workspaces</DropdownMenu.Item>
+							{/if}
+						</DropdownMenu.Group>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item onclick={() => goto('/settings#workspace')}>
+							<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
+							<span>Workspace settings</span>
+						</DropdownMenu.Item>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</Sidebar.MenuItem>
+
+			<!-- User Menu -->
 			<Sidebar.MenuItem>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
@@ -450,10 +514,6 @@
 							<DropdownMenu.Item onclick={() => goto('/prompts')}>
 								<LightbulbIcon class="mr-2 size-4 text-muted-foreground" />
 								<span>{m.sidebar_prompts()}</span>
-							</DropdownMenu.Item>
-							<DropdownMenu.Item onclick={() => goto('/publications')}>
-								<NotebookTextIcon class="mr-2 size-4 text-muted-foreground" />
-								<span>{m.sidebar_publications()}</span>
 							</DropdownMenu.Item>
 							<DropdownMenu.Item onclick={() => goto('/settings')}>
 								<SettingsIcon class="mr-2 size-4 text-muted-foreground" />

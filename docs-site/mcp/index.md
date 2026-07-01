@@ -4,8 +4,8 @@ OpenPost's MCP support lets ChatGPT-style clients and local desktop assistants w
 
 Use it when you want an assistant to:
 
-- inspect workspaces, connected accounts, media, drafts, publications, providers, and scheduled posts
-- turn a rough idea into a source publication, then keep drafts and scheduled posts linked to that source
+- inspect workspaces, connected accounts, media, drafts, providers, and scheduled posts
+- turn a rough idea into a draft, then adapt that draft for each destination
 - adapt copy for each destination before scheduling
 - attach existing workspace media or upload media from a public URL
 - suggest the next posting slot, schedule approved posts, or cancel queued posts
@@ -42,8 +42,6 @@ The proxy reads the selected CLI profile and forwards MCP frames to the remote `
 - `list_provider_catalog`
 - `list_accounts`
 - `list_media`
-- `list_publications`
-- `create_publication`
 - `create_draft`
 - `list_drafts`
 - `update_draft`
@@ -60,11 +58,9 @@ The proxy reads the selected CLI profile and forwards MCP frames to the remote `
 ## Safe workflow
 
 1. Ask the assistant to inspect the current workspace, provider catalog, accounts, and recent media.
-2. Create or select a source publication.
-3. Pass that `publication_id` when drafting or scheduling so the post stays linked to its source.
-4. Draft the base post and destination-specific renditions.
-5. Review the proposed schedule and destination list.
-6. Let the assistant schedule only after the final content and accounts are correct.
+2. Draft the base post and destination-specific renditions.
+3. Review the proposed schedule and destination list.
+4. Let the assistant schedule only after the final content and accounts are correct.
 
 MCP tools validate workspace membership, optional token workspace boundaries, and account ownership before reading or changing data. Scheduling and media uploads use the same quota and usage accounting as the web app and CLI.
 

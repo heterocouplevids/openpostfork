@@ -10,12 +10,12 @@ OpenPost supports one post targeting multiple providers, with room for per-accou
 4. Add per-account variants where one copy does not fit all destinations.
 5. Schedule or publish.
 
-## Starting from a publication
+## Drafts and renditions
 
-If the post comes from a launch brief, article, campaign, or source asset set,
-start from [Publications](/usage/publications). The composer keeps the
-publication link on saved drafts, scheduled posts, and threads so the source
-context remains visible across web, CLI, and MCP workflows.
+Drafts are the source of truth before publishing. Start with one base post,
+then use per-account renditions when a platform needs different copy, hashtags,
+or formatting. Unsynchronized renditions stay editable independently while the
+base draft remains available for future changes.
 
 ## Platform previews
 

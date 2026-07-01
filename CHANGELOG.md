@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Removed the user-facing Publications surface from the web app, CLI, public API, MCP tools, and docs so drafts/posts plus per-platform renditions remain the canonical workflow.
+- Moved workspace switching into the sidebar footer and clarified Provider Apps settings around Mastodon custom instances and optional provider OAuth key overrides.
+
+### Fixed
+- Replaced raw browser User-Agent strings in active sessions with readable browser/device labels.
+
 ## [1.0.21] - 2026-07-01
 
 ### Fixed

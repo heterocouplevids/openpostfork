@@ -824,10 +824,6 @@
 						},
 						"type": ["array", "null"]
 					},
-					"publication_id": {
-						"description": "Optional source publication ID this post was derived from",
-						"type": "string"
-					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N) to add for natural posting",
 						"format": "int64",
@@ -943,53 +939,6 @@
 				"required": ["text", "category"],
 				"type": "object"
 			},
-			"CreatePublicationInputBody": {
-				"additionalProperties": false,
-				"properties": {
-					"$schema": {
-						"description": "A URL to the JSON Schema for this object.",
-						"examples": ["https://example.com/schemas/CreatePublicationInputBody.json"],
-						"format": "uri",
-						"readOnly": true,
-						"type": "string"
-					},
-					"audience": {
-						"description": "Optional intended audience",
-						"type": "string"
-					},
-					"goal": {
-						"description": "Optional goal such as announce, explain, launch, ask for feedback, or promote article",
-						"type": "string"
-					},
-					"media_ids": {
-						"description": "Workspace media IDs attached to this publication source",
-						"items": {
-							"type": "string"
-						},
-						"type": ["array", "null"]
-					},
-					"source_content": {
-						"description": "Canonical idea, brief, announcement, notes, or source material",
-						"minLength": 1,
-						"type": "string"
-					},
-					"source_url": {
-						"description": "Optional source URL related to the publication",
-						"type": "string"
-					},
-					"title": {
-						"description": "Short internal title",
-						"minLength": 1,
-						"type": "string"
-					},
-					"workspace_id": {
-						"description": "Target workspace ID",
-						"type": "string"
-					}
-				},
-				"required": ["workspace_id", "title", "source_content"],
-				"type": "object"
-			},
 			"CreateSetInputBody": {
 				"additionalProperties": false,
 				"properties": {
@@ -1041,10 +990,6 @@
 						},
 						"minItems": 2,
 						"type": ["array", "null"]
-					},
-					"publication_id": {
-						"description": "Optional source publication ID this thread was derived from",
-						"type": "string"
 					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N) to add for natural posting",
@@ -2198,10 +2143,6 @@
 						},
 						"type": ["array", "null"]
 					},
-					"publication_id": {
-						"description": "Source publication ID",
-						"type": "string"
-					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N)",
 						"format": "int64",
@@ -2307,10 +2248,6 @@
 							"type": "string"
 						},
 						"type": ["array", "null"]
-					},
-					"publication_id": {
-						"description": "Source publication ID",
-						"type": "string"
 					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N)",
@@ -2566,85 +2503,6 @@
 					}
 				},
 				"required": ["platform", "display_name", "auth_mode", "configured"],
-				"type": "object"
-			},
-			"PublicationResponse": {
-				"additionalProperties": false,
-				"properties": {
-					"$schema": {
-						"description": "A URL to the JSON Schema for this object.",
-						"examples": ["https://example.com/schemas/PublicationResponse.json"],
-						"format": "uri",
-						"readOnly": true,
-						"type": "string"
-					},
-					"audience": {
-						"description": "Intended audience",
-						"type": "string"
-					},
-					"created_at": {
-						"description": "Creation time",
-						"type": "string"
-					},
-					"created_by": {
-						"description": "Creator user ID",
-						"type": "string"
-					},
-					"goal": {
-						"description": "Publication goal",
-						"type": "string"
-					},
-					"id": {
-						"description": "Publication ID",
-						"type": "string"
-					},
-					"media_ids": {
-						"description": "Attached workspace media IDs",
-						"items": {
-							"type": "string"
-						},
-						"type": ["array", "null"]
-					},
-					"release_plan_json": {
-						"description": "Encoded release plan JSON",
-						"type": "string"
-					},
-					"source_content": {
-						"description": "Canonical source material",
-						"type": "string"
-					},
-					"source_url": {
-						"description": "Optional source URL",
-						"type": "string"
-					},
-					"status": {
-						"description": "Publication status",
-						"type": "string"
-					},
-					"title": {
-						"description": "Short internal title",
-						"type": "string"
-					},
-					"updated_at": {
-						"description": "Last update time",
-						"type": "string"
-					},
-					"workspace_id": {
-						"description": "Workspace ID",
-						"type": "string"
-					}
-				},
-				"required": [
-					"id",
-					"workspace_id",
-					"created_by",
-					"title",
-					"source_content",
-					"status",
-					"release_plan_json",
-					"created_at",
-					"updated_at"
-				],
 				"type": "object"
 			},
 			"Readiness-checkResponse": {
@@ -3317,10 +3175,6 @@
 						},
 						"type": ["array", "null"]
 					},
-					"publication_id": {
-						"description": "Source publication ID to link. Send an empty string to clear it.",
-						"type": "string"
-					},
 					"random_delay_minutes": {
 						"description": "Random delay in minutes (±N) to add for natural posting",
 						"format": "int64",
@@ -3376,50 +3230,6 @@
 						"description": "Minute in UTC (0-59)",
 						"format": "int64",
 						"type": "integer"
-					}
-				},
-				"type": "object"
-			},
-			"UpdatePublicationBody": {
-				"additionalProperties": false,
-				"properties": {
-					"$schema": {
-						"description": "A URL to the JSON Schema for this object.",
-						"examples": ["https://example.com/schemas/UpdatePublicationBody.json"],
-						"format": "uri",
-						"readOnly": true,
-						"type": "string"
-					},
-					"audience": {
-						"description": "Optional intended audience",
-						"type": "string"
-					},
-					"goal": {
-						"description": "Optional publication goal",
-						"type": "string"
-					},
-					"media_ids": {
-						"description": "Replacement workspace media IDs",
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
-					},
-					"source_content": {
-						"description": "Canonical source material",
-						"type": "string"
-					},
-					"source_url": {
-						"description": "Optional source URL",
-						"type": "string"
-					},
-					"status": {
-						"description": "Publication status",
-						"type": "string"
-					},
-					"title": {
-						"description": "Short internal title",
-						"type": "string"
 					}
 				},
 				"type": "object"
@@ -8811,340 +8621,6 @@
 				},
 				"summary": "Delete a custom prompt",
 				"tags": ["Prompts"]
-			}
-		},
-		"/publications": {
-			"get": {
-				"operationId": "list-publications",
-				"parameters": [
-					{
-						"description": "Filter by workspace ID",
-						"explode": false,
-						"in": "query",
-						"name": "workspace_id",
-						"required": true,
-						"schema": {
-							"description": "Filter by workspace ID",
-							"type": "string"
-						}
-					},
-					{
-						"description": "Filter by publication status",
-						"explode": false,
-						"in": "query",
-						"name": "status",
-						"schema": {
-							"description": "Filter by publication status",
-							"type": "string"
-						}
-					},
-					{
-						"description": "Limit number of results (default 50, max 200)",
-						"explode": false,
-						"in": "query",
-						"name": "limit",
-						"schema": {
-							"description": "Limit number of results (default 50, max 200)",
-							"format": "int64",
-							"type": "integer"
-						}
-					},
-					{
-						"description": "Offset for pagination",
-						"explode": false,
-						"in": "query",
-						"name": "offset",
-						"schema": {
-							"description": "Offset for pagination",
-							"format": "int64",
-							"type": "integer"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"items": {
-										"$ref": "#/components/schemas/PublicationResponse"
-									},
-									"type": ["array", "null"]
-								}
-							}
-						},
-						"description": "OK"
-					},
-					"400": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Bad Request"
-					},
-					"403": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Forbidden"
-					},
-					"422": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Unprocessable Entity"
-					},
-					"500": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Internal Server Error"
-					}
-				},
-				"summary": "List publications",
-				"tags": ["Publications"]
-			},
-			"post": {
-				"operationId": "create-publication",
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/CreatePublicationInputBody"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/PublicationResponse"
-								}
-							}
-						},
-						"description": "OK"
-					},
-					"400": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Bad Request"
-					},
-					"403": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Forbidden"
-					},
-					"422": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Unprocessable Entity"
-					},
-					"500": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Internal Server Error"
-					}
-				},
-				"summary": "Create a publication",
-				"tags": ["Publications"]
-			}
-		},
-		"/publications/{id}": {
-			"get": {
-				"operationId": "get-publication",
-				"parameters": [
-					{
-						"description": "Publication ID",
-						"in": "path",
-						"name": "id",
-						"required": true,
-						"schema": {
-							"description": "Publication ID",
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/PublicationResponse"
-								}
-							}
-						},
-						"description": "OK"
-					},
-					"403": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Forbidden"
-					},
-					"404": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Not Found"
-					},
-					"422": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Unprocessable Entity"
-					},
-					"500": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Internal Server Error"
-					}
-				},
-				"summary": "Get a publication",
-				"tags": ["Publications"]
-			},
-			"patch": {
-				"operationId": "update-publication",
-				"parameters": [
-					{
-						"description": "Publication ID",
-						"in": "path",
-						"name": "id",
-						"required": true,
-						"schema": {
-							"description": "Publication ID",
-							"type": "string"
-						}
-					}
-				],
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/UpdatePublicationBody"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/PublicationResponse"
-								}
-							}
-						},
-						"description": "OK"
-					},
-					"400": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Bad Request"
-					},
-					"403": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Forbidden"
-					},
-					"404": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Not Found"
-					},
-					"422": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Unprocessable Entity"
-					},
-					"500": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Internal Server Error"
-					}
-				},
-				"summary": "Update a publication",
-				"tags": ["Publications"]
 			}
 		},
 		"/ready": {

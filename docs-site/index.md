@@ -30,7 +30,7 @@ features:
   - title: CLI
     details: Create posts, upload media, use social sets, and automate workflows from scripts or CI.
   - title: MCP
-    details: Let assistants inspect workspaces, draft publications, adapt renditions, and schedule posts through authenticated tools.
+    details: Let assistants inspect workspaces, draft posts, adapt renditions, and schedule through authenticated tools.
   - title: Android app
     details: Install the release APK and connect it to your self-hosted instance.
 ---
@@ -72,7 +72,7 @@ New to OpenPost? Start with the [Quickstart](/guide/quickstart) guide.
 
 ## Choose the right docs
 
-- **[User-facing docs](/usage/)** cover the web app, CLI, and MCP workflows for creating publications, adapting platform renditions, scheduling posts, and automating OpenPost as a product user.
+- **[User-facing docs](/usage/)** cover the web app, CLI, and MCP workflows for drafting posts, adapting platform renditions, scheduling posts, and automating OpenPost as a product user.
 - **[Self-hosting docs](/self-hosting/)** cover installation, configuration, provider app setup, media/database storage, backups, upgrades, and troubleshooting for operators.
 - **[Developer docs](/development/)** cover architecture, API reference, backend/frontend internals, platform adapters, MCP implementation, billing infrastructure, testing, and the production-readiness plan.
 

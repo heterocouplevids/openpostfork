@@ -1,13 +1,6 @@
 <script lang="ts">
 	import { onMount, tick, type Snippet } from 'svelte';
-	import { page } from '$app/state';
-	import {
-		client,
-		type Publication,
-		type SocialAccount,
-		type Workspace,
-		getToken
-	} from '$lib/api/client';
+	import { client, type SocialAccount, type Workspace, getToken } from '$lib/api/client';
 	import { getApiBase } from '$lib/stores/instance.svelte';
 	import { getAuthenticatedMediaByID } from '$lib/media-url';
 	import { isSupportedMediaFile, uploadMediaFile } from '$lib/media-upload-client';
@@ -64,7 +57,6 @@
 	interface InitialPost {
 		id: string;
 		workspace_id: string;
-		publication_id?: string;
 		content: string;
 		thread_draft?: string | null;
 		status: string;
@@ -101,10 +93,6 @@
 	let posts = $state<PostItem[]>([makeEmptyPost()]);
 	let activePostIndex = $state(0);
 	let draftId = $state<string | null>(null);
-	let publicationId = $state('');
-	let linkedPublication = $state<Publication | null>(null);
-	let loadingLinkedPublication = $state(false);
-	let lastLoadedPublicationId = '';
 	let lastInitializedPostId = $state<string | null>(null);
 	let isSaving = $state(false);
 	let isSubmitting = $state(false);
@@ -266,10 +254,6 @@
 		);
 		return Math.min(...limits);
 	});
-	const linkedPublicationMediaCount = $derived(
-		linkedPublication?.media_ids?.filter(Boolean).length ?? 0
-	);
-
 	const previewGroups = $derived.by<PreviewGroup[]>(() => {
 		const groups: PreviewGroup[] = [];
 		const sourcePosts = isThread ? posts : activePost ? [activePost] : [];
@@ -392,14 +376,9 @@
 		const selectedAccountsSnapshot = [...selectedAccountIds].sort();
 		return JSON.stringify({
 			draft: getDraftSnapshot(posts),
-			publicationId: publicationId.trim(),
 			selectedAccounts: selectedAccountsSnapshot,
 			variants: variantEntries
 		});
-	}
-
-	function getPublicationIDForPayload(): string {
-		return publicationId.trim();
 	}
 
 	function getVariantPost(accountId: string, postKey: string): VariantPost | null {
@@ -525,7 +504,6 @@
 	async function initializeFromPost(post: InitialPost | undefined) {
 		if (!post) {
 			draftId = null;
-			publicationId = page.url.searchParams.get('publication') ?? '';
 			lastInitializedPostId = null;
 			posts = [makeEmptyPost()];
 			activePostIndex = 0;
@@ -549,7 +527,6 @@
 		}
 
 		draftId = post.id;
-		publicationId = post.publication_id ?? '';
 		lastInitializedPostId = post.id;
 		selectedWorkspaceId = post.workspace_id;
 		selectedAccountIds = post.destinations?.map((d) => d.social_account_id) ?? [];
@@ -655,16 +632,6 @@
 	});
 
 	$effect(() => {
-		const id = getPublicationIDForPayload();
-		if (!id) {
-			linkedPublication = null;
-			lastLoadedPublicationId = '';
-			return;
-		}
-		loadLinkedPublication(id);
-	});
-
-	$effect(() => {
 		const text = ui.promptText;
 		if (text && !initialPost && !loadingWorkspaces) {
 			posts = [{ ...makeEmptyPost(), content: text }];
@@ -697,40 +664,6 @@
 	// --------------------------------------------------------------------------
 	// Data loading
 	// --------------------------------------------------------------------------
-	async function loadLinkedPublication(id: string) {
-		if (!id || id === lastLoadedPublicationId) return;
-		lastLoadedPublicationId = id;
-		loadingLinkedPublication = true;
-		try {
-			const { data, error: err } = await client.GET('/publications/{id}', {
-				params: { path: { id } }
-			});
-			if (err) throw err;
-			linkedPublication = data ?? null;
-			if (data?.media_ids?.length) {
-				await hydrateMediaMetadata(data.workspace_id, data.media_ids.filter(Boolean));
-			}
-			if (data && !isEditMode && !hasAnyContent(posts)) {
-				posts = posts.map((post, index) =>
-					index === 0
-						? {
-								...post,
-								content: data.source_content,
-								mediaIds: data.media_ids?.filter(Boolean) ?? []
-							}
-						: post
-				);
-				activePostIndex = 0;
-				scheduleAutoSave();
-			}
-		} catch (e) {
-			console.error('Failed to load linked publication:', e);
-			linkedPublication = null;
-		} finally {
-			loadingLinkedPublication = false;
-		}
-	}
-
 	async function hydrateMediaMetadata(workspaceId: string, mediaIds: string[]) {
 		const missingIds = Array.from(new Set(mediaIds.filter(Boolean))).filter(
 			(id) => !mediaMimeTypes.has(id) || !mediaSizes.has(id)
@@ -768,7 +701,7 @@
 			mediaAltTexts = nextAltTexts;
 			mediaSizes = nextSizes;
 		} catch (e) {
-			console.error('Failed to load publication media metadata:', e);
+			console.error('Failed to load media metadata:', e);
 		}
 	}
 
@@ -883,35 +816,6 @@
 		scheduleAutoSave();
 	}
 
-	function clearPublication() {
-		publicationId = '';
-		linkedPublication = null;
-		lastLoadedPublicationId = '';
-		scheduleAutoSave();
-	}
-
-	function useLinkedPublicationSource() {
-		if (!linkedPublication) return;
-		const sourceMediaIds = linkedPublication.media_ids?.filter(Boolean) ?? [];
-		posts = posts.map((post, index) =>
-			index === 0
-				? {
-						...post,
-						content: linkedPublication?.source_content ?? '',
-						mediaIds: mergeMediaIds(post.mediaIds, sourceMediaIds)
-					}
-				: post
-		);
-		activePostIndex = 0;
-		if (sourceMediaIds.length > 0) {
-			hydrateMediaMetadata(linkedPublication.workspace_id, sourceMediaIds);
-		}
-		scheduleAutoSave();
-		tick().then(() => {
-			document.getElementById('post-textarea-0')?.focus();
-		});
-	}
-
 	// --------------------------------------------------------------------------
 	// Draft saving
 	// --------------------------------------------------------------------------
@@ -952,7 +856,6 @@
 				social_account_ids: selectedAccountIds,
 				media_ids: draftMediaIds,
 				random_delay_minutes: defaultDelay,
-				...(getPublicationIDForPayload() ? { publication_id: getPublicationIDForPayload() } : {}),
 				...(threadDraft ? { thread_draft: threadDraft } : {})
 			};
 			if (draftId) {
@@ -963,7 +866,6 @@
 						scheduled_at: '',
 						social_account_ids: selectedAccountIds,
 						media_ids: draftMediaIds,
-						publication_id: getPublicationIDForPayload(),
 						random_delay_minutes: defaultDelay,
 						...(threadDraft ? { thread_draft: threadDraft } : {})
 					}
@@ -1045,9 +947,6 @@
 						workspace_id: selectedWorkspaceId,
 						social_account_ids: selectedAccountIds,
 						scheduled_at: scheduledAt,
-						...(getPublicationIDForPayload()
-							? { publication_id: getPublicationIDForPayload() }
-							: {}),
 						random_delay_minutes: randomDelay,
 						posts: validPosts.map((p) => ({
 							content: p.content,
@@ -1075,7 +974,6 @@
 							scheduled_at: scheduledAt,
 							social_account_ids: selectedAccountIds,
 							media_ids: posts[0].mediaIds,
-							publication_id: getPublicationIDForPayload(),
 							random_delay_minutes: randomDelay,
 							...(clearThreadDraft !== undefined ? { thread_draft: clearThreadDraft } : {})
 						}
@@ -1089,9 +987,6 @@
 							social_account_ids: selectedAccountIds,
 							scheduled_at: scheduledAt,
 							media_ids: posts[0].mediaIds,
-							...(getPublicationIDForPayload()
-								? { publication_id: getPublicationIDForPayload() }
-								: {}),
 							random_delay_minutes: randomDelay
 						}
 					});
@@ -1113,8 +1008,6 @@
 				posts = [makeEmptyPost()];
 				activePostIndex = 0;
 				draftId = null;
-				publicationId = '';
-				linkedPublication = null;
 				lastSavedSnapshot = '';
 				variants = new Map();
 				activeVariantAccountId = null;
@@ -1958,31 +1851,6 @@
 			{success}
 		</div>
 	{/if}
-	{#if publicationId}
-		<div
-			class="mx-3 mt-2 flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2 md:mx-4 md:mt-3"
-		>
-			<div class="flex min-w-0 items-center gap-2">
-				<Link2Icon class="h-4 w-4 shrink-0 text-muted-foreground" />
-				<div class="min-w-0">
-					<div class="text-xs font-medium text-muted-foreground">Linked source</div>
-					<div class="truncate text-sm">
-						{#if loadingLinkedPublication}
-							Loading source...
-						{:else if linkedPublication}
-							{linkedPublication.title}
-						{:else}
-							{publicationId}
-						{/if}
-					</div>
-				</div>
-			</div>
-			<Button variant="ghost" size="sm" class="gap-1.5" onclick={clearPublication}>
-				<UnlinkIcon class="h-3.5 w-3.5" />
-				Clear
-			</Button>
-		</div>
-	{/if}
 	{#if mediaCapabilityWarnings.length > 0}
 		<div
 			class="mx-3 mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 md:mx-4 md:mt-3 dark:text-amber-300"
@@ -2003,63 +1871,6 @@
 		<!-- Compose Column -->
 		<div class="flex flex-1 flex-col overflow-y-auto">
 			<div class="mx-auto w-full max-w-2xl px-3 py-4 md:px-6 md:py-6">
-				{#if linkedPublication}
-					<section
-						class="mb-5 rounded-lg border bg-muted/25 p-4"
-						aria-label="Source publication context"
-						data-testid="source-publication-context"
-					>
-						<div class="flex flex-wrap items-start justify-between gap-3">
-							<div class="min-w-0 space-y-1">
-								<div class="flex flex-wrap items-center gap-2">
-									<Badge class="capitalize">{linkedPublication.status}</Badge>
-									<span class="text-xs font-medium text-muted-foreground">Source publication</span>
-								</div>
-								<h2 class="truncate text-base font-semibold">{linkedPublication.title}</h2>
-							</div>
-							<div class="flex flex-wrap items-center gap-2">
-								{#if linkedPublication.source_url}
-									<a
-										href={linkedPublication.source_url}
-										target="_blank"
-										rel="noreferrer"
-										class="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-background"
-									>
-										<Link2Icon class="h-3.5 w-3.5" />
-										Source
-									</a>
-								{/if}
-								<Button
-									variant="outline"
-									size="sm"
-									class="gap-1.5"
-									onclick={useLinkedPublicationSource}
-								>
-									<LightbulbIcon class="h-3.5 w-3.5" />
-									Use source
-								</Button>
-							</div>
-						</div>
-						<p class="mt-3 line-clamp-4 text-sm leading-relaxed text-muted-foreground">
-							{linkedPublication.source_content}
-						</p>
-						<div class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-							<div class="rounded-md border bg-background/50 px-3 py-2">
-								<div class="font-medium text-foreground">Goal</div>
-								<div class="mt-0.5 truncate">{linkedPublication.goal || '-'}</div>
-							</div>
-							<div class="rounded-md border bg-background/50 px-3 py-2">
-								<div class="font-medium text-foreground">Audience</div>
-								<div class="mt-0.5 truncate">{linkedPublication.audience || '-'}</div>
-							</div>
-							<div class="rounded-md border bg-background/50 px-3 py-2">
-								<div class="font-medium text-foreground">Assets</div>
-								<div class="mt-0.5">{linkedPublicationMediaCount}</div>
-							</div>
-						</div>
-					</section>
-				{/if}
-
 				<!-- Prompt Card -->
 				{#if showPromptCard}
 					<div class="relative mb-5 rounded border bg-muted/30 p-4">
