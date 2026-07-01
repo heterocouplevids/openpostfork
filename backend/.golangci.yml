@@ -72,6 +72,9 @@ linters:
       - std-error-handling
     rules:
       - linters:
+          - goconst
+        path: .*
+      - linters:
           - dupl
           - errcheck
           - goconst
