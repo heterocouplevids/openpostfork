@@ -258,13 +258,10 @@
 
 	const previewGroups = $derived.by<PreviewGroup[]>(() => {
 		const groups: PreviewGroup[] = [];
-		const seenPlatforms = new Set<string>();
 		const sourcePosts = isThread ? posts : activePost ? [activePost] : [];
 
 		for (const account of selectedAccounts) {
 			const platformKey = getPlatformKey(account.platform);
-			if (seenPlatforms.has(platformKey)) continue;
-			seenPlatforms.add(platformKey);
 			const previewPosts = sourcePosts
 				.map((post) => ({
 					key: post.key,
@@ -278,10 +275,12 @@
 
 			groups.push({
 				key: `${account.id}:${platformKey}`,
+				accountId: account.id,
 				platformKey,
 				platformName: getPlatformName(account.platform),
 				username: account.account_username || 'username',
 				displayName: account.account_username || 'Display Name',
+				avatarUrl: account.account_avatar_url || '',
 				isUnsynced: variants.has(account.id),
 				posts: previewPosts
 			});
@@ -480,8 +479,11 @@
 	}
 
 	function getProviderMediaWarnings(platform: string, mediaIds: string[]): string[] {
-		if (mediaIds.length === 0) return [];
 		const videos = mediaIds.filter((id) => isVideoMedia(id));
+		const images = mediaIds.filter((id) => {
+			const mimeType = mediaMimeTypes.get(id) ?? '';
+			return mimeType.startsWith('image/');
+		});
 		const warnings: string[] = [];
 
 		if ((platform === 'x' || platform === 'bluesky') && videos.length > 0 && mediaIds.length > 1) {
@@ -494,6 +496,28 @@
 		}
 		if (platform === 'threads' && mediaIds.length > 1) {
 			warnings.push('Threads publishing currently sends only the first media attachment.');
+		}
+		if (platform === 'facebook' && mediaIds.length > 1) {
+			warnings.push('Facebook publishing currently supports at most one media attachment.');
+		}
+		if (platform === 'instagram') {
+			if (mediaIds.length !== 1) {
+				warnings.push(
+					'Instagram publishing currently requires exactly one image or video attachment.'
+				);
+			} else if (videos.length === 0 && images.length === 0) {
+				warnings.push('Instagram publishing supports image or video attachments only.');
+			}
+		}
+		if (platform === 'tiktok') {
+			if (mediaIds.length !== 1 || videos.length !== 1) {
+				warnings.push('TikTok publishing requires exactly one video attachment.');
+			}
+		}
+		if (platform === 'youtube') {
+			if (mediaIds.length !== 1 || videos.length !== 1) {
+				warnings.push('YouTube publishing requires exactly one video attachment.');
+			}
 		}
 		if (platform === 'threads') {
 			for (const id of videos) {

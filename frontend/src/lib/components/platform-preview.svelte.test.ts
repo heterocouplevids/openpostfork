@@ -9,7 +9,7 @@ const previewProps = {
 	displayName: 'OpenPost'
 };
 
-describe('PlatformPreview planned platform views', () => {
+describe('PlatformPreview platform views', () => {
 	it('renders an Instagram-specific post preview', async () => {
 		const screen = await render(PlatformPreview, {
 			platform: 'instagram',

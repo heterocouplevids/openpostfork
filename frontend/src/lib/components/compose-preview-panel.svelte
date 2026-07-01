@@ -11,10 +11,12 @@
 
 	export interface PreviewGroup {
 		key: string;
+		accountId: string;
 		platformKey: string;
 		platformName: string;
 		username: string;
 		displayName: string;
+		avatarUrl: string;
 		isUnsynced: boolean;
 		posts: PreviewPost[];
 	}
@@ -47,6 +49,7 @@
 							mediaMimeTypes={post.mediaMimeTypes}
 							username={group.username}
 							displayName={group.displayName}
+							avatarUrl={group.avatarUrl}
 							isUnsynced={group.isUnsynced}
 						/>
 					{/key}

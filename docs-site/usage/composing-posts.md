@@ -17,6 +17,13 @@ start from [Publications](/usage/publications). The composer keeps the
 publication link on saved drafts, scheduled posts, and threads so the source
 context remains visible across web, CLI, and MCP workflows.
 
+## Platform previews
+
+The preview panel renders each selected account separately, so multiple pages,
+channels, or profiles on the same provider stay visible. Instagram, Facebook,
+YouTube, and TikTok use provider-shaped cards instead of the generic preview,
+and media warnings surface first-slice limits before publishing.
+
 ## Practical advice
 
 - Keep one canonical message first, then customize only where a provider needs it.

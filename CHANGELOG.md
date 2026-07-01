@@ -64,7 +64,7 @@ All notable changes to this project are documented in this file.
 - Added user-facing MCP docs and reorganized the docs navigation around user docs, self-hosting docs, and developer docs.
 - Added a backend OpenAPI generator command so docs builds regenerate the checked-in Huma spec from the same route registrar used by the server.
 - Added hosted pricing handoff from landing-page plan CTAs through registration, onboarding, and the app billing checkout flow.
-- Added platform-specific preview cards for Instagram, Facebook, YouTube, and TikTok compose views.
+- Added account-specific platform preview cards for Instagram, Facebook, YouTube, and TikTok compose views.
 - Added a compact settings section navigator with stable anchors for billing, security, tokens, schedules, and workspace defaults.
 - Added dedicated docs overview pages that separate user-facing web/CLI/MCP docs, self-hosting operations docs, and developer implementation docs.
 - Added marketing SEO pages for free social post tools and publishing tips, including interactive character counting, thread splitting, and platform previews.
