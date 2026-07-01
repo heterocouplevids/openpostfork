@@ -27,3 +27,14 @@ services:
 volumes:
   openpost_data:
 ```
+
+For Docker, Podman, or NixOS-managed secrets, mount the secret files and use file-backed variables:
+
+```yaml
+environment:
+  - OPENPOST_JWT_SECRET_FILE=/run/secrets/openpost-jwt-secret
+  - OPENPOST_ENCRYPTION_KEY_FILE=/run/secrets/openpost-encryption-key
+  - OPENPOST_DATABASE_URL_FILE=/run/secrets/openpost-database-url
+```
+
+Leave the direct variables unset when the `_FILE` variants should be used.

@@ -104,6 +104,7 @@ All notable changes to this project are documented in this file.
 - Added offset pagination metadata for background jobs, including Activity load-more UI, CLI `jobs list --offset`, backend regression tests, and Playwright coverage.
 - Added offset pagination metadata for post lists, including CLI `post list --offset` and backend regression coverage.
 - Added release artifacts for the `openpost-mcp` stdio proxy alongside the main `openpost` CLI, with both binaries stamped with the release tag version.
+- Added file-backed env var support through `<VARIABLE>_FILE` for cloud secrets, provider JSON bootstrap config, legacy aliases, and deploy-managed secret files.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

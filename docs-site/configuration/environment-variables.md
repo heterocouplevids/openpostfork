@@ -2,6 +2,20 @@
 
 This page summarizes the env vars used by the backend. Some values in `.env.example` are recommended deployment examples; code defaults may differ.
 
+## File-backed values
+
+Every variable below can also be loaded from `<VARIABLE>_FILE`. OpenPost checks the direct variable first, then its file variant, then any legacy aliases and their file variants. File contents are trimmed before use.
+
+This is useful for Docker, Podman, Kubernetes, NixOS, and sops-managed secrets:
+
+```sh
+OPENPOST_JWT_SECRET_FILE=/run/secrets/openpost-jwt-secret
+OPENPOST_ENCRYPTION_KEY_FILE=/run/secrets/openpost-encryption-key
+OPENPOST_DATABASE_URL_FILE=/run/secrets/openpost-database-url
+```
+
+Leave the direct variable unset when you want the file value to win.
+
 ## Core settings
 
 | Variable | Required | Default | Description |
@@ -159,6 +173,7 @@ If `redirect_uri` is omitted, OpenPost derives `https://your-domain.com/api/v1/a
 - The preferred names above are what new deployments should use.
 - `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. The `provider_apps` table stores the same logical fields, with `client_secret` encrypted into `client_secret_encrypted`. Both currently support implemented adapters only: `x`, `mastodon`, `linkedin`, `threads`, `facebook`, `instagram`, `tiktok`, and `youtube`; Bluesky is enabled separately through app-password login.
 - Backward-compatible aliases still work for existing installs: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.
+- File-backed aliases also work for existing installs, such as `DATABASE_URL_FILE`, `JWT_SECRET_FILE`, and `ENCRYPTION_KEY_FILE`.
 - The root `.env.example` is the best copy-paste starting point.
 - Set explicit public URLs in production even when defaults exist.
 - For Threads, Facebook, Instagram, and TikTok, treat `OPENPOST_MEDIA_URL` as mandatory unless S3/R2 public media URLs are configured.

@@ -10,6 +10,7 @@ changes live in [Developer Docs](/development/).
 - [ ] Generate fresh `OPENPOST_JWT_SECRET` and `OPENPOST_ENCRYPTION_KEY`.
 - [ ] Keep both secrets at least 32 characters long.
 - [ ] Store secrets outside the repository and outside container images.
+- [ ] Use `<VARIABLE>_FILE` variants for Docker/Podman/Kubernetes/NixOS secrets, and leave the direct variable unset when the file value should win.
 - [ ] Set `OPENPOST_APP_URL` to the public HTTPS app origin.
 - [ ] Set `OPENPOST_PUBLIC_URL` to the same public HTTPS app origin unless you have a specific split-origin reason.
 - [ ] Keep `OPENPOST_EXTRA_CORS_ORIGINS` explicit and do not use `*`.

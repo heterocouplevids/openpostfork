@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -49,6 +51,91 @@ func TestLoadCloudPostgresAndS3Primitives(t *testing.T) {
 	require.Equal(t, "secret-key", cfg.S3SecretAccessKey)
 	require.Equal(t, "https://media.openpost.social", cfg.S3PublicBaseURL)
 	require.True(t, cfg.S3ForcePathStyle)
+}
+
+func TestLoadSupportsFileBackedEnvValues(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("OPENPOST_EDITION_FILE", writeEnvFile(t, "edition", "cloud\n"))
+	t.Setenv("OPENPOST_DATABASE_DRIVER_FILE", writeEnvFile(t, "database-driver", "postgres\n"))
+	t.Setenv("OPENPOST_DATABASE_URL_FILE", writeEnvFile(t, "database-url", "postgres://openpost:secret@db.internal:5432/openpost?sslmode=require\n"))
+	t.Setenv("OPENPOST_JWT_SECRET_FILE", writeEnvFile(t, "jwt-secret", "jwt-secret-with-more-than-thirty-two-characters\n"))
+	t.Setenv("OPENPOST_ENCRYPTION_KEY_FILE", writeEnvFile(t, "encryption-key", "encryption-key-with-more-than-thirty-two-chars\n"))
+	t.Setenv("OPENPOST_STORAGE_DRIVER_FILE", writeEnvFile(t, "storage-driver", "s3\n"))
+	t.Setenv("OPENPOST_S3_REGION_FILE", writeEnvFile(t, "s3-region", "auto\n"))
+	t.Setenv("OPENPOST_S3_BUCKET_FILE", writeEnvFile(t, "s3-bucket", "openpost-media\n"))
+	t.Setenv("OPENPOST_S3_ACCESS_KEY_ID_FILE", writeEnvFile(t, "s3-access-key-id", "access-key\n"))
+	t.Setenv("OPENPOST_S3_SECRET_ACCESS_KEY_FILE", writeEnvFile(t, "s3-secret-access-key", "secret-key\n"))
+	t.Setenv("OPENPOST_S3_PUBLIC_BASE_URL_FILE", writeEnvFile(t, "s3-public-base-url", "https://media.openpost.social/\n"))
+	t.Setenv("OPENPOST_S3_FORCE_PATH_STYLE_FILE", writeEnvFile(t, "s3-force-path-style", "true\n"))
+	t.Setenv("OPENPOST_POLAR_ACCESS_TOKEN_FILE", writeEnvFile(t, "polar-access-token", "polar-token\n"))
+	t.Setenv("OPENPOST_POLAR_WEBHOOK_SECRET_FILE", writeEnvFile(t, "polar-webhook-secret", "whsec_secret\n"))
+	t.Setenv("OPENPOST_POLAR_CHECKOUT_SUCCESS_URL_FILE", writeEnvFile(t, "polar-checkout-url", "https://app.openpost.social/settings/billing?checkout_id={CHECKOUT_ID}\n"))
+	t.Setenv("OPENPOST_POLAR_RETURN_URL_FILE", writeEnvFile(t, "polar-return-url", "https://app.openpost.social/settings/billing/\n"))
+	t.Setenv("OPENPOST_POLAR_STARTER_PRODUCT_ID_FILE", writeEnvFile(t, "polar-starter-product", "starter-product\n"))
+	t.Setenv("OPENPOST_POLAR_CREATOR_PRODUCT_ID_FILE", writeEnvFile(t, "polar-creator-product", "creator-product\n"))
+	t.Setenv("OPENPOST_POLAR_PRO_PRODUCT_ID_FILE", writeEnvFile(t, "polar-pro-product", "pro-product\n"))
+
+	cfg := Load()
+
+	require.Equal(t, EditionCloud, cfg.Edition)
+	require.Equal(t, DatabaseDriverPostgres, cfg.DatabaseDriver)
+	require.Equal(t, "postgres://openpost:secret@db.internal:5432/openpost?sslmode=require", cfg.DatabaseURL)
+	require.Equal(t, "jwt-secret-with-more-than-thirty-two-characters", cfg.JWTSecret)
+	require.Equal(t, "encryption-key-with-more-than-thirty-two-chars", cfg.EncryptionKey)
+	require.Equal(t, StorageDriverS3, cfg.StorageDriver)
+	require.Equal(t, "auto", cfg.S3Region)
+	require.Equal(t, "openpost-media", cfg.S3Bucket)
+	require.Equal(t, "access-key", cfg.S3AccessKeyID)
+	require.Equal(t, "secret-key", cfg.S3SecretAccessKey)
+	require.Equal(t, "https://media.openpost.social", cfg.S3PublicBaseURL)
+	require.True(t, cfg.S3ForcePathStyle)
+	require.Equal(t, "polar-token", cfg.PolarAccessToken)
+	require.Equal(t, "whsec_secret", cfg.PolarWebhookSecret)
+	require.Equal(t, "https://app.openpost.social/settings/billing?checkout_id={CHECKOUT_ID}", cfg.PolarCheckoutURL)
+	require.Equal(t, "https://app.openpost.social/settings/billing", cfg.PolarReturnURL)
+	require.Equal(t, "starter-product", cfg.PolarStarterProductID)
+	require.Equal(t, "creator-product", cfg.PolarCreatorProductID)
+	require.Equal(t, "pro-product", cfg.PolarProProductID)
+	require.NoError(t, cfg.ValidateRuntime())
+}
+
+func TestLoadFileBackedEnvPrefersInlineValue(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("OPENPOST_DATABASE_URL", "postgres://env.example/openpost")
+	t.Setenv("OPENPOST_DATABASE_URL_FILE", writeEnvFile(t, "database-url", "postgres://file.example/openpost\n"))
+
+	cfg := Load()
+
+	require.Equal(t, "postgres://env.example/openpost", cfg.DatabaseURL)
+}
+
+func TestLoadFileBackedEnvSupportsLegacyAliases(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("DATABASE_URL_FILE", writeEnvFile(t, "database-url", "postgres://alias.example/openpost\n"))
+	t.Setenv("JWT_SECRET_FILE", writeEnvFile(t, "jwt-secret", "legacy-jwt-secret-with-thirty-two-chars\n"))
+	t.Setenv("ENCRYPTION_KEY_FILE", writeEnvFile(t, "encryption-key", "legacy-encryption-key-with-thirty-two\n"))
+
+	cfg := Load()
+
+	require.Equal(t, "postgres://alias.example/openpost", cfg.DatabaseURL)
+	require.Equal(t, "legacy-jwt-secret-with-thirty-two-chars", cfg.JWTSecret)
+	require.Equal(t, "legacy-encryption-key-with-thirty-two", cfg.EncryptionKey)
+}
+
+func TestLoadSupportsFileBackedProviderApps(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("OPENPOST_PROVIDER_APPS_FILE", writeEnvFile(t, "provider-apps", `[
+		{"provider":"youtube","client_id":"youtube-client","client_secret":"youtube-secret"}
+	]`))
+
+	cfg := Load()
+
+	require.Len(t, cfg.ProviderApps, 2)
+	require.Equal(t, "bluesky", cfg.ProviderApps[0].Provider)
+	require.Equal(t, "youtube", cfg.ProviderApps[1].Provider)
+	require.Equal(t, "youtube-client", cfg.ProviderApps[1].ClientID)
+	require.Equal(t, "youtube-secret", cfg.ProviderApps[1].ClientSecret)
+	require.Equal(t, "https://app.openpost.social/api/v1/accounts/youtube/callback", cfg.ProviderApps[1].RedirectURI)
 }
 
 func TestLoadSelfHostedCORSOriginsIncludeLocalDevelopmentDefaults(t *testing.T) {
@@ -381,4 +468,12 @@ func TestWarnOnPlaceholderURLExplicitEnvSkipsWarn(t *testing.T) {
 	require.NotPanics(t, func() {
 		warnOnPlaceholderURL(&Config{FrontendURL: "https://openpost.example.com"})
 	})
+}
+
+func writeEnvFile(t *testing.T, name, value string) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), name)
+	require.NoError(t, os.WriteFile(path, []byte(value), 0o600))
+	return path
 }

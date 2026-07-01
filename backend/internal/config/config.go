@@ -155,7 +155,7 @@ func Load() *Config {
 		cfg.WebAuthnRPID = "localhost"
 	}
 
-	if raw := os.Getenv("MASTODON_SERVERS"); raw != "" {
+	if raw := getEnvDefault("MASTODON_SERVERS", ""); raw != "" {
 		var servers []MastodonServerConfig
 		if err := json.Unmarshal([]byte(raw), &servers); err != nil {
 			log.Printf("WARNING: failed to parse MASTODON_SERVERS JSON: %v", err)
@@ -164,7 +164,7 @@ func Load() *Config {
 		}
 	}
 	cfg.ProviderApps = providerAppsFromLegacyConfig(cfg)
-	if raw := os.Getenv("OPENPOST_PROVIDER_APPS"); raw != "" {
+	if raw := getEnvDefault("OPENPOST_PROVIDER_APPS", ""); raw != "" {
 		var apps []platform.AppConfig
 		if err := json.Unmarshal([]byte(raw), &apps); err != nil {
 			log.Printf("WARNING: failed to parse OPENPOST_PROVIDER_APPS JSON: %v", err)
@@ -372,10 +372,10 @@ func (c *Config) invalidCloudCORSConfig() []string {
 // explicitly, so `devenv shell` and any operator who has set a real URL
 // are not affected.
 func warnOnPlaceholderURL(cfg *Config) {
-	if _, explicit := os.LookupEnv("OPENPOST_APP_URL"); explicit {
+	if envValueSet("OPENPOST_APP_URL") {
 		return
 	}
-	if _, explicit := os.LookupEnv("OPENPOST_FRONTEND_URL"); explicit {
+	if envValueSet("OPENPOST_FRONTEND_URL") {
 		return
 	}
 	log.Printf("============================================================")
@@ -388,18 +388,16 @@ func warnOnPlaceholderURL(cfg *Config) {
 }
 
 func getEnvDefault(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
+	if value, _, ok := getEnvValue(key); ok {
 		return value
 	}
 	return fallback
 }
 
 func getEnvWithFallbacks(primary, fallback string, aliases ...string) string {
-	if value := os.Getenv(primary); value != "" {
-		return value
-	}
-	for _, alias := range aliases {
-		if value := os.Getenv(alias); value != "" {
+	keys := append([]string{primary}, aliases...)
+	for _, alias := range keys {
+		if value, _, ok := getEnvValue(alias); ok {
 			return value
 		}
 	}
@@ -408,14 +406,14 @@ func getEnvWithFallbacks(primary, fallback string, aliases ...string) string {
 
 func getEnvBoolWithAliases(fallback bool, keys ...string) bool {
 	for _, key := range keys {
-		value := strings.TrimSpace(os.Getenv(key))
-		if value == "" {
+		value, source, ok := getEnvValue(key)
+		if !ok {
 			continue
 		}
 
-		parsed, err := strconv.ParseBool(value)
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
 		if err != nil {
-			log.Printf("WARNING: invalid boolean for %s=%q, using default %t", key, value, fallback)
+			log.Printf("WARNING: invalid boolean for %s=%q, using default %t", source, value, fallback)
 			return fallback
 		}
 		return parsed
@@ -425,7 +423,7 @@ func getEnvBoolWithAliases(fallback bool, keys ...string) bool {
 }
 
 func getEnvEnum(key, fallback string, allowed ...string) string {
-	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	value := strings.ToLower(strings.TrimSpace(getEnvDefault(key, "")))
 	if value == "" {
 		return fallback
 	}
@@ -438,6 +436,39 @@ func getEnvEnum(key, fallback string, allowed ...string) string {
 
 	log.Printf("WARNING: invalid value for %s=%q, using default %q", key, value, fallback)
 	return fallback
+}
+
+func envValueSet(key string) bool {
+	_, _, ok := getEnvValue(key)
+	return ok
+}
+
+func getEnvValue(key string) (string, string, bool) {
+	if key == "" {
+		return "", "", false
+	}
+	if value := os.Getenv(key); value != "" {
+		return value, key, true
+	}
+
+	fileKey := key + "_FILE"
+	path := strings.TrimSpace(os.Getenv(fileKey))
+	if path == "" {
+		return "", "", false
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("WARNING: failed to read %s=%q: %v", fileKey, path, err)
+		return "", fileKey, false
+	}
+
+	value := strings.TrimSpace(string(raw))
+	if value == "" {
+		log.Printf("WARNING: %s=%q resolved to an empty value", fileKey, path)
+		return "", fileKey, false
+	}
+	return value, fileKey, true
 }
 
 // oauthRedirectFromFrontend returns the OAuth redirect URI to register
