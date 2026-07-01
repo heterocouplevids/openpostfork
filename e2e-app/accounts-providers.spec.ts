@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createWorkspace, registerUser } from "./helpers";
 
 test("accounts page shows configured and unavailable providers", async ({
   page,
@@ -6,20 +7,9 @@ test("accounts page shows configured and unavailable providers", async ({
 }) => {
   const unique = Date.now().toString(36);
   const email = `accounts-${unique}@example.com`;
-  const password = "password-1234";
 
-  const register = await request.post("/api/v1/auth/register", {
-    data: { email, password },
-  });
-  expect(register.ok()).toBeTruthy();
-  const auth = await register.json();
-  expect(auth.token).toBeTruthy();
-
-  const workspace = await request.post("/api/v1/workspaces", {
-    headers: { Authorization: `Bearer ${auth.token}` },
-    data: { name: "Provider Availability E2E" },
-  });
-  expect(workspace.ok()).toBeTruthy();
+  const auth = await registerUser(request, email);
+  await createWorkspace(request, auth.token, "Provider Availability E2E");
 
   await page.addInitScript((token) => {
     window.localStorage.setItem("token", token);
@@ -162,20 +152,9 @@ test("accounts page starts custom Mastodon instance connection", async ({
 }) => {
   const unique = Date.now().toString(36);
   const email = `mastodon-custom-${unique}@example.com`;
-  const password = "password-1234";
 
-  const register = await request.post("/api/v1/auth/register", {
-    data: { email, password },
-  });
-  expect(register.ok()).toBeTruthy();
-  const auth = await register.json();
-  expect(auth.token).toBeTruthy();
-
-  const workspace = await request.post("/api/v1/workspaces", {
-    headers: { Authorization: `Bearer ${auth.token}` },
-    data: { name: "Custom Mastodon E2E" },
-  });
-  expect(workspace.ok()).toBeTruthy();
+  const auth = await registerUser(request, email);
+  await createWorkspace(request, auth.token, "Custom Mastodon E2E");
 
   await page.addInitScript((token) => {
     window.localStorage.setItem("token", token);

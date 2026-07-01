@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createWorkspace, registerUser } from "./helpers";
 
 test("publications page sends a source publication into the composer", async ({
   page,
@@ -6,21 +7,13 @@ test("publications page sends a source publication into the composer", async ({
 }) => {
   const unique = Date.now().toString(36);
   const email = `publications-${unique}@example.com`;
-  const password = "password-1234";
 
-  const register = await request.post("/api/v1/auth/register", {
-    data: { email, password },
-  });
-  expect(register.ok()).toBeTruthy();
-  const auth = await register.json();
-  expect(auth.token).toBeTruthy();
-
-  const workspace = await request.post("/api/v1/workspaces", {
-    headers: { Authorization: `Bearer ${auth.token}` },
-    data: { name: "Publications E2E" },
-  });
-  expect(workspace.ok()).toBeTruthy();
-  const workspaceBody = await workspace.json();
+  const auth = await registerUser(request, email);
+  const workspaceBody = await createWorkspace(
+    request,
+    auth.token,
+    "Publications E2E",
+  );
 
   const sourceContent =
     "Launch the agentic scheduler flow with CLI, MCP, and app handoff.";

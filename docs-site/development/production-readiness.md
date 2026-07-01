@@ -90,7 +90,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 ### 8. Verification
 
-- Add Playwright smoke tests for marketing, login, onboarding, composer, scheduling, accounts, settings, and media. Coverage is now in place for marketing, docs audience separation, app settings/billing/MCP activity, provider discovery, custom Mastodon connect, plan onboarding, publication handoff, account-specific composer previews, composer scheduling through suggested slots, and media-library upload/listing.
+- Add Playwright smoke tests for marketing, login, onboarding, composer, scheduling, accounts, settings, and media. Coverage is now in place for marketing, docs audience separation, browser registration/login/onboarding, app settings/billing/MCP activity, provider discovery, custom Mastodon connect, plan onboarding, publication handoff, account-specific composer previews, composer scheduling through suggested slots, and media-library upload/listing.
 - Add backend regression tests before each schema/service change.
 - Keep `devenv shell -- lint` as the push gate.
 - For hosted deployment work, verify the real app URL, docs URL, marketing URL, release workflow, database backups, and logs.

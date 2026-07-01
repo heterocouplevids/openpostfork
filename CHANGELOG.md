@@ -77,6 +77,7 @@ All notable changes to this project are documented in this file.
 - Added Playwright docs E2E coverage that verifies the user-facing, self-hosting, and developer docs entry points stay distinct and reachable.
 - Added the docs E2E suite to CI and release preflight gates so docs audience separation stays verified automatically.
 - Added the app Playwright E2E suite to CI and release preflight gates for billing, MCP, provider, and publication workflows.
+- Added Playwright app E2E coverage for browser registration, first-workspace onboarding, and login redirects.
 - Added Playwright app E2E coverage for media-library upload and listing through the local-storage multipart fallback.
 - Added Playwright app E2E coverage for composer scheduling through suggested posting slots.
 - Added the backend OAuth account-selection foundation for page/channel providers, including encrypted pending selection storage and completion APIs used by Facebook and Instagram plus future YouTube adapters.

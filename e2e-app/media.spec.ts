@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createWorkspace, registerUser } from "./helpers";
 
 const tinyPNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
@@ -11,21 +12,13 @@ test("media library uploads and lists a local media file", async ({
 }) => {
   const unique = Date.now().toString(36);
   const email = `media-library-${unique}@example.com`;
-  const password = "password-1234";
 
-  const register = await request.post("/api/v1/auth/register", {
-    data: { email, password },
-  });
-  expect(register.ok()).toBeTruthy();
-  const auth = await register.json();
-  expect(auth.token).toBeTruthy();
-
-  const workspace = await request.post("/api/v1/workspaces", {
-    headers: { Authorization: `Bearer ${auth.token}` },
-    data: { name: "Media Library E2E" },
-  });
-  expect(workspace.ok()).toBeTruthy();
-  const workspaceBody = await workspace.json();
+  const auth = await registerUser(request, email);
+  const workspaceBody = await createWorkspace(
+    request,
+    auth.token,
+    "Media Library E2E",
+  );
 
   await page.addInitScript((token) => {
     window.localStorage.setItem("token", token);

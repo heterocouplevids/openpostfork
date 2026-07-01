@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createWorkspace, registerUser } from "./helpers";
 
 type PostPayload = {
   workspace_id?: string;
@@ -16,7 +17,6 @@ test("composer schedules a post from the suggested next slot", async ({
 }) => {
   const unique = Date.now().toString(36);
   const email = `composer-scheduling-${unique}@example.com`;
-  const password = "password-1234";
   const postContent = "Schedule this launch note from the composer.";
   const suggestedDate = new Date(Date.now() + 48 * 60 * 60 * 1000)
     .toISOString()
@@ -26,19 +26,12 @@ test("composer schedules a post from the suggested next slot", async ({
   let draftPayload: PostPayload | undefined;
   let scheduledPayload: PostPayload | undefined;
 
-  const register = await request.post("/api/v1/auth/register", {
-    data: { email, password },
-  });
-  expect(register.ok()).toBeTruthy();
-  const auth = await register.json();
-  expect(auth.token).toBeTruthy();
-
-  const workspace = await request.post("/api/v1/workspaces", {
-    headers: { Authorization: `Bearer ${auth.token}` },
-    data: { name: "Composer Scheduling E2E" },
-  });
-  expect(workspace.ok()).toBeTruthy();
-  const workspaceBody = await workspace.json();
+  const auth = await registerUser(request, email);
+  const workspaceBody = await createWorkspace(
+    request,
+    auth.token,
+    "Composer Scheduling E2E",
+  );
 
   await page.addInitScript((token) => {
     window.localStorage.setItem("token", token);
