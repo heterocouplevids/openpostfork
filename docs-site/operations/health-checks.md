@@ -61,13 +61,20 @@ instance URL, liveness result, readiness result, and database readiness status.
 For support snapshots, use diagnostics:
 
 ```bash
-openpost instance diagnostics --instance https://app.openpost.example --json
+openpost instance diagnostics \
+  --instance https://app.openpost.example \
+  --deployment docker-compose \
+  --provider youtube \
+  --logs-file ./openpost.log \
+  --json
 ```
 
 Diagnostics includes the CLI version, OS/architecture, profile, instance URL,
 config paths, liveness/readiness/database status, token presence/source, and
-authenticated user/workspace counts when a token is available. It never prints
-raw API tokens or server secrets.
+authenticated user/workspace counts when a token is available. Optional
+`--deployment`, `--provider`, and `--logs-file` fields capture the deployment
+method, provider being tested, and a redacted last-100-line log tail. It never
+prints raw API tokens or server secrets.
 
 ## Recommended probes
 
@@ -75,5 +82,5 @@ raw API tokens or server secrets.
 - Deploy rollout readiness: `GET /api/v1/ready`
 - External uptime monitor: `GET /api/v1/ready`
 - Operator smoke from a shell: `openpost instance health`
-- Support snapshot from a shell: `openpost instance diagnostics --json`
+- Support snapshot from a shell: `openpost instance diagnostics --deployment <method> --provider <provider> --logs-file <path> --json`
 - Mobile app instance setup: the app validates `/api/v1/ready` before saving the instance URL.

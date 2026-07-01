@@ -1,7 +1,11 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -9,6 +13,8 @@ import (
 	"github.com/openpost/cli/internal/auth"
 	"github.com/openpost/cli/internal/config"
 )
+
+const diagnosticsLogTailLines = 100
 
 func newInstanceCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -190,26 +196,38 @@ func newInstanceHealthCmd() *cobra.Command {
 }
 
 type instanceDiagnostics struct {
-	CLIVersion     string   `json:"cli_version"`
-	Platform       string   `json:"platform"`
-	Profile        string   `json:"profile"`
-	Instance       string   `json:"instance"`
-	ConfigPath     string   `json:"config_path"`
-	CredentialPath string   `json:"credential_path"`
-	Token          bool     `json:"token"`
-	TokenSource    string   `json:"token_source,omitempty"`
-	Health         string   `json:"health"`
-	Ready          string   `json:"ready"`
-	Database       string   `json:"database"`
-	Authenticated  bool     `json:"authenticated"`
-	UserEmail      string   `json:"user_email,omitempty"`
-	Workspace      string   `json:"workspace,omitempty"`
-	WorkspaceCount int      `json:"workspace_count"`
-	Errors         []string `json:"errors,omitempty"`
+	CLIVersion      string   `json:"cli_version"`
+	Platform        string   `json:"platform"`
+	Profile         string   `json:"profile"`
+	Instance        string   `json:"instance"`
+	ConfigPath      string   `json:"config_path"`
+	CredentialPath  string   `json:"credential_path"`
+	Deployment      string   `json:"deployment_method,omitempty"`
+	Provider        string   `json:"provider,omitempty"`
+	Token           bool     `json:"token"`
+	TokenSource     string   `json:"token_source,omitempty"`
+	Health          string   `json:"health"`
+	Ready           string   `json:"ready"`
+	Database        string   `json:"database"`
+	Authenticated   bool     `json:"authenticated"`
+	UserEmail       string   `json:"user_email,omitempty"`
+	Workspace       string   `json:"workspace,omitempty"`
+	WorkspaceCount  int      `json:"workspace_count"`
+	LogFile         string   `json:"log_file,omitempty"`
+	LogTailLineCap  int      `json:"log_tail_line_cap,omitempty"`
+	RedactedLogTail []string `json:"redacted_log_tail,omitempty"`
+	Errors          []string `json:"errors,omitempty"`
+}
+
+type instanceDiagnosticsFlags struct {
+	deployment string
+	provider   string
+	logsFile   string
 }
 
 func newInstanceDiagnosticsCmd() *cobra.Command {
-	return &cobra.Command{
+	var flags instanceDiagnosticsFlags
+	cmd := &cobra.Command{
 		Use:   "diagnostics",
 		Short: "Collect a safe support snapshot for an OpenPost instance",
 		Args:  cobra.NoArgs,
@@ -229,6 +247,8 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 				Instance:       cfg.Instance,
 				ConfigPath:     cfg.ConfigPath,
 				CredentialPath: cfg.CredentialPath,
+				Deployment:     strings.TrimSpace(flags.deployment),
+				Provider:       strings.TrimSpace(flags.provider),
 				Workspace:      cfg.Workspace,
 				Health:         "unknown",
 				Ready:          "unknown",
@@ -270,6 +290,17 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 				}
 			}
 
+			if flags.logsFile != "" {
+				out.LogFile = flags.logsFile
+				out.LogTailLineCap = diagnosticsLogTailLines
+				lines, err := tailRedactedLogFile(flags.logsFile, diagnosticsLogTailLines)
+				if err != nil {
+					out.Errors = append(out.Errors, "logs: "+err.Error())
+				} else {
+					out.RedactedLogTail = lines
+				}
+			}
+
 			p := printerFrom(cfg)
 			if cfg.AsJSON {
 				return p.PrintJSON(out)
@@ -281,6 +312,8 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 				{"Instance", out.Instance},
 				{"Config path", out.ConfigPath},
 				{"Credential path", out.CredentialPath},
+				{"Deployment", emptyDash(out.Deployment)},
+				{"Provider being tested", emptyDash(out.Provider)},
 				{"Token", yesNo(out.Token)},
 				{"Token source", emptyDash(out.TokenSource)},
 				{"Health", out.Health},
@@ -290,7 +323,16 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 				{"User email", emptyDash(out.UserEmail)},
 				{"Workspace", emptyDash(out.Workspace)},
 				{"Workspace count", fmt.Sprintf("%d", out.WorkspaceCount)},
+				{"Log file", emptyDash(out.LogFile)},
+				{"Redacted log lines", fmt.Sprintf("%d", len(out.RedactedLogTail))},
 			})
+			if len(out.RedactedLogTail) > 0 {
+				p.Printf("")
+				p.Printf("last %d redacted log lines:", len(out.RedactedLogTail))
+				for _, line := range out.RedactedLogTail {
+					p.Printf("%s", line)
+				}
+			}
 			if len(out.Errors) > 0 {
 				p.Printf("")
 				for _, diagnosticErr := range out.Errors {
@@ -300,6 +342,10 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&flags.deployment, "deployment", "", "deployment method being checked (docker, binary, nixos, cloud, other)")
+	cmd.Flags().StringVar(&flags.provider, "provider", "", "social provider being tested, such as x, mastodon, youtube, or tiktok")
+	cmd.Flags().StringVar(&flags.logsFile, "logs-file", "", "local OpenPost log file to include as a redacted last-100-line tail")
+	return cmd
 }
 
 func diagnosticsToken(cfg *config.Runtime) (token string, source string, ok bool) {
@@ -315,4 +361,47 @@ func diagnosticsToken(cfg *config.Runtime) (token string, source string, ok bool
 		return "", source, true
 	}
 	return token, source, true
+}
+
+func tailRedactedLogFile(path string, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = diagnosticsLogTailLines
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close() //nolint:errcheck
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	lines := make([]string, 0, limit)
+	for scanner.Scan() {
+		line := redactDiagnosticLogLine(scanner.Text())
+		if len(lines) < limit {
+			lines = append(lines, line)
+			continue
+		}
+		copy(lines, lines[1:])
+		lines[len(lines)-1] = line
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return lines, nil
+}
+
+var diagnosticRedactionPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)(authorization:\s*bearer\s+)[^\s]+`),
+	regexp.MustCompile(`(?i)("?(?:access_token|refresh_token|client_secret|jwt_secret|encryption_key)"?\s*[:=]\s*"?)[^"\s,]+`),
+	regexp.MustCompile(`(?i)((?:token|secret|password|api[_-]?key|client[_-]?secret|jwt[_-]?secret|encryption[_-]?key)\s*=\s*)[^\s]+`),
+	regexp.MustCompile(`(?i)(OPENPOST_[A-Z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD)[A-Z0-9_]*=)[^\s]+`),
+}
+
+func redactDiagnosticLogLine(line string) string {
+	redacted := line
+	for _, pattern := range diagnosticRedactionPatterns {
+		redacted = pattern.ReplaceAllString(redacted, `${1}[redacted]`)
+	}
+	return redacted
 }

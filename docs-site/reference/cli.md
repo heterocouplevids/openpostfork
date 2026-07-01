@@ -445,8 +445,16 @@ Collect a safe support snapshot for an OpenPost instance
 **Usage**
 
 ```text
-openpost instance diagnostics
+openpost instance diagnostics [flags]
 ```
+
+**Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--deployment` | `-` | deployment method being checked (docker, binary, nixos, cloud, other) |
+| `--logs-file` | `-` | local OpenPost log file to include as a redacted last-100-line tail |
+| `--provider` | `-` | social provider being tested, such as x, mastodon, youtube, or tiktok |
 
 **Inherited Flags**
 

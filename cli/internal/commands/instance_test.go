@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -157,6 +158,71 @@ func TestInstanceDiagnosticsWithTokenIncludesAuthSummary(t *testing.T) {
 		if header != "Bearer op_cli_test" {
 			t.Fatalf("authorization header = %q, want bearer token", header)
 		}
+	}
+}
+
+func TestInstanceDiagnosticsIncludesRedactedContextAndLogTail(t *testing.T) {
+	t.Setenv("OPENPOST_CONFIG_DIR", t.TempDir())
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/health":
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		case "/api/v1/ready":
+			_, _ = w.Write([]byte(`{"status":"ready","database":"ok"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	var logs strings.Builder
+	for i := 1; i <= 105; i++ {
+		_, _ = fmt.Fprintf(&logs, "line %03d\n", i)
+	}
+	logs.WriteString(`Authorization: Bearer supersecret OPENPOST_JWT_SECRET=abc access_token=tok`)
+
+	logPath := t.TempDir() + "/openpost.log"
+	if err := os.WriteFile(logPath, []byte(logs.String()), 0o600); err != nil {
+		t.Fatalf("write log fixture: %v", err)
+	}
+
+	out, err := executeRootCaptureStdout(
+		t,
+		"--instance", srv.URL,
+		"--json",
+		"instance", "diagnostics",
+		"--deployment", "docker-compose",
+		"--provider", "youtube",
+		"--logs-file", logPath,
+	)
+	if err != nil {
+		t.Fatalf("instance diagnostics returned error: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode json output: %v\noutput:\n%s", err, out)
+	}
+	if got["deployment_method"] != "docker-compose" || got["provider"] != "youtube" {
+		t.Fatalf("diagnostics context = %#v", got)
+	}
+	if got["log_tail_line_cap"] != float64(100) {
+		t.Fatalf("log_tail_line_cap = %#v, want 100", got["log_tail_line_cap"])
+	}
+	tail, ok := got["redacted_log_tail"].([]any)
+	if !ok || len(tail) != 100 {
+		t.Fatalf("redacted_log_tail length = %#v, want 100", got["redacted_log_tail"])
+	}
+	joinedTail := fmt.Sprint(tail)
+	for _, secret := range []string{"supersecret", "OPENPOST_JWT_SECRET=abc", "access_token=tok"} {
+		if strings.Contains(joinedTail, secret) {
+			t.Fatalf("redacted log tail leaked %q: %s", secret, joinedTail)
+		}
+	}
+	if !strings.Contains(joinedTail, "[redacted]") {
+		t.Fatalf("redacted log tail = %s, want redaction marker", joinedTail)
 	}
 }
 
