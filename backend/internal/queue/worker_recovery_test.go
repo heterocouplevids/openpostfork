@@ -22,7 +22,7 @@ func TestWorkerRequeuesStaleProcessingJobs(t *testing.T) {
 		Payload:     "{}",
 		Status:      jobStatusProcessing,
 		RunAt:       time.Now().UTC().Add(-time.Hour),
-		Attempts:    0,
+		Attempts:    1,
 		MaxAttempts: 3,
 		LockedAt:    time.Now().UTC().Add(-20 * time.Minute),
 		LockedBy:    "dead-worker",
@@ -39,6 +39,7 @@ func TestWorkerRequeuesStaleProcessingJobs(t *testing.T) {
 	require.Equal(t, jobStatusPending, stored.Status)
 	require.True(t, stored.LockedAt.IsZero())
 	require.Empty(t, stored.LockedBy)
+	require.Equal(t, 1, stored.Attempts)
 }
 
 func TestWorkerKeepsRecentProcessingJobsLocked(t *testing.T) {

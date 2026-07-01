@@ -12,7 +12,7 @@ OpenPost is a lightweight, self-hosted social media scheduler. The core product 
    Keep Docker, binary, CLI, Android, and docs release paths reproducible. Release tags should run backend, frontend, CLI, and docs checks before artifacts are published.
 
 2. **Scheduler reliability**
-   Improve recovery for interrupted jobs, stale processing jobs, retry behavior, and activity-state reporting.
+   Improve retry behavior and activity-state reporting. Stale processing jobs are now recovered by workers with SQLite/Postgres-compatible database queries.
 
 3. **Provider verification**
    Re-test real-account publishing flows for text, images, threads, and video where support is claimed. Keep public docs conservative where provider APIs or review requirements are uncertain.

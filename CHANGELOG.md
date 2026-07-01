@@ -108,6 +108,7 @@ All notable changes to this project are documented in this file.
 - Tightened cloud-mode CORS defaults so hosted deployments allow only `OPENPOST_APP_URL` plus explicit extra origins, while self-hosted installs keep local development and Capacitor defaults.
 
 ### Fixed
+- Made background-job workspace scoping, publish-job cancellation, MCP scheduling cleanup, and stale processing-job recovery use database-portable expressions for Postgres-backed cloud deployments.
 - Rejected MCP `schedule_post` and `schedule_draft` requests with provider/media combinations that cannot publish, including inherited draft media.
 - Rejected scheduled posts and threads with provider/media combinations that cannot publish, while still allowing incomplete drafts to autosave.
 - Hardened user-supplied remote URL fetches for dynamic Mastodon registration and MCP media uploads with shared private-address validation and guarded dial-time checks.

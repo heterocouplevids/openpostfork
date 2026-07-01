@@ -23,10 +23,10 @@ const (
 	jobStatusProcessing   = "processing"
 	jobStatusFailed       = "failed"
 	jobStatusCompleted    = "completed"
-	staleProcessingJobAge = "-15 minutes"
+	staleProcessingJobAge = 15 * time.Minute
 )
 
-// BackgroundWorker polls the SQLite database for pending jobs.
+// BackgroundWorker polls the configured database for pending jobs.
 type BackgroundWorker struct {
 	db        *bun.DB
 	workerID  string
@@ -83,13 +83,16 @@ func (w *BackgroundWorker) processDueJobs(ctx context.Context) {
 }
 
 func (w *BackgroundWorker) requeueStaleProcessingJobs(ctx context.Context) {
-	result, err := w.db.NewRaw(`
-		UPDATE jobs
-		SET status = ?, locked_at = NULL, locked_by = ''
-		WHERE status = ?
-			AND locked_at IS NOT NULL
-			AND locked_at <= datetime('now', ?)
-	`, jobStatusPending, jobStatusProcessing, staleProcessingJobAge).Exec(ctx)
+	cutoff := time.Now().UTC().Add(-staleProcessingJobAge)
+	result, err := w.db.NewUpdate().
+		Model((*models.Job)(nil)).
+		Set("status = ?", jobStatusPending).
+		Set("locked_at = NULL").
+		Set("locked_by = ''").
+		Where("status = ?", jobStatusProcessing).
+		Where("locked_at IS NOT NULL").
+		Where("locked_at <= ?", cutoff).
+		Exec(ctx)
 	if err != nil {
 		log.Printf("[Worker %s] failed to requeue stale processing jobs: %v\n", w.workerID, err)
 		return

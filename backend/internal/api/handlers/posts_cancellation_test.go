@@ -33,8 +33,8 @@ func createJobsTestDB(t *testing.T) *bun.DB {
 // `WHERE payload LIKE '%<post.ID>%'`, which would match any job payload
 // that contained the post ID as a substring (e.g. a media_cleanup job
 // that referenced the post in a free-text `note` field). The fix is to
-// filter on `type = 'publish_post'` AND `json_extract(payload,
-// '$.post_id') = ?` so only the publish_post job for the target post is
+// filter on `type = 'publish_post'` AND the JSON `post_id` key so only
+// the publish_post job for the target post is
 // cancelled, no matter what other job types exist or what fields they
 // put in their payloads.
 func TestCancelJobsForPostOnlyAffectsPublishPost(t *testing.T) {
@@ -81,7 +81,7 @@ func TestCancelJobsForPostOnlyAffectsPublishPost(t *testing.T) {
 	// A decoy job that is a publish_post for a different post whose ID
 	// happens to start with the same 8 characters as postID. The old
 	// LIKE-based query would have matched (substring match); the new
-	// json_extract-based query must not.
+	// JSON-key query must not.
 	decoySimilarPost := &models.Job{
 		ID:       uuid.NewString(),
 		Type:     jobTypePublishPost,
@@ -93,7 +93,7 @@ func TestCancelJobsForPostOnlyAffectsPublishPost(t *testing.T) {
 
 	// A hypothetical future job type that does include a `post_id` field
 	// in its payload. Even with the JSON-key fix, this would still be
-	// matched by json_extract alone — but the `type = ?` filter
+	// matched by the JSON-key condition alone — but the `type = ?` filter
 	// explicitly excludes it, which is the contract we want to pin.
 	decoyNonPublishWithPostID := &models.Job{
 		ID:       uuid.NewString(),
@@ -114,7 +114,7 @@ func TestCancelJobsForPostOnlyAffectsPublishPost(t *testing.T) {
 	// keep them in sync deliberately.
 	res, err := db.NewDelete().
 		Model(&models.Job{}).
-		Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, postID).
+		Where(publishPostJobPostIDWhere(db), jobTypePublishPost, postID).
 		Exec(ctx)
 	require.NoError(t, err)
 	rowsAffected, err := res.RowsAffected()

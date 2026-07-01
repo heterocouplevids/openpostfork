@@ -1,6 +1,6 @@
 # Background Jobs
 
-OpenPost uses durable background jobs stored in SQLite.
+OpenPost uses durable background jobs stored in the configured database.
 
 ## Why
 
@@ -11,6 +11,8 @@ OpenPost uses durable background jobs stored in SQLite.
 ## Guidance
 
 If a feature must continue after the request completes, put it in the jobs table instead of launching an unmanaged goroutine.
+
+Workers recover jobs left in `processing` by dead workers after the stale lock window and return them to `pending` without incrementing attempts. Job payload workspace scoping uses database-portable JSON expressions so the same queue paths work on SQLite and Postgres.
 
 ## Inspecting Jobs
 

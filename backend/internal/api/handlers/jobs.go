@@ -148,8 +148,8 @@ func (h *JobHandler) listJobsQuery(model interface{}, input *ListJobsInput, allo
 	query := h.db.NewSelect().
 		Model(model).
 		ModelTableExpr("jobs AS job").
-		Join("LEFT JOIN posts AS p ON p.id = json_extract(job.payload, '$.post_id')").
-		Join("LEFT JOIN social_accounts AS sa ON sa.id = json_extract(job.payload, '$.account_id')")
+		Join("LEFT JOIN posts AS p ON p.id = " + aliasedJobPayloadTextExpr(h.db, "job", postIDKey)).
+		Join("LEFT JOIN social_accounts AS sa ON sa.id = " + aliasedJobPayloadTextExpr(h.db, "job", "account_id"))
 
 	if input.Status != "" {
 		query = query.Where("job.status = ?", input.Status)

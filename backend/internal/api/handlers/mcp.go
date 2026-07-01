@@ -2660,7 +2660,7 @@ func (h *MCPHandler) scheduleDraft(ctx context.Context, userID string, args map[
 		}
 		if _, err := tx.NewDelete().
 			Model(&models.Job{}).
-			Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, post.ID).
+			Where(publishPostJobPostIDWhere(h.db), jobTypePublishPost, post.ID).
 			Exec(txCtx); err != nil {
 			return err
 		}
@@ -2879,7 +2879,7 @@ func (h *MCPHandler) cancelPost(ctx context.Context, userID string, args map[str
 		}
 		if _, err := tx.NewDelete().
 			Model(&models.Job{}).
-			Where("type = ? AND json_extract(payload, '$.post_id') = ?", jobTypePublishPost, post.ID).
+			Where(publishPostJobPostIDWhere(h.db), jobTypePublishPost, post.ID).
 			Exec(txCtx); err != nil {
 			return err
 		}

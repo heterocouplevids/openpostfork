@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/uptrace/bun/dialect"
 )
 
 func TestInitDBPreservesSQLiteDefault(t *testing.T) {
@@ -31,6 +32,11 @@ func TestInitDBWithDriverRejectsUnsupportedDriver(t *testing.T) {
 	db, err := InitDBWithDriver("mysql", "mysql://example")
 	require.Nil(t, db)
 	require.ErrorContains(t, err, "unsupported database driver")
+}
+
+func TestJSONTextExprForDialect(t *testing.T) {
+	require.Equal(t, "json_extract(job.payload, '$.post_id')", JSONTextExprForDialect(dialect.SQLite, "job.payload", "post_id"))
+	require.Equal(t, "(job.payload::jsonb ->> 'post_id')", JSONTextExprForDialect(dialect.PG, "job.payload", "post_id"))
 }
 
 func TestInitDBWithDriverBuildsPostgresHandle(t *testing.T) {
