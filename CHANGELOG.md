@@ -103,6 +103,7 @@ All notable changes to this project are documented in this file.
 - Added provider-specific troubleshooting docs and docs E2E coverage for OAuth, permission, media URL, and publishing failure paths.
 - Added offset pagination metadata for background jobs, including Activity load-more UI, CLI `jobs list --offset`, backend regression tests, and Playwright coverage.
 - Added offset pagination metadata for post lists, including CLI `post list --offset` and backend regression coverage.
+- Added release artifacts for the `openpost-mcp` stdio proxy alongside the main `openpost` CLI, with both binaries stamped with the release tag version.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
@@ -126,6 +127,7 @@ All notable changes to this project are documented in this file.
 - Made app Playwright E2E runs start a freshly built Go server by default instead of silently reusing stale local servers.
 - Removed duplicate Huma route registration from the Go binary startup path so app E2E runs and production boot no longer panic on repeated operation IDs.
 - Wrapped the docs API reference OpenAPI renderer in client-only rendering so VitePress builds no longer emit a nonfatal SSR TypeError.
+- Fixed release CLI cross-compilation by keeping `GOOS` and `GOARCH` out of `devenv` shell evaluation and applying them only to the Go build commands.
 
 ## [1.0.16] - 2026-06-23
 
