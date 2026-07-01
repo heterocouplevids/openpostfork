@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"sync"
 )
 
 // PublishRequest contains everything needed to publish a single post.
@@ -40,17 +41,20 @@ type MediaValidationIssue struct {
 type MediaValidator func([]MediaItem) []MediaValidationIssue
 
 var MediaValidators = map[string]MediaValidator{}
+var registerMediaValidatorsOnce sync.Once
 
 func RegisterAllMediaValidators() {
-	MediaValidators[providerBluesky] = validateBlueskyMedia
-	MediaValidators[providerFacebook] = validateFacebookMedia
-	MediaValidators[providerInstagram] = validateInstagramMedia
-	MediaValidators[providerLinkedIn] = validateLinkedInMedia
-	MediaValidators[providerMastodon] = validateMastodonMedia
-	MediaValidators[providerTikTok] = validateTikTokMedia
-	MediaValidators[providerThreads] = validateThreadsMedia
-	MediaValidators[providerX] = validateXMedia
-	MediaValidators[providerYouTube] = validateYouTubeMedia
+	registerMediaValidatorsOnce.Do(func() {
+		MediaValidators[providerBluesky] = validateBlueskyMedia
+		MediaValidators[providerFacebook] = validateFacebookMedia
+		MediaValidators[providerInstagram] = validateInstagramMedia
+		MediaValidators[providerLinkedIn] = validateLinkedInMedia
+		MediaValidators[providerMastodon] = validateMastodonMedia
+		MediaValidators[providerTikTok] = validateTikTokMedia
+		MediaValidators[providerThreads] = validateThreadsMedia
+		MediaValidators[providerX] = validateXMedia
+		MediaValidators[providerYouTube] = validateYouTubeMedia
+	})
 }
 
 func ValidateMedia(platformName string, media []MediaItem) []MediaValidationIssue {

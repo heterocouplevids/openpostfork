@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/usage"
 	"github.com/uptrace/bun"
@@ -26,6 +27,7 @@ const (
 	statusDraft       = "draft"
 	statusScheduled   = "scheduled"
 	workspaceIDClause = " AND p.workspace_id = ?"
+	severityError     = "error"
 )
 
 type PostHandler struct {
@@ -36,6 +38,7 @@ type PostHandler struct {
 }
 
 func NewPostHandler(db *bun.DB, authenticator middleware.Authenticator, entitlement ...entitlements.Service) *PostHandler {
+	platform.RegisterAllMediaValidators()
 	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
 	if len(entitlement) > 0 && entitlement[0] != nil {
 		entitlementService = entitlement[0]
@@ -211,6 +214,174 @@ func (h *PostHandler) validateMediaBelongsToWorkspace(ctx context.Context, works
 	return nil
 }
 
+func (h *PostHandler) validateScheduledProviderMedia(ctx context.Context, workspaceID string, accountIDs []string, mediaIDs []string) error {
+	if len(accountIDs) == 0 {
+		return nil
+	}
+
+	platforms, err := h.platformsForAccounts(ctx, workspaceID, accountIDs)
+	if err != nil {
+		return err
+	}
+	if len(platforms) == 0 {
+		return nil
+	}
+
+	mediaItems, err := h.mediaItemsForIDs(ctx, workspaceID, mediaIDs)
+	if err != nil {
+		return err
+	}
+
+	for _, platformName := range platforms {
+		for _, issue := range platform.ValidateMedia(platformName, mediaItems) {
+			if issue.Severity != severityError {
+				continue
+			}
+			return huma.Error400BadRequest(providerMediaIssueMessage(issue))
+		}
+	}
+	return nil
+}
+
+func (h *PostHandler) platformsForAccounts(ctx context.Context, workspaceID string, accountIDs []string) ([]string, error) {
+	uniqueIDs := uniqueNonEmptyStrings(accountIDs)
+	if len(uniqueIDs) == 0 {
+		return nil, nil
+	}
+
+	var accounts []models.SocialAccount
+	if err := h.db.NewSelect().
+		Model(&accounts).
+		Column("id", "platform").
+		Where("workspace_id = ?", workspaceID).
+		Where("is_active = ?", true).
+		Where("id IN (?)", bun.List(uniqueIDs)).
+		Scan(ctx); err != nil {
+		return nil, huma.Error500InternalServerError("failed to load social account platforms")
+	}
+
+	platformByID := make(map[string]string, len(accounts))
+	for _, account := range accounts {
+		platformByID[account.ID] = account.Platform
+	}
+
+	platforms := make([]string, 0, len(accounts))
+	seenPlatforms := make(map[string]struct{}, len(accounts))
+	for _, accountID := range uniqueIDs {
+		platformName := platformByID[accountID]
+		if platformName == "" {
+			continue
+		}
+		if _, seen := seenPlatforms[platformName]; seen {
+			continue
+		}
+		seenPlatforms[platformName] = struct{}{}
+		platforms = append(platforms, platformName)
+	}
+	return platforms, nil
+}
+
+func (h *PostHandler) mediaItemsForIDs(ctx context.Context, workspaceID string, mediaIDs []string) ([]platform.MediaItem, error) {
+	uniqueIDs := uniqueNonEmptyStrings(mediaIDs)
+	if len(uniqueIDs) == 0 {
+		return nil, nil
+	}
+
+	var media []models.MediaAttachment
+	if err := h.db.NewSelect().
+		Model(&media).
+		Column("id", "mime_type", "size", "original_filename").
+		Where("workspace_id = ?", workspaceID).
+		Where("id IN (?)", bun.List(uniqueIDs)).
+		Scan(ctx); err != nil {
+		return nil, huma.Error500InternalServerError("failed to load media metadata")
+	}
+
+	mediaByID := make(map[string]models.MediaAttachment, len(media))
+	for _, item := range media {
+		mediaByID[item.ID] = item
+	}
+
+	items := make([]platform.MediaItem, 0, len(mediaIDs))
+	for _, mediaID := range mediaIDs {
+		item, ok := mediaByID[mediaID]
+		if !ok {
+			continue
+		}
+		items = append(items, platform.MediaItem{
+			ID:               item.ID,
+			MimeType:         item.MimeType,
+			Size:             item.Size,
+			OriginalFilename: item.OriginalFilename,
+		})
+	}
+	return items, nil
+}
+
+func providerMediaIssueMessage(issue platform.MediaValidationIssue) string {
+	message := strings.TrimSpace(issue.Message)
+	if message == "" {
+		message = "media is not compatible with this provider"
+	}
+	if issue.Provider == "" {
+		return message
+	}
+	return fmt.Sprintf("%s: %s", issue.Provider, message)
+}
+
+func uniqueNonEmptyStrings(values []string) []string {
+	unique := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
+}
+
+func (h *PostHandler) postDestinationAccountIDs(ctx context.Context, postID string) ([]string, error) {
+	var destinations []models.PostDestination
+	if err := h.db.NewSelect().
+		Model(&destinations).
+		Column("social_account_id").
+		Where("post_id = ?", postID).
+		Order("id ASC").
+		Scan(ctx); err != nil {
+		return nil, huma.Error500InternalServerError("failed to load post destinations")
+	}
+
+	accountIDs := make([]string, 0, len(destinations))
+	for _, destination := range destinations {
+		accountIDs = append(accountIDs, destination.SocialAccountID)
+	}
+	return accountIDs, nil
+}
+
+func (h *PostHandler) postMediaIDs(ctx context.Context, postID string) ([]string, error) {
+	var media []models.PostMedia
+	if err := h.db.NewSelect().
+		Model(&media).
+		Column("media_id", "display_order").
+		Where("post_id = ?", postID).
+		Order("display_order ASC").
+		Scan(ctx); err != nil {
+		return nil, huma.Error500InternalServerError("failed to load post media")
+	}
+
+	mediaIDs := make([]string, 0, len(media))
+	for _, item := range media {
+		mediaIDs = append(mediaIDs, item.MediaID)
+	}
+	return mediaIDs, nil
+}
+
 func (h *PostHandler) validatePublicationBelongsToWorkspace(ctx context.Context, workspaceID, publicationID string) (string, error) {
 	publicationID = strings.TrimSpace(publicationID)
 	if publicationID == "" {
@@ -317,6 +488,9 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			status = statusScheduled
 		}
 		if status == statusScheduled {
+			if err := h.validateScheduledProviderMedia(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs, input.Body.MediaIDs); err != nil {
+				return nil, err
+			}
 			if err := h.checkScheduledPostQuota(ctx, input.Body.WorkspaceID, 1, *input.Body.ScheduledAt); err != nil {
 				return nil, err
 			}
@@ -932,6 +1106,11 @@ func (h *PostHandler) CreateThread(api huma.API) {
 			status = statusScheduled
 		}
 		if status == statusScheduled {
+			for _, threadPost := range input.Body.Posts {
+				if err := h.validateScheduledProviderMedia(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs, threadPost.MediaIDs); err != nil {
+					return nil, err
+				}
+			}
 			if err := h.checkScheduledPostQuota(ctx, input.Body.WorkspaceID, int64(len(input.Body.Posts)), *input.Body.ScheduledAt); err != nil {
 				return nil, err
 			}
@@ -1419,6 +1598,32 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 				}
 			}
 			if err := h.validateMediaBelongsToWorkspace(ctx, post.WorkspaceID, draftMediaIDs); err != nil {
+				return nil, err
+			}
+		}
+
+		willBeScheduled := post.Status == statusScheduled
+		if input.Body.ScheduledAt != nil {
+			willBeScheduled = strings.TrimSpace(*input.Body.ScheduledAt) != ""
+		}
+		if willBeScheduled {
+			accountIDs := input.Body.SocialAccountIDs
+			if accountIDs == nil {
+				var err error
+				accountIDs, err = h.postDestinationAccountIDs(ctx, post.ID)
+				if err != nil {
+					return nil, err
+				}
+			}
+			mediaIDs := input.Body.MediaIDs
+			if mediaIDs == nil {
+				var err error
+				mediaIDs, err = h.postMediaIDs(ctx, post.ID)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if err := h.validateScheduledProviderMedia(ctx, post.WorkspaceID, accountIDs, mediaIDs); err != nil {
 				return nil, err
 			}
 		}
