@@ -19,16 +19,23 @@ test("sidebar footer switches between workspaces", async ({
   }, auth.token);
   await page.goto("/");
 
-  const workspaceButton = page.getByRole("button", {
-    name: new RegExp(`${firstName}.*Workspace`),
-  });
+  const workspaceNames = [firstName, secondName];
+  const workspaceNamePattern = new RegExp(workspaceNames.join("|"));
+  const workspaceButton = page
+    .getByRole("button", { name: workspaceNamePattern })
+    .first();
   await expect(workspaceButton).toBeVisible();
+  const buttonText = await workspaceButton.innerText();
+  const activeWorkspace = workspaceNames.find((name) =>
+    buttonText.includes(name),
+  );
+  expect(activeWorkspace).toBeTruthy();
+  const nextWorkspace =
+    activeWorkspace === firstName ? secondName : firstName;
 
   await workspaceButton.click();
   await expect(page.getByText("Switch workspace")).toBeVisible();
-  await page.getByRole("menuitem", { name: secondName }).click();
+  await page.getByRole("menuitem", { name: new RegExp(nextWorkspace) }).click();
 
-  await expect(
-    page.getByRole("button", { name: new RegExp(`${secondName}.*Workspace`) }),
-  ).toBeVisible();
+  await expect(workspaceButton).toContainText(nextWorkspace);
 });

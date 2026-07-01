@@ -17,6 +17,7 @@
 	import ShieldIcon from 'lucide-svelte/icons/shield';
 	import KeyRoundIcon from 'lucide-svelte/icons/key-round';
 	import { m } from '$lib/paraglide/messages';
+	import { safeSameOriginRedirect } from '$lib/redirects';
 
 	let email = $state('');
 	let password = $state('');
@@ -29,16 +30,7 @@
 	const needsMfa = $derived(mfaToken.length > 0);
 
 	function loginTarget() {
-		const redirect = $page.url.searchParams.get('redirect');
-		if (!redirect || redirect.startsWith('//') || redirect.startsWith('\\')) return '/';
-
-		try {
-			const target = new URL(redirect, $page.url.origin);
-			if (target.origin !== $page.url.origin || !target.pathname.startsWith('/')) return '/';
-			return `${target.pathname}${target.search}${target.hash}`;
-		} catch {
-			return '/';
-		}
+		return safeSameOriginRedirect($page.url);
 	}
 
 	async function handleSubmit(e: Event) {

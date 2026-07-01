@@ -17,6 +17,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { m } from '$lib/paraglide/messages';
 	import { onboardingPathForPlan } from '$lib/billing';
+	import { safeSameOriginRedirect } from '$lib/redirects';
 
 	let { children } = $props();
 
@@ -55,6 +56,15 @@
 		onboardingChecked && lastOnboardingCheckedPath === currentPath
 	);
 
+	function authenticatedPublicTarget() {
+		if (currentPath !== '/login') return '/';
+		const target = safeSameOriginRedirect($page.url);
+		if (target === '/login' || target.startsWith('/login?') || target.startsWith('/register')) {
+			return '/';
+		}
+		return target;
+	}
+
 	onMount(() => {
 		instance.initialize();
 		auth.initialize();
@@ -85,7 +95,7 @@
 					goto(onboardingPathForPlan($page.url.searchParams.get('plan')));
 				}
 			} else if (currentPath === '/login' || currentPath === '/register') {
-				goto('/');
+				goto(authenticatedPublicTarget());
 			}
 		}
 	});

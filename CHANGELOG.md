@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Preserved safe same-origin login redirects after authentication so settings deep links survive the authenticated route guard.
+- Made the workspace-switcher e2e test match the footer switcher behavior for alphabetically selected workspaces.
+
 ## [1.0.22] - 2026-07-01
 
 ### Added
