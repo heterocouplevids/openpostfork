@@ -173,19 +173,11 @@ func Load() *Config {
 		}
 	}
 
-	// Build CORS origins list
-	corsOrigins := []string{cfg.FrontendURL, "http://localhost:5173"}
-	if extra := getEnvWithFallbacks("OPENPOST_EXTRA_CORS_ORIGINS", "", "OPENPOST_CORS_EXTRA_ORIGINS"); extra != "" {
-		for _, origin := range strings.Split(extra, ",") {
-			trimmed := strings.TrimSpace(origin)
-			if trimmed != "" {
-				corsOrigins = append(corsOrigins, trimmed)
-			}
-		}
-	}
-	// Always allow Capacitor origins
-	corsOrigins = append(corsOrigins, "capacitor://localhost", "http://localhost", "https://localhost")
-	cfg.CORSOrigins = corsOrigins
+	cfg.CORSOrigins = buildCORSOrigins(
+		cfg.Edition,
+		cfg.FrontendURL,
+		getEnvWithFallbacks("OPENPOST_EXTRA_CORS_ORIGINS", "", "OPENPOST_CORS_EXTRA_ORIGINS"),
+	)
 
 	warnOnPlaceholderURL(cfg)
 
@@ -286,6 +278,34 @@ func providerAppMergeKey(app platform.AppConfig) string {
 	return app.Provider
 }
 
+func buildCORSOrigins(edition, frontendURL, extraRaw string) []string {
+	origins := make([]string, 0, 6)
+	addOrigin := func(origin string) {
+		origin = strings.TrimRight(strings.TrimSpace(origin), "/")
+		if origin == "" {
+			return
+		}
+		for _, existing := range origins {
+			if existing == origin {
+				return
+			}
+		}
+		origins = append(origins, origin)
+	}
+
+	addOrigin(frontendURL)
+	if edition != EditionCloud {
+		addOrigin("http://localhost:5173")
+		addOrigin("capacitor://localhost")
+		addOrigin("http://localhost")
+		addOrigin("https://localhost")
+	}
+	for _, origin := range strings.Split(extraRaw, ",") {
+		addOrigin(origin)
+	}
+	return origins
+}
+
 func (c *Config) DatabaseDSN() string {
 	if c.DatabaseDriver == DatabaseDriverPostgres && c.DatabaseURL != "" {
 		return c.DatabaseURL
@@ -299,6 +319,7 @@ func (c *Config) ValidateRuntime() error {
 	}
 
 	missing := append(c.missingCloudDataPlaneConfig(), c.missingCloudBillingConfig()...)
+	missing = append(missing, c.invalidCloudCORSConfig()...)
 	if len(missing) > 0 {
 		return fmt.Errorf("OPENPOST_EDITION=cloud requires: %s", strings.Join(missing, ", "))
 	}
@@ -358,6 +379,15 @@ func (c *Config) missingCloudBillingConfig() []string {
 		missing = append(missing, "OPENPOST_POLAR_PRO_PRODUCT_ID")
 	}
 	return missing
+}
+
+func (c *Config) invalidCloudCORSConfig() []string {
+	for _, origin := range c.CORSOrigins {
+		if strings.TrimSpace(origin) == "*" {
+			return []string{"OPENPOST_EXTRA_CORS_ORIGINS without wildcard origins"}
+		}
+	}
+	return nil
 }
 
 // warnOnPlaceholderURL emits a loud startup warning when the operator is

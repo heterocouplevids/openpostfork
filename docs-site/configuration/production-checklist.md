@@ -12,6 +12,7 @@ changes live in [Developer Docs](/development/).
 - [ ] Store secrets outside the repository and outside container images.
 - [ ] Set `OPENPOST_APP_URL` to the public HTTPS app origin.
 - [ ] Set `OPENPOST_PUBLIC_URL` to the same public HTTPS app origin unless you have a specific split-origin reason.
+- [ ] Keep `OPENPOST_EXTRA_CORS_ORIGINS` explicit and do not use `*`.
 - [ ] Configure a reverse proxy with HTTPS before connecting OAuth providers.
 - [ ] Confirm `GET /api/v1/health` returns `{"status":"ok"}`.
 - [ ] Confirm `GET /api/v1/ready` returns `{"status":"ready","database":"ok"}`.

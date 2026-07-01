@@ -51,6 +51,38 @@ func TestLoadCloudPostgresAndS3Primitives(t *testing.T) {
 	require.True(t, cfg.S3ForcePathStyle)
 }
 
+func TestLoadSelfHostedCORSOriginsIncludeLocalDevelopmentDefaults(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://openpost.example.com/")
+	t.Setenv("OPENPOST_EXTRA_CORS_ORIGINS", "https://admin.openpost.example.com/, capacitor://preview")
+
+	cfg := Load()
+
+	require.Equal(t, []string{
+		"https://openpost.example.com",
+		"http://localhost:5173",
+		"capacitor://localhost",
+		"http://localhost",
+		"https://localhost",
+		"https://admin.openpost.example.com",
+		"capacitor://preview",
+	}, cfg.CORSOrigins)
+}
+
+func TestLoadCloudCORSOriginsExcludeLocalDevelopmentDefaults(t *testing.T) {
+	t.Setenv("OPENPOST_APP_URL", "https://app.openpost.social")
+	t.Setenv("OPENPOST_EDITION", "cloud")
+	t.Setenv("OPENPOST_EXTRA_CORS_ORIGINS", "https://admin.openpost.social")
+
+	cfg := Load()
+
+	require.Equal(t, []string{
+		"https://app.openpost.social",
+		"https://admin.openpost.social",
+	}, cfg.CORSOrigins)
+	require.NotContains(t, cfg.CORSOrigins, "http://localhost:5173")
+	require.NotContains(t, cfg.CORSOrigins, "capacitor://localhost")
+}
+
 func TestValidateRuntimeAllowsSelfHostedLocalDefaults(t *testing.T) {
 	cfg := &Config{
 		Edition:        EditionSelfHost,
@@ -123,6 +155,16 @@ func TestValidateRuntimeRejectsCloudMissingPolarPrimitives(t *testing.T) {
 	require.ErrorContains(t, err, "OPENPOST_POLAR_STARTER_PRODUCT_ID")
 	require.ErrorContains(t, err, "OPENPOST_POLAR_CREATOR_PRODUCT_ID")
 	require.ErrorContains(t, err, "OPENPOST_POLAR_PRO_PRODUCT_ID")
+}
+
+func TestValidateRuntimeRejectsCloudWildcardCORSOrigins(t *testing.T) {
+	cfg := validCloudRuntimeConfig()
+	cfg.CORSOrigins = []string{"https://app.openpost.social", "*"}
+
+	err := cfg.ValidateRuntime()
+
+	require.Error(t, err)
+	require.ErrorContains(t, err, "OPENPOST_EXTRA_CORS_ORIGINS without wildcard origins")
 }
 
 func validCloudRuntimeConfig() *Config {

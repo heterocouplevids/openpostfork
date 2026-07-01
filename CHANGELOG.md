@@ -91,6 +91,7 @@ All notable changes to this project are documented in this file.
 - Added marketing-site/ — minimal Astro landing page at openpost.social.
 - Moved docs and marketing site deployment from VPS/GitHub Pages to Cloudflare Pages.
 - Moved the JavaScript workspace to pnpm workspaces with Turborepo orchestration across the web app, docs site, and marketing site.
+- Tightened cloud-mode CORS defaults so hosted deployments allow only `OPENPOST_APP_URL` plus explicit extra origins, while self-hosted installs keep local development and Capacitor defaults.
 
 ### Fixed
 - Rejected MCP `schedule_post` and `schedule_draft` requests with provider/media combinations that cannot publish, including inherited draft media.
