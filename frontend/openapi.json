@@ -1231,6 +1231,24 @@
 				"required": ["message"],
 				"type": "object"
 			},
+			"DeleteProviderAppResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/DeleteProviderAppResponse.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"requires_restart": {
+						"description": "Whether the server must restart before adapter changes apply",
+						"type": "boolean"
+					}
+				},
+				"required": ["requires_restart"],
+				"type": "object"
+			},
 			"DeleteSetOutputBody": {
 				"additionalProperties": false,
 				"properties": {
@@ -2449,6 +2467,61 @@
 				"required": ["id", "text", "category", "is_built_in", "created_at"],
 				"type": "object"
 			},
+			"ProviderAppResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"client_id": {
+						"description": "OAuth client ID",
+						"type": "string"
+					},
+					"created_at": {
+						"description": "Creation time",
+						"type": "string"
+					},
+					"id": {
+						"description": "Provider app ID",
+						"type": "string"
+					},
+					"instance_url": {
+						"description": "Federated provider instance URL",
+						"type": "string"
+					},
+					"is_active": {
+						"description": "Whether this app is active",
+						"type": "boolean"
+					},
+					"name": {
+						"description": "Optional provider app display name",
+						"type": "string"
+					},
+					"provider": {
+						"description": "Provider key",
+						"type": "string"
+					},
+					"redirect_uri": {
+						"description": "OAuth redirect URI",
+						"type": "string"
+					},
+					"secret_configured": {
+						"description": "Whether an encrypted client secret is stored",
+						"type": "boolean"
+					},
+					"updated_at": {
+						"description": "Last update time",
+						"type": "string"
+					}
+				},
+				"required": [
+					"id",
+					"provider",
+					"client_id",
+					"is_active",
+					"secret_configured",
+					"created_at",
+					"updated_at"
+				],
+				"type": "object"
+			},
 			"ProviderInfo": {
 				"additionalProperties": false,
 				"properties": {
@@ -2690,6 +2763,73 @@
 					}
 				},
 				"required": ["revoked"],
+				"type": "object"
+			},
+			"SaveProviderAppInputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/SaveProviderAppInputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"client_id": {
+						"description": "OAuth client ID",
+						"type": "string"
+					},
+					"client_secret": {
+						"description": "OAuth client secret. Omit to preserve the existing secret when updating.",
+						"type": "string"
+					},
+					"instance_url": {
+						"description": "Federated provider instance URL",
+						"type": "string"
+					},
+					"is_active": {
+						"description": "Whether this app should be active. Defaults to true.",
+						"type": "boolean"
+					},
+					"name": {
+						"description": "Optional provider app display name",
+						"type": "string"
+					},
+					"provider": {
+						"description": "Provider key",
+						"type": "string"
+					},
+					"redirect_uri": {
+						"description": "OAuth redirect URI",
+						"type": "string"
+					}
+				},
+				"required": ["provider", "client_id"],
+				"type": "object"
+			},
+			"SaveProviderAppResponse": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/SaveProviderAppResponse.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"app": {
+						"$ref": "#/components/schemas/ProviderAppResponse"
+					},
+					"existed": {
+						"description": "Whether an existing provider app row was updated",
+						"type": "boolean"
+					},
+					"requires_restart": {
+						"description": "Whether the server must restart before adapter changes apply",
+						"type": "boolean"
+					}
+				},
+				"required": ["app", "existed", "requires_restart"],
 				"type": "object"
 			},
 			"ScheduleDay": {
@@ -4373,6 +4513,116 @@
 				},
 				"summary": "Get OAuth authorization URL for a platform",
 				"tags": ["Accounts"]
+			}
+		},
+		"/admin/provider-apps": {
+			"get": {
+				"operationId": "list-provider-apps",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": {
+										"$ref": "#/components/schemas/ProviderAppResponse"
+									},
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "List configured provider apps",
+				"tags": ["Admin"]
+			},
+			"post": {
+				"operationId": "save-provider-app",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SaveProviderAppInputBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SaveProviderAppResponse"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "Create or update a provider app",
+				"tags": ["Admin"]
+			}
+		},
+		"/admin/provider-apps/{id}": {
+			"delete": {
+				"operationId": "delete-provider-app",
+				"parameters": [
+					{
+						"description": "Provider app ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": {
+							"description": "Provider app ID",
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DeleteProviderAppResponse"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"default": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Error"
+					}
+				},
+				"summary": "Delete a provider app",
+				"tags": ["Admin"]
 			}
 		},
 		"/api-tokens": {

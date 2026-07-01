@@ -158,6 +158,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/provider-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List configured provider apps */
+        get: operations["list-provider-apps"];
+        put?: never;
+        /** Create or update a provider app */
+        post: operations["save-provider-app"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/provider-apps/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a provider app */
+        delete: operations["delete-provider-app"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api-tokens": {
         parameters: {
             query?: never;
@@ -1883,6 +1918,16 @@ export interface components {
             /** @description Success message */
             message: string;
         };
+        DeleteProviderAppResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DeleteProviderAppResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Whether the server must restart before adapter changes apply */
+            requires_restart: boolean;
+        };
         DeleteSetOutputBody: {
             /**
              * Format: uri
@@ -2524,6 +2569,28 @@ export interface components {
             /** @description Workspace ID (if custom) */
             workspace_id?: string;
         };
+        ProviderAppResponse: {
+            /** @description OAuth client ID */
+            client_id: string;
+            /** @description Creation time */
+            created_at: string;
+            /** @description Provider app ID */
+            id: string;
+            /** @description Federated provider instance URL */
+            instance_url?: string;
+            /** @description Whether this app is active */
+            is_active: boolean;
+            /** @description Optional provider app display name */
+            name?: string;
+            /** @description Provider key */
+            provider: string;
+            /** @description OAuth redirect URI */
+            redirect_uri?: string;
+            /** @description Whether an encrypted client secret is stored */
+            secret_configured: boolean;
+            /** @description Last update time */
+            updated_at: string;
+        };
         ProviderInfo: {
             /** @description Connection method: oauth, app_password, or oauth_oob */
             auth_mode: string;
@@ -2642,6 +2709,41 @@ export interface components {
              */
             readonly $schema?: string;
             revoked: boolean;
+        };
+        SaveProviderAppInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SaveProviderAppInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description OAuth client ID */
+            client_id: string;
+            /** @description OAuth client secret. Omit to preserve the existing secret when updating. */
+            client_secret?: string;
+            /** @description Federated provider instance URL */
+            instance_url?: string;
+            /** @description Whether this app should be active. Defaults to true. */
+            is_active?: boolean;
+            /** @description Optional provider app display name */
+            name?: string;
+            /** @description Provider key */
+            provider: string;
+            /** @description OAuth redirect URI */
+            redirect_uri?: string;
+        };
+        SaveProviderAppResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SaveProviderAppResponse.json
+             */
+            readonly $schema?: string;
+            app: components["schemas"]["ProviderAppResponse"];
+            /** @description Whether an existing provider app row was updated */
+            existed: boolean;
+            /** @description Whether the server must restart before adapter changes apply */
+            requires_restart: boolean;
         };
         ScheduleDay: {
             /**
@@ -3669,6 +3771,100 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-provider-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAppResponse"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "save-provider-app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveProviderAppInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveProviderAppResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-provider-app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider app ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteProviderAppResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };

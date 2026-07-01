@@ -3,6 +3,7 @@ package providerapps
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -137,4 +138,89 @@ func TestListActiveAppConfigsFailsWhenSecretCannotDecrypt(t *testing.T) {
 
 	_, err = service.ListActiveAppConfigs(ctx)
 	require.ErrorContains(t, err, "failed to decrypt provider app bad-app (x)")
+}
+
+func TestUpsertProviderAppEncryptsSecretsAndPreservesSecretOnMetadataUpdate(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := createProviderAppsTestDB(t)
+	encryptor := crypto.NewTokenEncryptor("0123456789abcdef0123456789abcdef")
+	service := NewService(db, encryptor)
+	secret := "x-secret"
+
+	created, existed, err := service.UpsertProviderApp(ctx, UpsertInput{
+		Provider:     " X ",
+		ClientID:     " x-client ",
+		ClientSecret: &secret,
+		RedirectURI:  " https://app.test/api/v1/accounts/x/callback ",
+		IsActive:     true,
+	})
+	require.NoError(t, err)
+	require.False(t, existed)
+	require.Equal(t, "x", created.Provider)
+	require.Equal(t, "x-client", created.ClientID)
+	require.NotEqual(t, []byte(secret), created.ClientSecretEnc)
+	decrypted, err := encryptor.Decrypt(created.ClientSecretEnc)
+	require.NoError(t, err)
+	require.Equal(t, secret, decrypted)
+
+	updated, existed, err := service.UpsertProviderApp(ctx, UpsertInput{
+		Provider:    "x",
+		ClientID:    "updated-client",
+		RedirectURI: "https://app.test/api/v1/accounts/x/callback",
+		IsActive:    false,
+	})
+	require.NoError(t, err)
+	require.True(t, existed)
+	require.Equal(t, created.ID, updated.ID)
+	require.Equal(t, "updated-client", updated.ClientID)
+	require.False(t, updated.IsActive)
+	decrypted, err = encryptor.Decrypt(updated.ClientSecretEnc)
+	require.NoError(t, err)
+	require.Equal(t, secret, decrypted)
+
+	var rows []models.ProviderApp
+	require.NoError(t, db.NewSelect().Model(&rows).Scan(ctx))
+	require.Len(t, rows, 1)
+	require.False(t, rows[0].IsActive)
+}
+
+func TestUpsertProviderAppValidatesProviderInput(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(createProviderAppsTestDB(t), crypto.NewTokenEncryptor("0123456789abcdef0123456789abcdef"))
+
+	_, _, err := service.UpsertProviderApp(context.Background(), UpsertInput{Provider: "reddit", ClientID: "client", IsActive: true})
+	var validationErr ValidationError
+	require.ErrorAs(t, err, &validationErr)
+	require.ErrorContains(t, err, "unsupported provider app")
+
+	_, _, err = service.UpsertProviderApp(context.Background(), UpsertInput{Provider: "mastodon", ClientID: "client", IsActive: true})
+	require.ErrorAs(t, err, &validationErr)
+	require.ErrorContains(t, err, "instance_url is required")
+}
+
+func TestDeleteProviderAppRemovesRow(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := createProviderAppsTestDB(t)
+	service := NewService(db, crypto.NewTokenEncryptor("0123456789abcdef0123456789abcdef"))
+	secret := "x-secret"
+	created, _, err := service.UpsertProviderApp(ctx, UpsertInput{
+		Provider:     "x",
+		ClientID:     "x-client",
+		ClientSecret: &secret,
+		IsActive:     true,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, service.DeleteProviderApp(ctx, created.ID))
+	var count int
+	require.NoError(t, db.NewSelect().Model((*models.ProviderApp)(nil)).ColumnExpr("COUNT(*)").Scan(ctx, &count))
+	require.Equal(t, 0, count)
+
+	err = service.DeleteProviderApp(ctx, created.ID)
+	require.True(t, errors.Is(err, ErrNotFound))
 }

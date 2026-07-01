@@ -91,3 +91,11 @@ func TestMergeAppConfigsOverridesByCanonicalProviderKey(t *testing.T) {
 	require.Equal(t, "https://masto.pt", got[2].InstanceURL)
 	require.Equal(t, "facebook", got[3].Provider)
 }
+
+func TestIsAppProviderSupportedNormalizesProviderNames(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, IsAppProviderSupported(" X "))
+	require.True(t, IsAppProviderSupported("mastodon"))
+	require.False(t, IsAppProviderSupported("reddit"))
+}

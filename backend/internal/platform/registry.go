@@ -147,6 +147,12 @@ func AppConfigMergeKey(app AppConfig) string {
 	return app.Provider
 }
 
+func IsAppProviderSupported(provider string) bool {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	_, ok := appBuilders[provider]
+	return ok
+}
+
 func NormalizeAppConfig(app AppConfig) AppConfig {
 	app.Provider = strings.ToLower(strings.TrimSpace(app.Provider))
 	app.Name = strings.TrimSpace(app.Name)

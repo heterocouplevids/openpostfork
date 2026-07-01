@@ -19,6 +19,7 @@ import (
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/mfa"
+	"github.com/openpost/backend/internal/services/providerapps"
 	"github.com/openpost/backend/internal/services/sessions"
 	"github.com/uptrace/bun"
 )
@@ -91,6 +92,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	handlers.NewAPITokenHandler(deps.APITokenService, deps.Authenticator, deps.DB).RegisterRoutes(api)
 	handlers.NewCLIAuthHandler(deps.CLIAuthService, deps.Authenticator, deps.PublicURL).RegisterRoutes(api)
 	handlers.NewMCPActivityHandler(deps.DB, deps.Authenticator).RegisterRoutes(api)
+	handlers.NewProviderAppHandler(providerapps.NewService(deps.DB, deps.TokenEncryptor), deps.DB, deps.Authenticator).RegisterRoutes(api)
 
 	mcpOAuthHandler := deps.MCPOAuthHandler
 	if mcpOAuthHandler == nil {

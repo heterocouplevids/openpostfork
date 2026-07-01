@@ -26,7 +26,7 @@ The snapshot includes health/readiness checks, token presence, workspace context
 
 | Symptom                                | Likely cause                                                            | Fix                                                                        |
 | -------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Provider is unavailable on Accounts    | Missing provider app config                                             | Add provider env vars, `OPENPOST_PROVIDER_APPS`, or an active encrypted `provider_apps` row, then restart. |
+| Provider is unavailable on Accounts    | Missing provider app config                                             | Add provider env vars, `OPENPOST_PROVIDER_APPS`, or save credentials through the instance-admin provider app API, then restart. |
 | OAuth redirects to the wrong host      | `OPENPOST_APP_URL` or provider callback mismatch                        | Set one public HTTPS origin and update the provider console.               |
 | OAuth succeeds but no account is saved | Provider returned no usable profile, page, channel, or business account | Confirm scopes, account ownership, and provider app review state.          |
 | Text publishes but media fails         | Media URL is private, local, or not HTTPS                               | Use public `OPENPOST_MEDIA_URL` or S3/R2 public media URLs.                |

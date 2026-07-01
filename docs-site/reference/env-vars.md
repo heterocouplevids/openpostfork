@@ -33,7 +33,7 @@ This is the low-level quick reference version of the configuration docs.
 | `OPENPOST_POLAR_STARTER_PRODUCT_ID` | Polar Starter product ID |
 | `OPENPOST_POLAR_CREATOR_PRODUCT_ID` | Polar Creator product ID |
 | `OPENPOST_POLAR_PRO_PRODUCT_ID` | Polar Pro product ID |
-| `OPENPOST_PROVIDER_APPS` | Structured provider app registry JSON; active encrypted `provider_apps` DB rows can override matching entries |
+| `OPENPOST_PROVIDER_APPS` | Structured provider app registry JSON; active encrypted provider app API rows can override matching entries |
 | `X_CLIENT_ID` | X client ID |
 | `X_CLIENT_SECRET` | X client secret |
 | `X_REDIRECT_URI` | X callback override |

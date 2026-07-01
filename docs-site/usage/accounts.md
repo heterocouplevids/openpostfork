@@ -11,7 +11,7 @@ Connected accounts are provider-specific identities inside a workspace.
 
 ## Notes
 
-- Disconnecting an account does not delete your provider app credentials from `.env`.
+- Disconnecting an account does not delete server-side provider app credentials from env vars, `OPENPOST_PROVIDER_APPS`, or the provider app registry.
 - Stored OAuth tokens are encrypted at rest.
 - Each provider has its own callback and permission requirements.
 - Authenticated clients can call `GET /api/v1/accounts/providers` to discover which provider apps are configured before showing connect actions.

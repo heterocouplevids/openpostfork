@@ -20,7 +20,7 @@ These providers have adapter code in OpenPost today. The Accounts page discovers
 
 Start with one provider, confirm the callback works, then expand.
 
-Provider app credentials can come from legacy env vars, `OPENPOST_PROVIDER_APPS` JSON, or active encrypted `provider_apps` database rows. Database rows are loaded at startup and override matching env/JSON entries, so operator-managed changes require a restart until admin hot reload exists.
+Provider app credentials can come from legacy env vars, `OPENPOST_PROVIDER_APPS` JSON, or active encrypted `provider_apps` database rows managed through the instance-admin provider app API. Database rows are loaded at startup and override matching env/JSON entries, so operator-managed changes require a restart until hot reload exists.
 
 If connection or publishing fails, use [Provider Troubleshooting](/providers/troubleshooting) to collect diagnostics and map common OAuth, permission, media URL, and publishing errors to the right fix.
 

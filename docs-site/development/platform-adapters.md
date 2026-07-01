@@ -14,6 +14,18 @@ Provider integrations live under `backend/internal/platform/`.
 - `tiktok.go`
 - `youtube.go`
 
+## Provider app configuration
+
+Provider app credentials are normalized into `platform.AppConfig` before startup builds the adapter registry. Self-hosted installs can use legacy env vars or `OPENPOST_PROVIDER_APPS`; hosted/operator-managed installs can store encrypted rows in `provider_apps`.
+
+Instance admins can manage encrypted database rows through:
+
+- `GET /api/v1/admin/provider-apps`
+- `POST /api/v1/admin/provider-apps`
+- `DELETE /api/v1/admin/provider-apps/{id}`
+
+The write API encrypts `client_secret`, never returns stored secrets, and reports `requires_restart: true` because adapter changes are applied on server startup. If `client_secret` is omitted on update, the existing encrypted secret is preserved.
+
 ## Account selection
 
 Most providers can save a connected account directly after OAuth profile lookup. Some larger platforms need a second step:

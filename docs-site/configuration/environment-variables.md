@@ -41,7 +41,9 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 
 OpenPost builds provider adapters at startup from legacy provider env vars, optional `OPENPOST_PROVIDER_APPS` JSON, and active rows in the `provider_apps` database table.
 
-Database rows are intended for hosted/operator-managed installs. They store `client_secret_encrypted` with the same `OPENPOST_ENCRYPTION_KEY` used for account tokens, override matching env/JSON entries, and require a server restart after changes until hot reload/admin management exists. Matching is by provider, except Mastodon uses provider plus `instance_url`.
+Database rows are intended for hosted/operator-managed installs. They store `client_secret_encrypted` with the same `OPENPOST_ENCRYPTION_KEY` used for account tokens, override matching env/JSON entries, and require a server restart after changes until hot reload exists. Matching is by provider, except Mastodon uses provider plus `instance_url`.
+
+Instance admins can manage encrypted database rows through `GET /api/v1/admin/provider-apps`, `POST /api/v1/admin/provider-apps`, and `DELETE /api/v1/admin/provider-apps/{id}`. API responses never return client secrets; send `client_secret` only when creating a row or rotating the existing secret.
 
 ## X
 
@@ -79,7 +81,7 @@ Database rows are intended for hosted/operator-managed installs. They store `cli
 
 ## Facebook
 
-Facebook Pages publishing is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or encrypted `provider_apps` rows for hosted/operator-managed credentials.
+Facebook Pages publishing is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or the instance-admin provider app API for hosted/operator-managed credentials.
 
 Example:
 
@@ -97,7 +99,7 @@ If `redirect_uri` is omitted, OpenPost derives `https://your-domain.com/api/v1/a
 
 ## Instagram
 
-Instagram Business publishing is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or encrypted `provider_apps` rows for hosted/operator-managed credentials.
+Instagram Business publishing is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or the instance-admin provider app API for hosted/operator-managed credentials.
 
 Example:
 
@@ -115,7 +117,7 @@ If `redirect_uri` is omitted, OpenPost derives `https://your-domain.com/api/v1/a
 
 ## TikTok
 
-TikTok is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or encrypted `provider_apps` rows for hosted/operator-managed credentials.
+TikTok is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or the instance-admin provider app API for hosted/operator-managed credentials.
 
 Example:
 
@@ -134,7 +136,7 @@ TikTok direct video publishing requires `OPENPOST_MEDIA_URL` or `OPENPOST_S3_PUB
 
 ## YouTube
 
-YouTube video uploads are configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or encrypted `provider_apps` rows for hosted/operator-managed credentials.
+YouTube video uploads are configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or the instance-admin provider app API for hosted/operator-managed credentials.
 
 Example:
 
