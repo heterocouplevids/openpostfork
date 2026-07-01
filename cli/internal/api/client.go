@@ -281,11 +281,37 @@ type BillingStatus struct {
 	PeriodStart       string           `json:"period_start"`
 }
 
+type BillingURL struct {
+	URL string `json:"url"`
+	ID  string `json:"id,omitempty"`
+}
+
 func (c *Client) BillingStatus(ctx context.Context, workspaceID string) (*BillingStatus, error) {
 	v := url.Values{}
 	v.Set("workspace_id", workspaceID)
 	var out BillingStatus
 	if err := c.GetJSON(ctx, "/api/v1/billing/status?"+v.Encode(), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) CreateBillingCheckout(ctx context.Context, workspaceID, planID string) (*BillingURL, error) {
+	var out BillingURL
+	if err := c.PostJSON(ctx, "/api/v1/billing/checkout", map[string]string{
+		"workspace_id": workspaceID,
+		"plan_id":      planID,
+	}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) CreateBillingPortal(ctx context.Context, workspaceID string) (*BillingURL, error) {
+	var out BillingURL
+	if err := c.PostJSON(ctx, "/api/v1/billing/portal", map[string]string{
+		"workspace_id": workspaceID,
+	}, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

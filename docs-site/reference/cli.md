@@ -41,6 +41,7 @@ openpost [flags]
 | --- | --- |
 | `openpost account` | Manage connected social accounts |
 | `openpost auth` | Authenticate with an OpenPost instance |
+| `openpost billing` | Manage OpenPost Cloud billing |
 | `openpost completion` | Generate shell completion script |
 | `openpost instance` | Manage OpenPost instance profiles |
 | `openpost jobs` | List background jobs |
@@ -341,6 +342,110 @@ Revoke an API token
 
 ```text
 openpost auth token revoke &lt;id&gt;
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost billing`
+
+Manage OpenPost Cloud billing
+
+Inspect billing status and create hosted checkout or customer portal URLs for the active workspace.
+
+**Usage**
+
+```text
+openpost billing
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+**Subcommands**
+
+| Command | Description |
+| --- | --- |
+| `openpost billing checkout` | Create a Polar checkout URL for the active workspace |
+| `openpost billing portal` | Create a Polar customer portal URL for the active workspace |
+| `openpost billing status` | Show billing plan and usage for the active workspace |
+
+### `openpost billing checkout`
+
+Create a Polar checkout URL for the active workspace
+
+Create a hosted checkout URL for the active workspace. Plan IDs are validated by the server, usually starter, creator, or pro.
+
+**Usage**
+
+```text
+openpost billing checkout &lt;plan&gt;
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost billing portal`
+
+Create a Polar customer portal URL for the active workspace
+
+**Usage**
+
+```text
+openpost billing portal
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost billing status`
+
+Show billing plan and usage for the active workspace
+
+**Usage**
+
+```text
+openpost billing status
 ```
 
 **Inherited Flags**

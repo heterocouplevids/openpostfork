@@ -143,6 +143,66 @@ func TestBillingStatus_WireFormat(t *testing.T) {
 	}
 }
 
+func TestCreateBillingCheckout_WireFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/v1/billing/checkout" {
+			t.Fatalf("path = %s, want /api/v1/billing/checkout", r.URL.Path)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body["workspace_id"] != "ws_1" || body["plan_id"] != "creator" {
+			t.Fatalf("body = %#v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"checkout_1","url":"https://polar.sh/checkout/checkout_1"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "op_cli_test")
+	got, err := c.CreateBillingCheckout(context.Background(), "ws_1", "creator")
+	if err != nil {
+		t.Fatalf("CreateBillingCheckout returned error: %v", err)
+	}
+	if got.ID != "checkout_1" || got.URL != "https://polar.sh/checkout/checkout_1" {
+		t.Fatalf("checkout = %+v", got)
+	}
+}
+
+func TestCreateBillingPortal_WireFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/v1/billing/portal" {
+			t.Fatalf("path = %s, want /api/v1/billing/portal", r.URL.Path)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body["workspace_id"] != "ws_1" {
+			t.Fatalf("body = %#v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"portal_1","url":"https://polar.sh/portal/portal_1"}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "op_cli_test")
+	got, err := c.CreateBillingPortal(context.Background(), "ws_1")
+	if err != nil {
+		t.Fatalf("CreateBillingPortal returned error: %v", err)
+	}
+	if got.ID != "portal_1" || got.URL != "https://polar.sh/portal/portal_1" {
+		t.Fatalf("portal = %+v", got)
+	}
+}
+
 func TestUpdateAccount_WireFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch {

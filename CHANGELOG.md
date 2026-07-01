@@ -41,6 +41,7 @@ All notable changes to this project are documented in this file.
 - Added an instance-admin Settings panel for managing database-backed provider app credentials and restart-required state.
 - Added provider-readiness catalog details to `openpost instance diagnostics` support snapshots.
 - Added billing plan and usage details to authenticated `openpost instance diagnostics` support snapshots.
+- Added `openpost billing status`, `openpost billing checkout`, and `openpost billing portal` for hosted workspace billing flows from the CLI.
 - Added an authenticated account-provider discovery endpoint so clients can distinguish configured provider apps from unavailable providers.
 - Added provider-discovery rendering on the Accounts page, including unavailable states for provider apps that still need operator configuration.
 - Added MCP `list_scheduled_posts` so assistant clients can inspect the upcoming publishing queue before scheduling or canceling posts.

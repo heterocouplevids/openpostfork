@@ -12,6 +12,7 @@
 // ├── post    (create, list, view, update, delete)
 // ├── thread  (create)
 // ├── jobs    (list)
+// ├── billing (status, checkout, portal)
 // └── completion
 //
 // Each subcommand file owns its own RunE and flags. Global flags
@@ -90,6 +91,7 @@ func NewRoot(version string) *cobra.Command {
 	root.AddCommand(newPostCmd())
 	root.AddCommand(newThreadCmd())
 	root.AddCommand(newJobsCmd())
+	root.AddCommand(newBillingCmd())
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newVersionCmd(version))
 

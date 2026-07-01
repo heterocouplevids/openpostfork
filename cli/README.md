@@ -138,6 +138,16 @@ Create a thread from markdown segments separated by `---` lines:
 openpost thread create ./thread.md --accounts x --schedule "next monday 9am"
 ```
 
+## Billing
+
+Inspect or start hosted billing flows for the active workspace:
+
+```sh
+openpost billing status
+openpost billing checkout creator
+openpost billing portal
+```
+
 Useful diagnostics:
 
 ```sh
