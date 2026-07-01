@@ -347,6 +347,20 @@ type PostMedia struct {
 	DisplayOrder int    `json:"display_order"`
 }
 
+type ProviderMediaState struct {
+	bun.BaseModel `bun:"table:provider_media_states"`
+
+	PostID          string    `bun:",pk" json:"post_id"`
+	SocialAccountID string    `bun:",pk" json:"social_account_id"`
+	MediaID         string    `bun:",pk" json:"media_id"`
+	Platform        string    `bun:",notnull" json:"platform"`
+	PlatformMediaID string    `bun:",notnull" json:"platform_media_id"`
+	Status          string    `bun:",notnull,default:'ready'" json:"status"`
+	ErrorMessage    string    `json:"error_message"`
+	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
 type PublicationAsset struct {
 	bun.BaseModel `bun:"table:publication_assets"`
 

@@ -23,6 +23,11 @@ import (
 
 var errLinkedInThreadReplySkipped = errors.New("linkedin thread reply skipped")
 
+const (
+	providerMediaStatusReady  = "ready"
+	providerMediaStatusFailed = "failed"
+)
+
 type Service struct {
 	db                           *bun.DB
 	tm                           *tokenmanager.TokenManager
@@ -394,7 +399,7 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 	var mediaAltTexts []string
 	mediaItems := make([]platform.MediaItem, 0, len(mediaAttachments))
 	for _, media := range mediaAttachments {
-		mediaID, err := s.uploadMediaToPlatform(ctx, account, provider, token, media, publishContent)
+		mediaID, err := s.platformMediaIDForDestination(ctx, post, dest, account, provider, token, media, publishContent)
 		if err != nil {
 			log.Printf("[Publisher] Failed to upload media %s to %s: %v", media.ID, account.Platform, err)
 			return fmt.Errorf("media upload failed for %s: %w", media.ID, err)
@@ -543,8 +548,78 @@ func isExpiredTokenError(err error) bool {
 		(strings.Contains(msg, "expired") && strings.Contains(msg, "token"))
 }
 
+func (s *Service) platformMediaIDForDestination(ctx context.Context, post *models.Post, dest *models.PostDestination, account *models.SocialAccount, provider platform.Adapter, token string, media models.MediaAttachment, content string) (string, error) {
+	if usesPublicMediaURLProvider(account.Platform) {
+		return s.uploadMediaToPlatform(ctx, account, provider, token, media, content)
+	}
+
+	platformMediaID, err := s.loadReadyProviderMediaState(ctx, post.ID, dest.SocialAccountID, media.ID)
+	if err != nil {
+		return "", err
+	}
+	if platformMediaID != "" {
+		return platformMediaID, nil
+	}
+
+	platformMediaID, err = s.uploadMediaToPlatform(ctx, account, provider, token, media, content)
+	if err != nil {
+		if saveErr := s.saveProviderMediaState(ctx, post.ID, dest.SocialAccountID, media.ID, account.Platform, "", providerMediaStatusFailed, err.Error()); saveErr != nil {
+			log.Printf("[Publisher] Failed to record provider media upload failure for media %s: %v", media.ID, saveErr)
+		}
+		return "", err
+	}
+
+	if saveErr := s.saveProviderMediaState(ctx, post.ID, dest.SocialAccountID, media.ID, account.Platform, platformMediaID, providerMediaStatusReady, ""); saveErr != nil {
+		log.Printf("[Publisher] Failed to record provider media state for media %s: %v", media.ID, saveErr)
+	}
+	return platformMediaID, nil
+}
+
+func (s *Service) loadReadyProviderMediaState(ctx context.Context, postID, socialAccountID, mediaID string) (string, error) {
+	var state models.ProviderMediaState
+	if err := s.db.NewSelect().
+		Model(&state).
+		Column("platform_media_id").
+		Where("post_id = ?", postID).
+		Where("social_account_id = ?", socialAccountID).
+		Where("media_id = ?", mediaID).
+		Where("status = ?", providerMediaStatusReady).
+		Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", fmt.Errorf("loading provider media state: %w", err)
+	}
+	return state.PlatformMediaID, nil
+}
+
+func (s *Service) saveProviderMediaState(ctx context.Context, postID, socialAccountID, mediaID, platformName, platformMediaID, status, errorMessage string) error {
+	now := time.Now().UTC()
+	state := &models.ProviderMediaState{
+		PostID:          postID,
+		SocialAccountID: socialAccountID,
+		MediaID:         mediaID,
+		Platform:        platformName,
+		PlatformMediaID: platformMediaID,
+		Status:          status,
+		ErrorMessage:    errorMessage,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	_, err := s.db.NewInsert().
+		Model(state).
+		On("CONFLICT (post_id, social_account_id, media_id) DO UPDATE").
+		Set("platform = EXCLUDED.platform").
+		Set("platform_media_id = EXCLUDED.platform_media_id").
+		Set("status = EXCLUDED.status").
+		Set("error_message = EXCLUDED.error_message").
+		Set("updated_at = EXCLUDED.updated_at").
+		Exec(ctx)
+	return err
+}
+
 func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.Adapter, token string, media models.MediaAttachment, content string) (string, error) {
-	if account.Platform == "threads" || account.Platform == "tiktok" || account.Platform == "facebook" || account.Platform == "instagram" {
+	if usesPublicMediaURLProvider(account.Platform) {
 		return s.getPublicMediaURL(media), nil
 	}
 
@@ -568,6 +643,15 @@ func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.Soc
 	}
 
 	return provider.UploadMedia(ctx, token, account.AccountID, media.MimeType, data)
+}
+
+func usesPublicMediaURLProvider(platformName string) bool {
+	switch platformName {
+	case "threads", "tiktok", "facebook", "instagram":
+		return true
+	default:
+		return false
+	}
 }
 
 func firstContentLine(content string) string {

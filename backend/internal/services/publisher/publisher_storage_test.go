@@ -32,9 +32,11 @@ func (f *fakePublisherStorage) Open(id string) (io.ReadCloser, error) {
 
 type fakePublisherAdapter struct {
 	uploadedBody string
+	uploadCalls  int
 	publishCalls int
 	publishErr   error
 	externalID   string
+	lastRequest  *platform.PublishRequest
 }
 
 func (f *fakePublisherAdapter) GenerateAuthURL(string) (string, map[string]string) {
@@ -53,6 +55,7 @@ func (f *fakePublisherAdapter) GetProfile(context.Context, string) (*platform.Us
 	return nil, nil
 }
 func (f *fakePublisherAdapter) UploadMedia(_ context.Context, _, _, _ string, reader io.Reader) (string, error) {
+	f.uploadCalls++
 	body, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err
@@ -60,8 +63,9 @@ func (f *fakePublisherAdapter) UploadMedia(_ context.Context, _, _, _ string, re
 	f.uploadedBody = string(body)
 	return "platform-media-id", nil
 }
-func (f *fakePublisherAdapter) Publish(context.Context, string, string, *platform.PublishRequest) (string, error) {
+func (f *fakePublisherAdapter) Publish(_ context.Context, _, _ string, req *platform.PublishRequest) (string, error) {
 	f.publishCalls++
+	f.lastRequest = req
 	if f.publishErr != nil {
 		return "", f.publishErr
 	}
@@ -77,6 +81,7 @@ type fakeMetadataPublisherAdapter struct {
 }
 
 func (f *fakeMetadataPublisherAdapter) UploadMediaWithMetadata(_ context.Context, _, _ string, req platform.UploadMediaRequest) (string, error) {
+	f.uploadCalls++
 	body, err := io.ReadAll(req.Reader)
 	if err != nil {
 		return "", err

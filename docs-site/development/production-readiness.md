@@ -56,7 +56,10 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Move cloud uploads to direct browser-to-S3/R2 upload sessions. The S3 storage driver now issues authenticated upload sessions with presigned PUT targets, pending media reservations, completion finalization, dedupe, and quota accounting.
 - Track media assets separately from provider-uploaded media IDs.
 - Store size, checksum, dimensions, duration, processing status, storage driver, object key, and public URL mode.
-- Add provider media state for X, LinkedIn, Mastodon, Threads, Instagram, Facebook, YouTube, and TikTok.
+- Add provider media state for X, LinkedIn, Mastodon, Threads, Instagram,
+  Facebook, YouTube, and TikTok. Destination-scoped provider media state now
+  records successful upload IDs for retry reuse while avoiding cached public
+  URLs for Threads, Instagram, Facebook, and TikTok.
 - Keep Threads and other public-URL providers working through signed/public media URLs.
 
 ### 5. Publication Model

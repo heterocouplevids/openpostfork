@@ -63,4 +63,7 @@ OpenPost reserves a pending media record before issuing the presigned URL, then 
 
 The web app uses the direct upload session flow automatically when the server supports it. Local filesystem deployments and older servers fall back to multipart uploads.
 
-Provider media-state tracking is still part of the production-readiness roadmap.
+OpenPost stores destination-scoped provider media state for uploaded media IDs
+so failed destination retries can reuse an existing provider upload. Providers
+that publish by public media URL, such as Threads, Instagram, Facebook, and
+TikTok, are intentionally not cached so signed media URLs stay fresh.
