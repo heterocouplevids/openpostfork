@@ -398,6 +398,8 @@ func TestMCPInitializeAdvertisesPrompts(t *testing.T) {
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
 	result := out["result"].(map[string]any)
+	require.Contains(t, result["instructions"], "List workspaces, accounts, and providers")
+	require.Contains(t, result["instructions"], "render_scheduler_widget")
 	capabilities := result["capabilities"].(map[string]any)
 	require.Contains(t, capabilities, "tools")
 	require.Contains(t, capabilities, "prompts")
@@ -441,6 +443,8 @@ func TestMCPResourcesListAndRead(t *testing.T) {
 	require.Equal(t, mcpAppWidgetMimeType, content["mimeType"])
 	require.Contains(t, content["text"], "OpenPost Scheduler")
 	require.Contains(t, content["text"], "window.openai")
+	require.Contains(t, content["text"], "ui/notifications/tool-input")
+	require.Contains(t, content["text"], "bridge.toolInput")
 	meta := content["_meta"].(map[string]any)
 	require.Equal(t, true, meta["openai/widgetPrefersBorder"])
 	require.NotEmpty(t, meta["openai/widgetDescription"])

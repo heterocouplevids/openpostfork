@@ -305,6 +305,7 @@ func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Princip
 				"name":    "openpost",
 				"version": "0.1.0",
 			},
+			"instructions": "OpenPost schedules social posts from source ideas. List workspaces, accounts, and providers when IDs are unknown; create publications for reusable source material; create or update drafts before scheduling; use render_scheduler_widget when a visual summary helps.",
 			"capabilities": map[string]any{
 				"tools":     map[string]any{"listChanged": false},
 				"prompts":   map[string]any{"listChanged": false},
@@ -529,6 +530,7 @@ h1 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: 0; }
     if (bridge.toolOutput) return bridge.toolOutput;
     if (bridge.structuredContent) return bridge.structuredContent;
     if (bridge.response && bridge.response.structuredContent) return bridge.response.structuredContent;
+    if (bridge.toolInput) return bridge.toolInput;
     return {};
   }
   function normalizePayload(payload) {
@@ -606,6 +608,10 @@ h1 { margin: 0; font-size: 20px; line-height: 1.2; letter-spacing: 0; }
     if (event.source !== window.parent) return;
     var message = event.data || {};
     if (message.jsonrpc === "2.0" && message.method === "ui/notifications/tool-result") {
+      render(message.params || {});
+      return;
+    }
+    if (message.jsonrpc === "2.0" && message.method === "ui/notifications/tool-input") {
       render(message.params || {});
       return;
     }
