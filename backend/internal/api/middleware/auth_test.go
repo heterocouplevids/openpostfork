@@ -9,11 +9,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/apitokens"
+	"github.com/openpost/backend/internal/services/auth"
+	"github.com/openpost/backend/internal/services/sessions"
+	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 )
@@ -183,6 +187,45 @@ func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
 	if principal.TokenPrefix != generated.Model.TokenPrefix {
 		t.Fatalf("expected token prefix %q, got %q", generated.Model.TokenPrefix, principal.TokenPrefix)
 	}
+}
+
+func TestJWTAuthenticatorRejectsRevokedSession(t *testing.T) {
+	ctx := context.Background()
+	sqldb, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=private", strings.ReplaceAll(t.Name(), "/", "_")))
+	require.NoError(t, err)
+	sqldb.SetMaxOpenConns(1)
+	db := bun.NewDB(sqldb, sqlitedialect.New())
+	t.Cleanup(func() {
+		require.NoError(t, db.Close())
+	})
+	for _, model := range []interface{}{
+		(*models.User)(nil),
+		(*models.UserSession)(nil),
+	} {
+		_, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx)
+		require.NoError(t, err)
+	}
+	_, err = db.NewInsert().Model(&models.User{ID: "user-1", Email: "user@example.com", PasswordHash: "hash"}).Exec(ctx)
+	require.NoError(t, err)
+
+	authService := auth.NewService("test-secret")
+	sessionService := sessions.NewService(db)
+	session, err := sessionService.CreateSession(ctx, sessions.CreateInput{
+		UserID:    "user-1",
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
+	})
+	require.NoError(t, err)
+	token, err := authService.GenerateTokenWithSession("user-1", "user@example.com", session.ID, session.ExpiresAt)
+	require.NoError(t, err)
+
+	authenticator := NewJWTAuthenticatorWithSessions(authService, sessionService)
+	principal, err := authenticator.AuthenticateBearer(ctx, token)
+	require.NoError(t, err)
+	require.Equal(t, session.ID, principal.SessionID)
+
+	require.NoError(t, sessionService.RevokeSession(ctx, "user-1", session.ID))
+	_, err = authenticator.AuthenticateBearer(ctx, token)
+	require.Error(t, err)
 }
 
 func TestCheckWorkspaceAccessHonorsTokenWorkspaceScope(t *testing.T) {

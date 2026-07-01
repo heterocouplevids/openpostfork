@@ -30,6 +30,8 @@
 	import UsersIcon from 'lucide-svelte/icons/users';
 	import UserPlusIcon from 'lucide-svelte/icons/user-plus';
 	import CopyIcon from 'lucide-svelte/icons/copy';
+	import MonitorIcon from 'lucide-svelte/icons/monitor';
+	import LogOutIcon from 'lucide-svelte/icons/log-out';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
 	import { getLocaleTag } from '$lib/i18n';
@@ -131,6 +133,10 @@
 	let loadingSecurity = $state(true);
 	let securityBusy = $state(false);
 	let securityError = $state('');
+	let authSessions = $state.raw<AuthSessionSummary[]>([]);
+	let authSessionsLoading = $state(true);
+	let authSessionsError = $state('');
+	let authSessionBusyID = $state('');
 	let currentPassword = $state('');
 	let totpSetupChallengeId = $state('');
 	let totpManualEntryKey = $state('');
@@ -154,6 +160,16 @@
 		totp_enabled: boolean;
 		passkeys: PasskeySummary[];
 		methods: string[];
+	}
+
+	interface AuthSessionSummary {
+		id: string;
+		user_agent: string;
+		ip_address: string;
+		current: boolean;
+		expires_at: string;
+		last_used_at: string;
+		created_at: string;
 	}
 
 	let securityStatus = $state<SecurityStatus | null>(null);
@@ -373,6 +389,21 @@
 		}
 	}
 
+	async function loadAuthSessions() {
+		authSessionsLoading = true;
+		authSessionsError = '';
+		try {
+			const { data, error: err } = await (client as any).GET('/auth/sessions');
+			if (err || !data) throw new Error(err?.detail || 'Failed to load active sessions');
+			authSessions = data as AuthSessionSummary[];
+		} catch (e) {
+			authSessions = [];
+			authSessionsError = (e as Error).message;
+		} finally {
+			authSessionsLoading = false;
+		}
+	}
+
 	async function loadAPITokens() {
 		apiTokensLoading = true;
 		securityError = '';
@@ -506,6 +537,32 @@
 			securityError = (e as Error).message;
 		} finally {
 			apiTokenBusy = false;
+		}
+	}
+
+	async function revokeAuthSession(session: AuthSessionSummary) {
+		const prompt = session.current
+			? 'Sign out of this browser? You will need to log in again.'
+			: 'Revoke this browser session?';
+		if (!confirm(prompt)) return;
+		authSessionBusyID = session.id;
+		authSessionsError = '';
+		try {
+			const { data, error: err } = await (client as any).DELETE('/auth/sessions/{session_id}', {
+				params: { path: { session_id: session.id } }
+			});
+			if (err) throw new Error(err.detail || 'Failed to revoke session');
+			if (data?.revoked_current || session.current) {
+				auth.logout();
+				await goto('/login');
+				return;
+			}
+			await loadAuthSessions();
+			toastMessage = 'Session revoked';
+		} catch (e) {
+			authSessionsError = (e as Error).message;
+		} finally {
+			authSessionBusyID = '';
 		}
 	}
 
@@ -1004,6 +1061,17 @@
 		return `${new Intl.NumberFormat(getLocaleTag()).format(value)} B`;
 	}
 
+	function formatSessionUserAgent(value: string): string {
+		const trimmed = value.trim();
+		if (!trimmed) return 'Unknown browser';
+		return trimmed.length > 120 ? `${trimmed.slice(0, 117)}...` : trimmed;
+	}
+
+	function formatSessionTime(value: string): string {
+		if (!value || value.startsWith('0001-01-01')) return 'Never';
+		return new Date(value).toLocaleString();
+	}
+
 	$effect(() => {
 		if (workspaceCtx.currentWorkspace) {
 			loadBillingStatus();
@@ -1027,6 +1095,7 @@
 	$effect(() => {
 		if (authState.isAuthenticated) {
 			loadSecurityStatus();
+			loadAuthSessions();
 			loadAPITokens();
 			loadMCPActivity();
 		}
@@ -1439,6 +1508,91 @@
 								Passkeys: {passkeyCount}
 							</p>
 						</div>
+					</div>
+
+					<div class="rounded-lg border p-4">
+						<div class="mb-4 flex items-center justify-between gap-3">
+							<div>
+								<h3 class="flex items-center gap-2 font-medium">
+									<MonitorIcon class="h-4 w-4 text-muted-foreground" />
+									Active Sessions
+								</h3>
+								<p class="mt-1 text-sm text-muted-foreground">
+									Review signed-in browsers and revoke access without changing your password.
+								</p>
+							</div>
+							<Button
+								variant="outline"
+								size="sm"
+								onclick={loadAuthSessions}
+								disabled={authSessionsLoading}
+							>
+								{#if authSessionsLoading}
+									<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+								{/if}
+								Refresh
+							</Button>
+						</div>
+
+						{#if authSessionsError}
+							<div
+								class="mb-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+							>
+								{authSessionsError}
+							</div>
+						{/if}
+
+						{#if authSessionsLoading}
+							<div class="space-y-2">
+								<Skeleton class="h-16 rounded-md" />
+								<Skeleton class="h-16 rounded-md" />
+							</div>
+						{:else if authSessions.length === 0}
+							<p class="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
+								No active web sessions found.
+							</p>
+						{:else}
+							<div class="space-y-2" data-testid="auth-session-list">
+								{#each authSessions as session (session.id)}
+									<div
+										class="flex flex-col gap-3 rounded-md border px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+										data-testid="auth-session-row"
+									>
+										<div class="min-w-0">
+											<div class="flex flex-wrap items-center gap-2">
+												<p class="text-sm font-medium break-words">
+													{formatSessionUserAgent(session.user_agent)}
+												</p>
+												{#if session.current}
+													<span class="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+														Current
+													</span>
+												{/if}
+											</div>
+											<p class="mt-1 text-xs text-muted-foreground">
+												{session.ip_address || 'Unknown IP'} · Last used
+												{formatSessionTime(session.last_used_at)} · Expires
+												{formatSessionTime(session.expires_at)}
+											</p>
+										</div>
+										<Button
+											variant="ghost"
+											size="sm"
+											class="self-start text-destructive hover:text-destructive sm:self-center"
+											onclick={() => revokeAuthSession(session)}
+											disabled={Boolean(authSessionBusyID)}
+										>
+											{#if authSessionBusyID === session.id}
+												<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+											{:else}
+												<LogOutIcon class="mr-2 h-4 w-4" />
+											{/if}
+											{session.current ? 'Sign out' : 'Revoke'}
+										</Button>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 
 					<div class="grid gap-4 lg:grid-cols-2">

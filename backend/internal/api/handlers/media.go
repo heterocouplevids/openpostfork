@@ -1536,7 +1536,10 @@ func (h *MediaHandler) optionalMediaAuth() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
-			if authHeader != "" {
+			if authHeader != "" && h.authn != nil {
+				return middleware.BearerMiddleware(h.authn)(next)(c)
+			}
+			if authHeader != "" && h.auth != nil {
 				return middleware.JWTMiddleware(h.auth)(next)(c)
 			}
 			return next(c)
@@ -1561,9 +1564,8 @@ func (h *MediaHandler) authorizeMediaAccess(c echo.Context, media *models.MediaA
 	}
 
 	if token := c.QueryParam("token"); token != "" {
-		claims, err := h.auth.ValidateToken(token)
-		if err == nil && claims != nil && claims.UserID != "" {
-			allowed, err := h.userCanAccessWorkspace(c.Request().Context(), media.WorkspaceID, claims.UserID)
+		if userID := h.userIDFromQueryToken(c.Request().Context(), token); userID != "" {
+			allowed, err := h.userCanAccessWorkspace(c.Request().Context(), media.WorkspaceID, userID)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: errValidateWorkspaceAccess})
 			}
@@ -1581,6 +1583,23 @@ func (h *MediaHandler) authorizeMediaAccess(c echo.Context, media *models.MediaA
 	}
 
 	return nil
+}
+
+func (h *MediaHandler) userIDFromQueryToken(ctx context.Context, token string) string {
+	if h.authn != nil {
+		principal, err := h.authn.AuthenticateBearer(ctx, token)
+		if err == nil && principal != nil {
+			return principal.UserID
+		}
+		return ""
+	}
+	if h.auth != nil {
+		claims, err := h.auth.ValidateToken(token)
+		if err == nil && claims != nil {
+			return claims.UserID
+		}
+	}
+	return ""
 }
 
 func (h *MediaHandler) userCanAccessWorkspace(ctx context.Context, workspaceID, userID string) (bool, error) {

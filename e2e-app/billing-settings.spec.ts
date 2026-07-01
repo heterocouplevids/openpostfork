@@ -80,6 +80,45 @@ test("settings shows recent MCP activity for an authenticated user", async ({
   await expect(page.getByTestId("mcp-activity-list")).toContainText("success");
 });
 
+test("settings lists and revokes active web sessions", async ({
+  page,
+  request,
+}) => {
+  const unique = Date.now().toString(36);
+  const email = `sessions-${unique}@example.com`;
+
+  const auth = await registerUser(request, email);
+  await createWorkspace(request, auth.token, "Sessions E2E");
+
+  const secondLogin = await request.post("/api/v1/auth/login", {
+    headers: { "User-Agent": "E2E Other Browser" },
+    data: { email, password },
+  });
+  expect(secondLogin.ok()).toBeTruthy();
+
+  await page.addInitScript((token) => {
+    window.localStorage.setItem("token", token);
+  }, auth.token);
+  await page.goto("/settings");
+
+  await expect(
+    page.getByRole("heading", { name: "Active Sessions" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("auth-session-list")).toContainText("Current");
+  await expect(page.getByTestId("auth-session-list")).toContainText(
+    "E2E Other Browser",
+  );
+
+  page.on("dialog", (dialog) => dialog.accept());
+  const otherSession = page
+    .getByTestId("auth-session-row")
+    .filter({ hasText: "E2E Other Browser" });
+  await otherSession.getByRole("button", { name: "Revoke" }).click();
+  await expect(page.getByTestId("auth-session-list")).not.toContainText(
+    "E2E Other Browser",
+  );
+});
+
 test("settings creates MCP-scoped API tokens", async ({ page, request }) => {
   const unique = Date.now().toString(36);
   const email = `mcp-token-${unique}@example.com`;
@@ -166,7 +205,9 @@ test("settings creates and accepts workspace invitations", async ({
 
   await invitedPage.getByRole("button", { name: "Open Settings" }).click();
   await expect(invitedPage).toHaveURL(/\/settings#team$/);
-  await expect(invitedPage.getByRole("heading", { name: "Team" })).toBeVisible();
+  await expect(
+    invitedPage.getByRole("heading", { name: "Team" }),
+  ).toBeVisible();
   await expect(invitedPage.getByTestId("team-members-list")).toContainText(
     inviteEmail,
   );

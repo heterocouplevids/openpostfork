@@ -72,6 +72,19 @@ type UserPasskey struct {
 	LastUsedAt     time.Time `bun:",nullzero" json:"last_used_at"`
 }
 
+type UserSession struct {
+	bun.BaseModel `bun:"table:user_sessions"`
+
+	ID         string    `bun:",pk" json:"id"`
+	UserID     string    `bun:",notnull" json:"user_id"`
+	UserAgent  string    `json:"user_agent"`
+	IPAddress  string    `json:"ip_address"`
+	ExpiresAt  time.Time `bun:",notnull" json:"expires_at"`
+	LastUsedAt time.Time `bun:",nullzero" json:"last_used_at"`
+	RevokedAt  time.Time `bun:",nullzero" json:"revoked_at"`
+	CreatedAt  time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 type AuthChallenge struct {
 	bun.BaseModel `bun:"table:auth_challenges"`
 

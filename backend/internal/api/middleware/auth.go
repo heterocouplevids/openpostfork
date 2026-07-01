@@ -20,6 +20,8 @@ const (
 	UserIDKey      contextKey = "user_id"
 	EmailKey       contextKey = "email"
 	WorkspaceIDKey contextKey = "workspace_id"
+	SessionIDKey   contextKey = "session_id"
+	UserAgentKey   contextKey = "user_agent"
 	ClientIPKey    contextKey = "client_ip"
 	errorKey       contextKey = "error"
 
@@ -39,26 +41,41 @@ type Principal struct {
 	ClientID    string
 	ClientName  string
 	TokenPrefix string
+	SessionID   string
 }
 
 type Authenticator interface {
 	AuthenticateBearer(ctx context.Context, token string) (*Principal, error)
 }
 
+type SessionValidator interface {
+	ValidateSession(ctx context.Context, userID, sessionID string) (*models.UserSession, error)
+}
+
 type JWTAuthenticator struct {
-	service *auth.Service
+	service  *auth.Service
+	sessions SessionValidator
 }
 
 func NewJWTAuthenticator(service *auth.Service) *JWTAuthenticator {
 	return &JWTAuthenticator{service: service}
 }
 
-func (a *JWTAuthenticator) AuthenticateBearer(_ context.Context, token string) (*Principal, error) {
+func NewJWTAuthenticatorWithSessions(service *auth.Service, sessionValidator SessionValidator) *JWTAuthenticator {
+	return &JWTAuthenticator{service: service, sessions: sessionValidator}
+}
+
+func (a *JWTAuthenticator) AuthenticateBearer(ctx context.Context, token string) (*Principal, error) {
 	claims, err := a.service.ValidateToken(token)
 	if err != nil {
 		return nil, err
 	}
-	return &Principal{UserID: claims.UserID, Email: claims.Email}, nil
+	if claims.SessionID != "" && a.sessions != nil {
+		if _, err := a.sessions.ValidateSession(ctx, claims.UserID, claims.SessionID); err != nil {
+			return nil, err
+		}
+	}
+	return &Principal{UserID: claims.UserID, Email: claims.Email, SessionID: claims.SessionID}, nil
 }
 
 type CompositeService struct {
@@ -67,8 +84,16 @@ type CompositeService struct {
 }
 
 func NewCompositeService(jwtService *auth.Service, apiTokenService *apitokens.Service) *CompositeService {
+	return NewCompositeServiceWithSessions(jwtService, apiTokenService, nil)
+}
+
+func NewCompositeServiceWithSessions(
+	jwtService *auth.Service,
+	apiTokenService *apitokens.Service,
+	sessionValidator SessionValidator,
+) *CompositeService {
 	return &CompositeService{
-		jwt:       NewJWTAuthenticator(jwtService),
+		jwt:       NewJWTAuthenticatorWithSessions(jwtService, sessionValidator),
 		apiTokens: apiTokenService,
 	}
 }
@@ -123,6 +148,9 @@ func AuthMiddleware(api huma.API, authenticator Authenticator) func(ctx huma.Con
 		if principal.WorkspaceID != "" {
 			ctx = huma.WithValue(ctx, WorkspaceIDKey, principal.WorkspaceID)
 		}
+		if principal.SessionID != "" {
+			ctx = huma.WithValue(ctx, SessionIDKey, principal.SessionID)
+		}
 		next(ctx)
 	}
 }
@@ -148,6 +176,20 @@ func GetWorkspaceID(ctx context.Context) string {
 	return ""
 }
 
+func GetSessionID(ctx context.Context) string {
+	if v, ok := ctx.Value(SessionIDKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+func GetUserAgent(ctx context.Context) string {
+	if v, ok := ctx.Value(UserAgentKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
 func GetClientIP(ctx context.Context) string {
 	if v, ok := ctx.Value(ClientIPKey).(string); ok {
 		return v
@@ -157,7 +199,9 @@ func GetClientIP(ctx context.Context) string {
 
 func RequestMetadataMiddleware() func(ctx huma.Context, next func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
-		next(huma.WithValue(ctx, ClientIPKey, requestClientIP(ctx)))
+		ctx = huma.WithValue(ctx, ClientIPKey, requestClientIP(ctx))
+		ctx = huma.WithValue(ctx, UserAgentKey, strings.TrimSpace(ctx.Header("User-Agent")))
+		next(ctx)
 	}
 }
 
@@ -221,6 +265,9 @@ func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {
 
 			c.Set(string(UserIDKey), claims.UserID)
 			c.Set(string(EmailKey), claims.Email)
+			if claims.SessionID != "" {
+				c.Set(string(SessionIDKey), claims.SessionID)
+			}
 
 			return next(c)
 		}
@@ -257,6 +304,10 @@ func BearerMiddleware(authenticator Authenticator) echo.MiddlewareFunc {
 			if principal.WorkspaceID != "" {
 				c.Set(string(WorkspaceIDKey), principal.WorkspaceID)
 				requestCtx = context.WithValue(requestCtx, WorkspaceIDKey, principal.WorkspaceID)
+			}
+			if principal.SessionID != "" {
+				c.Set(string(SessionIDKey), principal.SessionID)
+				requestCtx = context.WithValue(requestCtx, SessionIDKey, principal.SessionID)
 			}
 			c.SetRequest(c.Request().WithContext(requestCtx))
 

@@ -2,7 +2,7 @@
 
 > Status: June 2026 — post-v1 priorities.
 
-OpenPost is a lightweight, self-hosted social media scheduler. The core product now includes the web app, CLI, API tokens, social sets, TOTP, passkeys, workspaces, media library, and provider publishing flows. The next phase should focus on reliability, provider correctness, and operator polish before larger integrations.
+OpenPost is a lightweight, self-hosted social media scheduler. The core product now includes the web app, CLI, API tokens, active web-session revocation, social sets, TOTP, passkeys, workspaces, media library, and provider publishing flows. The next phase should focus on reliability, provider correctness, and operator polish before larger integrations.
 
 ---
 
@@ -27,25 +27,22 @@ OpenPost is a lightweight, self-hosted social media scheduler. The core product 
 1. **Enhanced thread management**
    Add safer atomic updates to scheduled or failed threads.
 
-2. **Active session management**
-   Add a settings view to list and revoke active web login sessions.
-
-3. **Full pagination for list endpoints**
+2. **Full pagination for list endpoints**
    Add cursor or offset pagination for posts, jobs, and other large lists.
 
-4. **Analytics and engagement tracking**
+3. **Analytics and engagement tracking**
    Poll provider APIs for engagement metrics and display them in an analytics dashboard.
 
-5. **MCP server**
+4. **MCP server**
    Add an official automation server for local tools and agents.
 
-6. **Writing assistance**
+5. **Writing assistance**
    Add optional rewrite and content brainstorming workflows without making OpenPost depend on a hosted provider.
 
-7. **Directus integration**
+6. **Directus integration**
    Explore two-way sync with Directus for users who want a separate content archive.
 
-8. **Spanish localization**
+7. **Spanish localization**
    Complete Spanish translations with a real translation pass. The old stub was removed in v1.0.x.
 
 ---

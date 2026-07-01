@@ -2655,6 +2655,26 @@
 				"required": ["revoked"],
 				"type": "object"
 			},
+			"RevokeUserSessionOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/schemas/RevokeUserSessionOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"revoked": {
+						"type": "boolean"
+					},
+					"revoked_current": {
+						"type": "boolean"
+					}
+				},
+				"required": ["revoked", "revoked_current"],
+				"type": "object"
+			},
 			"RevokeWorkspaceInvitationOutputBody": {
 				"additionalProperties": false,
 				"properties": {
@@ -3450,6 +3470,52 @@
 					}
 				},
 				"required": ["id", "email", "created_at"],
+				"type": "object"
+			},
+			"UserSessionSummary": {
+				"additionalProperties": false,
+				"properties": {
+					"created_at": {
+						"description": "Session creation time",
+						"format": "date-time",
+						"type": "string"
+					},
+					"current": {
+						"description": "Whether this is the session used for the request",
+						"type": "boolean"
+					},
+					"expires_at": {
+						"description": "Session expiry time",
+						"format": "date-time",
+						"type": "string"
+					},
+					"id": {
+						"description": "Session ID",
+						"type": "string"
+					},
+					"ip_address": {
+						"description": "Recorded client IP address",
+						"type": "string"
+					},
+					"last_used_at": {
+						"description": "Last successful use time",
+						"format": "date-time",
+						"type": "string"
+					},
+					"user_agent": {
+						"description": "Recorded user agent",
+						"type": "string"
+					}
+				},
+				"required": [
+					"id",
+					"user_agent",
+					"ip_address",
+					"current",
+					"expires_at",
+					"last_used_at",
+					"created_at"
+				],
 				"type": "object"
 			},
 			"VariantInput": {
@@ -5305,6 +5371,119 @@
 					}
 				},
 				"summary": "Start TOTP enrollment for the current user",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/sessions": {
+			"get": {
+				"operationId": "list-auth-sessions",
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": {
+										"$ref": "#/components/schemas/UserSessionSummary"
+									},
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "List active web sessions",
+				"tags": ["Auth"]
+			}
+		},
+		"/auth/sessions/{session_id}": {
+			"delete": {
+				"operationId": "revoke-auth-session",
+				"parameters": [
+					{
+						"description": "Session ID",
+						"in": "path",
+						"name": "session_id",
+						"required": true,
+						"schema": {
+							"description": "Session ID",
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RevokeUserSessionOutputBody"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Not Found"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Revoke an active web session",
 				"tags": ["Auth"]
 			}
 		},

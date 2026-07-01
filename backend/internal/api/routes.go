@@ -19,6 +19,7 @@ import (
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/mfa"
+	"github.com/openpost/backend/internal/services/sessions"
 	"github.com/uptrace/bun"
 )
 
@@ -26,6 +27,7 @@ type RouteDeps struct {
 	DB                           *bun.DB
 	AuthService                  *auth.Service
 	Authenticator                middleware.Authenticator
+	SessionService               *sessions.Service
 	APITokenService              *apitokens.Service
 	CLIAuthService               *cliauth.Service
 	MCPOAuthService              *mcpoauth.Service
@@ -69,6 +71,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 		deps.MFAService,
 		deps.DisableRegistrations,
 	)
+	authHandler.SetSessionService(deps.SessionService)
 	authHandler.Register(api)
 	authHandler.Login(api)
 	authHandler.VerifyTOTPLogin(api)
@@ -76,6 +79,8 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	authHandler.FinishPasskeyLogin(api)
 	authHandler.Me(api)
 	authHandler.SecurityStatus(api)
+	authHandler.ListSessions(api)
+	authHandler.RevokeSession(api)
 	authHandler.BeginTOTPSetup(api)
 	authHandler.ConfirmTOTPSetup(api)
 	authHandler.DisableTOTP(api)

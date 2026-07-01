@@ -83,6 +83,7 @@ func CreateSchema(db *bun.DB) error {
 		(*models.MastodonInstance)(nil),
 		(*models.SocialAccount)(nil),
 		(*models.UserPasskey)(nil),
+		(*models.UserSession)(nil),
 		(*models.AuthChallenge)(nil),
 		(*models.APIToken)(nil),
 		(*models.MCPOAuthCode)(nil),

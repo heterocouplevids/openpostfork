@@ -9,6 +9,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const TokenTTL = 7 * 24 * time.Hour
+
 type Service struct {
 	jwtSecret []byte
 }
@@ -30,20 +32,29 @@ func (s *Service) CheckPassword(password, hash string) bool {
 }
 
 type Claims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
+	UserID    string `json:"user_id"`
+	Email     string `json:"email"`
+	SessionID string `json:"session_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
 func (s *Service) GenerateToken(userID, email string) (string, error) {
+	return s.GenerateTokenWithSession(userID, email, "", time.Now().UTC().Add(TokenTTL))
+}
+
+func (s *Service) GenerateTokenWithSession(userID, email, sessionID string, expiresAt time.Time) (string, error) {
 	claims := &Claims{
-		UserID: userID,
-		Email:  email,
+		UserID:    userID,
+		Email:     email,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(expiresAt.UTC()),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "openpost",
 		},
+	}
+	if sessionID != "" {
+		claims.ID = sessionID
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

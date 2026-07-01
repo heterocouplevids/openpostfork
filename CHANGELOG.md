@@ -66,6 +66,7 @@ All notable changes to this project are documented in this file.
 - Added hosted pricing handoff from landing-page plan CTAs through registration, onboarding, and the app billing checkout flow.
 - Added account-specific platform preview cards for Instagram, Facebook, YouTube, and TikTok compose views.
 - Added a compact settings section navigator with stable anchors for billing, security, tokens, schedules, and workspace defaults.
+- Added server-backed web session tracking with Settings UI revocation and Playwright coverage for active browser sessions.
 - Added dedicated docs overview pages that separate user-facing web/CLI/MCP docs, self-hosting operations docs, and developer implementation docs.
 - Added marketing SEO pages for free social post tools and publishing tips, including interactive character counting, thread splitting, and platform previews.
 - Added a UTM campaign-link builder to the marketing tools page with Playwright coverage for generated tracking URLs.

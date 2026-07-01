@@ -20,6 +20,7 @@ import (
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/mfa"
 	"github.com/openpost/backend/internal/services/ratelimit"
+	"github.com/openpost/backend/internal/services/sessions"
 	"github.com/uptrace/bun"
 )
 
@@ -38,6 +39,7 @@ type AuthHandler struct {
 	db                    *bun.DB
 	auth                  *auth.Service
 	authenticator         middleware.Authenticator
+	sessions              *sessions.Service
 	encryptor             *crypto.TokenEncryptor
 	mfa                   *mfa.Service
 	registrationsDisabled bool
@@ -64,6 +66,10 @@ func NewAuthHandler(
 		registrationsDisabled: registrationsDisabled,
 		limiter:               ratelimit.New(),
 	}
+}
+
+func (h *AuthHandler) SetSessionService(sessionService *sessions.Service) {
+	h.sessions = sessionService
 }
 
 var (
@@ -182,6 +188,31 @@ type SecurityStatusOutput struct {
 	}
 }
 
+type UserSessionSummary struct {
+	ID         string    `json:"id" doc:"Session ID"`
+	UserAgent  string    `json:"user_agent" doc:"Recorded user agent"`
+	IPAddress  string    `json:"ip_address" doc:"Recorded client IP address"`
+	Current    bool      `json:"current" doc:"Whether this is the session used for the request"`
+	ExpiresAt  time.Time `json:"expires_at" doc:"Session expiry time"`
+	LastUsedAt time.Time `json:"last_used_at" doc:"Last successful use time"`
+	CreatedAt  time.Time `json:"created_at" doc:"Session creation time"`
+}
+
+type ListUserSessionsOutput struct {
+	Body []UserSessionSummary
+}
+
+type RevokeUserSessionInput struct {
+	SessionID string `path:"session_id" doc:"Session ID"`
+}
+
+type RevokeUserSessionOutput struct {
+	Body struct {
+		Revoked        bool `json:"revoked"`
+		RevokedCurrent bool `json:"revoked_current"`
+	}
+}
+
 type SetupTOTPOutput struct {
 	Body struct {
 		ChallengeID    string `json:"challenge_id"`
@@ -239,7 +270,7 @@ func (h *AuthHandler) Register(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to create user")
 		}
 
-		return h.issueAuthResponse(user)
+		return h.issueAuthResponse(ctx, user)
 	})
 }
 
@@ -322,7 +353,7 @@ func (h *AuthHandler) Login(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to load account security")
 		}
 		if len(methods) == 0 {
-			return h.issueAuthResponse(user)
+			return h.issueAuthResponse(ctx, user)
 		}
 
 		challengeID, err := h.createChallenge(ctx, user.ID, authChallengeLoginMFA, loginChallengePayload{
@@ -383,7 +414,7 @@ func (h *AuthHandler) VerifyTOTPLogin(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to finish MFA login")
 		}
 
-		return h.issueAuthResponse(user)
+		return h.issueAuthResponse(ctx, user)
 	})
 }
 
@@ -464,6 +495,7 @@ func (h *AuthHandler) FinishPasskeyLogin(api huma.API) {
 		Path:        "/auth/login/passkey/verify",
 		Summary:     "Complete MFA login with a passkey",
 		Tags:        []string{tagAuth},
+		Middlewares: huma.Middlewares{middleware.RequestMetadataMiddleware()},
 		Errors:      []int{400, 401},
 	}, func(ctx context.Context, input *FinishPasskeyLoginInput) (*AuthOutput, error) {
 		challenge, err := h.getChallenge(ctx, input.Body.ChallengeID, authChallengePasskeyLogin)
@@ -508,7 +540,7 @@ func (h *AuthHandler) FinishPasskeyLogin(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to finish passkey login")
 		}
 
-		return h.issueAuthResponse(user)
+		return h.issueAuthResponse(ctx, user)
 	})
 }
 
@@ -563,6 +595,59 @@ func (h *AuthHandler) SecurityStatus(api huma.API) {
 		resp.Body.Passkeys = toPasskeySummaries(passkeys)
 		resp.Body.Methods = methods
 		return resp, nil
+	})
+}
+
+func (h *AuthHandler) ListSessions(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-auth-sessions",
+		Method:      http.MethodGet,
+		Path:        "/auth/sessions",
+		Summary:     "List active web sessions",
+		Tags:        []string{tagAuth},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
+		Errors:      []int{403},
+	}, func(ctx context.Context, _ *struct{}) (*ListUserSessionsOutput, error) {
+		currentSessionID := middleware.GetSessionID(ctx)
+		if h.sessions == nil || currentSessionID == "" {
+			return nil, huma.Error403Forbidden("web session token required")
+		}
+
+		items, err := h.sessions.ListActiveSessions(ctx, middleware.GetUserID(ctx))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to list sessions")
+		}
+
+		return &ListUserSessionsOutput{Body: userSessionSummaries(items, currentSessionID)}, nil
+	})
+}
+
+func (h *AuthHandler) RevokeSession(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "revoke-auth-session",
+		Method:      http.MethodDelete,
+		Path:        "/auth/sessions/{session_id}",
+		Summary:     "Revoke an active web session",
+		Tags:        []string{tagAuth},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
+		Errors:      []int{403, 404},
+	}, func(ctx context.Context, input *RevokeUserSessionInput) (*RevokeUserSessionOutput, error) {
+		currentSessionID := middleware.GetSessionID(ctx)
+		if h.sessions == nil || currentSessionID == "" {
+			return nil, huma.Error403Forbidden("web session token required")
+		}
+
+		if err := h.sessions.RevokeSession(ctx, middleware.GetUserID(ctx), input.SessionID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("session not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to revoke session")
+		}
+
+		output := &RevokeUserSessionOutput{}
+		output.Body.Revoked = true
+		output.Body.RevokedCurrent = input.SessionID == currentSessionID
+		return output, nil
 	})
 }
 
@@ -902,8 +987,23 @@ func (h *AuthHandler) getUserByID(ctx context.Context, userID string) (*models.U
 	return user, nil
 }
 
-func (h *AuthHandler) issueAuthResponse(user *models.User) (*AuthOutput, error) {
-	token, err := h.auth.GenerateToken(user.ID, user.Email)
+func (h *AuthHandler) issueAuthResponse(ctx context.Context, user *models.User) (*AuthOutput, error) {
+	expiresAt := time.Now().UTC().Add(auth.TokenTTL)
+	sessionID := ""
+	if h.sessions != nil {
+		session, err := h.sessions.CreateSession(ctx, sessions.CreateInput{
+			UserID:    user.ID,
+			UserAgent: middleware.GetUserAgent(ctx),
+			IPAddress: middleware.GetClientIP(ctx),
+			ExpiresAt: expiresAt,
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to create session")
+		}
+		sessionID = session.ID
+	}
+
+	token, err := h.auth.GenerateTokenWithSession(user.ID, user.Email, sessionID, expiresAt)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to generate token")
 	}
@@ -1048,4 +1148,20 @@ func toPasskeySummaries(passkeys []models.UserPasskey) []PasskeySummary {
 		})
 	}
 	return items
+}
+
+func userSessionSummaries(items []models.UserSession, currentSessionID string) []UserSessionSummary {
+	out := make([]UserSessionSummary, 0, len(items))
+	for _, session := range items {
+		out = append(out, UserSessionSummary{
+			ID:         session.ID,
+			UserAgent:  session.UserAgent,
+			IPAddress:  session.IPAddress,
+			Current:    session.ID == currentSessionID,
+			ExpiresAt:  session.ExpiresAt,
+			LastUsedAt: session.LastUsedAt,
+			CreatedAt:  session.CreatedAt,
+		})
+	}
+	return out
 }

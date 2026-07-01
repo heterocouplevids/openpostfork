@@ -37,6 +37,7 @@ import (
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/mfa"
 	"github.com/openpost/backend/internal/services/publisher"
+	"github.com/openpost/backend/internal/services/sessions"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 )
 
@@ -73,6 +74,7 @@ func main() {
 	tokenEncryptor := crypto.NewTokenEncryptor(cfg.EncryptionKey)
 	authService := auth.NewService(cfg.JWTSecret)
 	apiTokenService := apitokens.NewService(db)
+	sessionService := sessions.NewService(db)
 	billingService := billing.NewService(db, cfg.PolarWebhookSecret, billing.PolarConfig{
 		AccessToken: cfg.PolarAccessToken,
 		APIBaseURL:  cfg.PolarAPIBaseURL,
@@ -88,7 +90,7 @@ func main() {
 	if cfg.Edition == config.EditionCloud {
 		entitlementService = entitlements.NewSubscriptionService(db, entitlements.NewCloudBootstrapService())
 	}
-	authenticator := apimiddleware.NewCompositeService(authService, apiTokenService)
+	authenticator := apimiddleware.NewCompositeServiceWithSessions(authService, apiTokenService, sessionService)
 	cliAuthService := cliauth.NewService(db, apiTokenService)
 	mcpOAuthService := mcpoauth.NewService(db, apiTokenService)
 	mediaSigner := mediasigner.New(cfg.EncryptionKey)
@@ -190,6 +192,7 @@ func main() {
 		DB:                           db,
 		AuthService:                  authService,
 		Authenticator:                authenticator,
+		SessionService:               sessionService,
 		APITokenService:              apiTokenService,
 		CLIAuthService:               cliAuthService,
 		MCPOAuthService:              mcpOAuthService,
