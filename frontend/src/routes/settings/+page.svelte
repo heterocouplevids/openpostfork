@@ -3,12 +3,15 @@
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Select from '$lib/components/ui/select';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import PageContainer from '$lib/components/page-container.svelte';
+	import ProfileAvatarUploader from '$lib/components/profile-avatar-uploader.svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth';
+	import { getApiBase } from '$lib/stores/instance.svelte';
 	import { createPasskeyCredential } from '$lib/auth/webauthn';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
@@ -32,6 +35,8 @@
 	import CopyIcon from 'lucide-svelte/icons/copy';
 	import MonitorIcon from 'lucide-svelte/icons/monitor';
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
+	import CameraIcon from 'lucide-svelte/icons/camera';
+	import UserIcon from 'lucide-svelte/icons/user';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
 	import { getLocaleTag } from '$lib/i18n';
@@ -73,6 +78,10 @@
 
 	let saving = $state(false);
 	let toastMessage = $state('');
+	let profileDisplayName = $state('');
+	let profileBusy = $state(false);
+	let profileError = $state('');
+	let avatarUploaderOpen = $state(false);
 	let loadingSecurity = $state(true);
 	let securityBusy = $state(false);
 	let securityError = $state('');
@@ -122,6 +131,7 @@
 
 	const authState = $derived($auth);
 	const userIsInstanceAdmin = $derived(Boolean(authState.user?.is_admin));
+	const currentOrganizationID = $derived(workspaceCtx.currentWorkspace?.organization_id ?? '');
 	const passkeyCount = $derived(securityStatus?.passkeys.length ?? 0);
 	const teamMembers = $derived(workspaceTeam?.members ?? []);
 	const pendingInvitations = $derived(workspaceTeam?.invitations ?? []);
@@ -159,19 +169,27 @@
 	const providerAppNeedsSecret = $derived(
 		providerAppForm.provider === 'mastodon' && !editingProviderApp?.secret_configured
 	);
-	const settingsSections = $derived([
+	const settingsTabs = $derived([
 		{ id: 'workspace', label: 'Workspace' },
-		{ id: 'team', label: 'Team' },
-		{ id: 'billing', label: 'Billing' },
-		...(userIsInstanceAdmin ? [{ id: 'provider-apps', label: 'Provider Apps' }] : []),
-		{ id: 'security', label: 'Security' },
-		{ id: 'tokens', label: 'Tokens & MCP' },
-		{ id: 'date-time', label: 'Date & Time' },
-		{ id: 'media-cleanup', label: 'Media Cleanup' },
-		{ id: 'posting-schedule', label: 'Posting Schedule' },
-		{ id: 'natural-posting', label: 'Natural Posting' },
-		{ id: 'slot-defaults', label: 'Slot Defaults' }
+		{ id: 'account', label: 'Account' },
+		{ id: 'organization', label: 'Organization' },
+		...(userIsInstanceAdmin ? [{ id: 'admin', label: 'Admin' }] : [])
 	]);
+	const activeSettingsTab = $derived.by(() =>
+		normalizeSettingsTab(
+			page.url.searchParams.get('tab') || page.url.hash.replace(/^#/, '') || null
+		)
+	);
+	const profileEmail = $derived(authState.user?.email ?? '');
+	const profileAvatarURL = $derived(authState.user?.avatar_url ?? '');
+	const profileInitials = $derived.by(() => {
+		const source = profileDisplayName || profileEmail || 'OP';
+		const parts = source
+			.replace(/@.*/, '')
+			.split(/[\s._-]+/)
+			.filter(Boolean);
+		return (parts[0]?.[0] ?? 'O').toUpperCase() + (parts[1]?.[0] ?? '').toUpperCase();
+	});
 	const currentBillingPlan = $derived(
 		billingPlans.find((plan) => plan.id === billingStatus?.plan_id) ?? null
 	);
@@ -190,6 +208,82 @@
 				limit
 			}));
 	});
+
+	function isSettingsTab(value: string) {
+		return settingsTabs.some((tab) => tab.id === value);
+	}
+
+	function normalizeSettingsTab(value: string | null) {
+		if (value === 'billing' || value === 'team') return 'organization';
+		if (value === 'provider-apps') return 'admin';
+		if (value === 'security' || value === 'tokens' || value === 'profile') return 'account';
+		if (value === 'social-accounts') return 'workspace';
+		return value && isSettingsTab(value) ? value : 'workspace';
+	}
+
+	function setSettingsTab(value: string) {
+		if (!isSettingsTab(value) || activeSettingsTab === value) return;
+		const next = new URL(page.url);
+		next.searchParams.set('tab', value);
+		goto(`${next.pathname}${next.search}`, {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true
+		});
+	}
+
+	async function saveProfile(event: SubmitEvent) {
+		event.preventDefault();
+		profileBusy = true;
+		profileError = '';
+		try {
+			const { data, error: err } = await client.PATCH('/auth/profile', {
+				body: { display_name: profileDisplayName }
+			});
+			if (err || !data) throw new Error(err?.detail || 'Failed to update profile');
+			auth.setUser(data);
+			profileDisplayName = data.display_name ?? '';
+			toastMessage = 'Profile updated';
+		} catch (e) {
+			profileError = (e as Error).message;
+		} finally {
+			profileBusy = false;
+		}
+	}
+
+	function handleAvatarUploaded(avatarURL: string) {
+		if (authState.user) {
+			auth.setUser({ ...authState.user, avatar_url: avatarURL });
+		}
+		toastMessage = 'Profile picture updated';
+	}
+
+	async function removeAvatar() {
+		if (!profileAvatarURL) return;
+		profileBusy = true;
+		profileError = '';
+		try {
+			const { error: err } = await fetch(`${getApiBase()}/auth/profile/avatar`, {
+				method: 'DELETE',
+				headers: {
+					Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`
+				}
+			}).then(async (response) => ({
+				error: response.ok
+					? null
+					: await response.json().catch(() => ({ error: 'Failed to remove avatar' }))
+			}));
+			if (err) throw new Error(err.detail || err.error || 'Failed to remove avatar');
+			if (authState.user) {
+				auth.setUser({ ...authState.user, avatar_url: '' });
+			}
+			toastMessage = 'Profile picture removed';
+		} catch (e) {
+			profileError = (e as Error).message;
+		} finally {
+			profileBusy = false;
+		}
+	}
 
 	async function loadSecurityStatus() {
 		loadingSecurity = true;
@@ -407,9 +501,13 @@
 		billingStatusLoading = true;
 		billingError = '';
 		try {
-			const { data, error: err } = await client.GET('/billing/status', {
-				params: { query: { workspace_id: workspaceID } }
-			});
+			const { data, error: err } = currentOrganizationID
+				? await client.GET('/organizations/{id}/billing/status', {
+						params: { path: { id: currentOrganizationID } }
+					})
+				: await client.GET('/billing/status', {
+						params: { query: { workspace_id: workspaceID } }
+					});
 			if (err || !data) throw new Error(err?.detail || 'Failed to load billing status');
 			billingStatus = data as BillingStatus;
 		} catch (e) {
@@ -426,9 +524,14 @@
 		billingBusyPlan = planID;
 		billingError = '';
 		try {
-			const { data, error: err } = await client.POST('/billing/checkout', {
-				body: { workspace_id: workspaceID, plan_id: planID }
-			});
+			const { data, error: err } = currentOrganizationID
+				? await client.POST('/organizations/{id}/billing/checkout', {
+						params: { path: { id: currentOrganizationID } },
+						body: { plan_id: planID }
+					})
+				: await client.POST('/billing/checkout', {
+						body: { workspace_id: workspaceID, plan_id: planID }
+					});
 			if (err || !data?.url) throw new Error(err?.detail || 'Failed to create checkout');
 			window.location.assign(data.url);
 		} catch (e) {
@@ -444,9 +547,13 @@
 		billingPortalBusy = true;
 		billingError = '';
 		try {
-			const { data, error: err } = await client.POST('/billing/portal', {
-				body: { workspace_id: workspaceID }
-			});
+			const { data, error: err } = currentOrganizationID
+				? await client.POST('/organizations/{id}/billing/portal', {
+						params: { path: { id: currentOrganizationID } }
+					})
+				: await client.POST('/billing/portal', {
+						body: { workspace_id: workspaceID }
+					});
 			if (err || !data?.url) throw new Error(err?.detail || 'Failed to open billing portal');
 			window.location.assign(data.url);
 		} catch (e) {
@@ -987,7 +1094,7 @@
 		if (/iPhone/.test(userAgent)) return 'iPhone';
 		if (/Android/.test(userAgent))
 			return /Mobile/.test(userAgent) ? 'Android phone' : 'Android tablet';
-		if (/Macintosh|Mac OS X/.test(userAgent)) return 'Mac';
+		if (/Macintosh|Mac OS X/.test(userAgent)) return 'MacBook';
 		if (/Windows NT/.test(userAgent)) return 'Windows';
 		if (/Linux/.test(userAgent)) return 'Linux';
 		return 'device';
@@ -997,6 +1104,15 @@
 		if (!value || value.startsWith('0001-01-01')) return 'Never';
 		return new Date(value).toLocaleString();
 	}
+
+	let lastProfileUserID = $state('');
+	$effect(() => {
+		const user = authState.user;
+		if (user?.id && user.id !== lastProfileUserID) {
+			lastProfileUserID = user.id;
+			profileDisplayName = user.display_name || '';
+		}
+	});
 
 	$effect(() => {
 		if (workspaceCtx.currentWorkspace) {
@@ -1073,32 +1189,136 @@
 
 <PageContainer
 	title="Settings"
-	description="Manage your workspace preferences"
+	description="Manage account, workspace, and organization settings from one place."
 	icon={SettingsIcon}
 	loading={!workspaceCtx.currentWorkspace}
 	loadingMessage="Loading workspace..."
 >
 	<div class="space-y-8">
-		<nav
-			aria-label="Settings sections"
-			data-testid="settings-section-nav"
-			class="sticky top-0 z-10 -mx-4 border-y bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:top-2 md:mx-0 md:rounded-lg md:border"
-		>
-			<div
-				class="flex [scrollbar-width:none] gap-2 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+		<Tabs.Root value={activeSettingsTab} onValueChange={setSettingsTab} class="gap-6">
+			<Tabs.List
+				variant="line"
+				aria-label="Settings areas"
+				data-testid="settings-tabs"
+				class="flex w-full justify-start overflow-x-auto rounded-none border-b pb-1"
 			>
-				{#each settingsSections as section (section.id)}
-					<a
-						href={`#${section.id}`}
-						class="shrink-0 rounded-md border bg-background px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-					>
-						{section.label}
-					</a>
+				{#each settingsTabs as tab (tab.id)}
+					<Tabs.Trigger value={tab.id}>
+						{tab.label}
+					</Tabs.Trigger>
 				{/each}
-			</div>
-		</nav>
+			</Tabs.List>
+		</Tabs.Root>
 
-		<section id="workspace" class="scroll-mt-24 space-y-4">
+		<section
+			id="profile"
+			class:hidden={activeSettingsTab !== 'account'}
+			class="scroll-mt-24 rounded-lg border p-6"
+		>
+			<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div>
+					<h2 class="flex items-center gap-2 text-lg font-semibold">
+						<UserIcon class="h-5 w-5 text-muted-foreground" />
+						Profile
+					</h2>
+					<p class="mt-2 text-sm text-muted-foreground">
+						Your name and avatar follow your user account across every workspace.
+					</p>
+				</div>
+			</div>
+
+			{#if avatarUploaderOpen}
+				<ProfileAvatarUploader
+					bind:open={avatarUploaderOpen}
+					onComplete={handleAvatarUploaded}
+					onError={(message) => (profileError = message)}
+				/>
+			{/if}
+
+			<form onsubmit={saveProfile} class="space-y-6">
+				<div class="flex flex-col gap-6 sm:flex-row sm:items-center">
+					<div class="group relative h-24 w-24 shrink-0">
+						{#if profileAvatarURL}
+							<img
+								src={profileAvatarURL}
+								alt="Profile avatar"
+								class="h-24 w-24 rounded-full border bg-muted object-cover"
+							/>
+						{:else}
+							<div
+								class="flex h-24 w-24 items-center justify-center rounded-full border border-dashed bg-muted text-xl font-semibold text-muted-foreground"
+							>
+								{profileInitials}
+							</div>
+						{/if}
+						<button
+							type="button"
+							onclick={() => (avatarUploaderOpen = true)}
+							class="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+							aria-label="Change profile picture"
+						>
+							<CameraIcon class="h-6 w-6" />
+						</button>
+					</div>
+
+					<div class="min-w-0 flex-1 space-y-3">
+						<div class="space-y-2">
+							<Label for="profile-display-name">Display name</Label>
+							<Input
+								id="profile-display-name"
+								bind:value={profileDisplayName}
+								placeholder="Your name"
+								maxlength={120}
+							/>
+						</div>
+						<p class="text-sm text-muted-foreground">{profileEmail}</p>
+						<div class="flex flex-wrap gap-2">
+							<Button type="button" variant="outline" onclick={() => (avatarUploaderOpen = true)}>
+								<CameraIcon class="mr-2 h-4 w-4" />
+								Change Picture
+							</Button>
+							{#if profileAvatarURL}
+								<Button
+									type="button"
+									variant="ghost"
+									class="text-destructive hover:text-destructive"
+									onclick={removeAvatar}
+									disabled={profileBusy}
+								>
+									<TrashIcon class="mr-2 h-4 w-4" />
+									Remove
+								</Button>
+							{/if}
+						</div>
+					</div>
+				</div>
+
+				{#if profileError}
+					<div
+						class="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+					>
+						{profileError}
+					</div>
+				{/if}
+
+				<div class="flex justify-end">
+					<Button type="submit" disabled={profileBusy}>
+						{#if profileBusy}
+							<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+						{:else}
+							<SaveIcon class="mr-2 h-4 w-4" />
+						{/if}
+						Save Profile
+					</Button>
+				</div>
+			</form>
+		</section>
+
+		<section
+			id="workspace"
+			class:hidden={activeSettingsTab !== 'workspace'}
+			class="scroll-mt-24 space-y-4"
+		>
 			<h2 class="mb-4 text-lg font-semibold">Workspace</h2>
 			<div class="flex items-center gap-4">
 				<span class="text-sm font-medium">Current Workspace</span>
@@ -1107,18 +1327,23 @@
 			<div class="rounded-lg border bg-muted/20 p-4">
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
-						<p class="text-sm font-medium">Connected social accounts live separately</p>
+						<p class="text-sm font-medium">Social accounts are workspace settings</p>
 						<p class="text-sm text-muted-foreground">
-							Account security is personal. Social connections and sets are still managed per
-							workspace on the accounts page.
+							Connected platforms, account sets, posting schedule, timezone, and media cleanup all
+							belong to the selected workspace. User login security stays under Account.
 						</p>
 					</div>
-					<Button variant="outline" onclick={() => goto('/accounts')}>Open Accounts</Button>
+					<Button variant="outline" onclick={() => goto('/accounts')}>Manage Social Accounts</Button
+					>
 				</div>
 			</div>
 		</section>
 
-		<section id="team" class="scroll-mt-24 rounded-lg border p-6">
+		<section
+			id="team"
+			class:hidden={activeSettingsTab !== 'organization'}
+			class="scroll-mt-24 rounded-lg border p-6"
+		>
 			<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
 					<h2 class="flex items-center gap-2 text-lg font-semibold">
@@ -1126,7 +1351,8 @@
 						Team
 					</h2>
 					<p class="mt-2 text-sm text-muted-foreground">
-						Invite collaborators into this workspace and keep pending seats visible.
+						Invite collaborators into the selected workspace. Organization billing owns the seat
+						limits; workspace roles decide what each collaborator can do here.
 					</p>
 				</div>
 				<div class="rounded-md border bg-muted/20 px-3 py-2 text-sm">
@@ -1282,7 +1508,11 @@
 			{/if}
 		</section>
 
-		<section id="billing" class="scroll-mt-24 rounded-lg border p-6">
+		<section
+			id="billing"
+			class:hidden={activeSettingsTab !== 'organization'}
+			class="scroll-mt-24 rounded-lg border p-6"
+		>
 			<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
 					<h2 class="flex items-center gap-2 text-lg font-semibold">
@@ -1290,7 +1520,8 @@
 						Billing
 					</h2>
 					<p class="mt-2 text-sm text-muted-foreground">
-						Manage the OpenPost Cloud plan for this workspace.
+						Manage the OpenPost Cloud plan for this organization. Seats and workspace limits apply
+						across every workspace in the organization.
 					</p>
 				</div>
 				<Button variant="outline" onclick={openBillingPortal} disabled={billingPortalBusy}>
@@ -1329,7 +1560,7 @@
 							</p>
 						{:else}
 							<p class="mt-2 text-sm text-muted-foreground">
-								Start checkout to activate hosted billing for this workspace.
+								Start checkout to activate hosted billing for this organization.
 							</p>
 						{/if}
 					</div>
@@ -1417,6 +1648,7 @@
 			<section
 				id="provider-apps"
 				data-testid="provider-apps-settings"
+				class:hidden={activeSettingsTab !== 'admin'}
 				class="scroll-mt-24 rounded-lg border p-6"
 			>
 				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1541,7 +1773,7 @@
 						</div>
 
 						<div class="space-y-2">
-							<Label for="provider-app-name">Display name</Label>
+							<Label for="provider-app-name">App name</Label>
 							<Input
 								id="provider-app-name"
 								bind:value={providerAppForm.name}
@@ -1711,7 +1943,11 @@
 			</section>
 		{/if}
 
-		<section id="security" class="scroll-mt-24 rounded-lg border p-6">
+		<section
+			id="security"
+			class:hidden={activeSettingsTab !== 'account'}
+			class="scroll-mt-24 rounded-lg border p-6"
+		>
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ShieldCheckIcon class="h-5 w-5 text-muted-foreground" />
 				Account Security
@@ -1796,7 +2032,7 @@
 										<div class="min-w-0">
 											<div class="flex flex-wrap items-center gap-2">
 												<p class="truncate text-sm font-medium" title={session.user_agent}>
-													{formatSessionUserAgent(session.user_agent)}
+													{session.device_name || formatSessionUserAgent(session.user_agent)}
 												</p>
 												{#if session.current}
 													<span class="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
@@ -1991,7 +2227,11 @@
 			{/if}
 		</section>
 
-		<section id="tokens" class="scroll-mt-24 rounded-lg border p-6">
+		<section
+			id="tokens"
+			class:hidden={activeSettingsTab !== 'account'}
+			class="scroll-mt-24 rounded-lg border p-6"
+		>
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<TerminalIcon class="h-5 w-5 text-muted-foreground" />
 				CLI Devices & API Tokens
@@ -2209,7 +2449,11 @@
 			</div>
 		</section>
 
-		<section id="date-time" class="scroll-mt-24 space-y-4">
+		<section
+			id="date-time"
+			class:hidden={activeSettingsTab !== 'workspace'}
+			class="scroll-mt-24 space-y-4"
+		>
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
 				Date & Time
@@ -2263,7 +2507,11 @@
 			</div>
 		</section>
 
-		<section id="media-cleanup" class="scroll-mt-24 space-y-4">
+		<section
+			id="media-cleanup"
+			class:hidden={activeSettingsTab !== 'workspace'}
+			class="scroll-mt-24 space-y-4"
+		>
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ImageIcon class="h-5 w-5 text-muted-foreground" />
 				Media Cleanup
@@ -2292,7 +2540,11 @@
 			</div>
 		</section>
 
-		<section id="posting-schedule" class="scroll-mt-24 rounded-lg border p-6">
+		<section
+			id="posting-schedule"
+			class:hidden={activeSettingsTab !== 'workspace'}
+			class="scroll-mt-24 rounded-lg border p-6"
+		>
 			<div class="mb-4 flex items-center justify-between">
 				<h2 class="flex items-center gap-2 text-lg font-semibold">
 					<CalendarIcon class="h-5 w-5 text-muted-foreground" />
@@ -2451,7 +2703,11 @@
 			{/if}
 		</section>
 
-		<section id="natural-posting" class="scroll-mt-24 space-y-4">
+		<section
+			id="natural-posting"
+			class:hidden={activeSettingsTab !== 'workspace'}
+			class="scroll-mt-24 space-y-4"
+		>
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
 				Natural Posting
@@ -2509,7 +2765,11 @@
 			</div>
 		</section>
 
-		<section id="slot-defaults" class="scroll-mt-24 space-y-4">
+		<section
+			id="slot-defaults"
+			class:hidden={activeSettingsTab !== 'workspace'}
+			class="scroll-mt-24 space-y-4"
+		>
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
 				<ClockIcon class="h-5 w-5 text-muted-foreground" />
 				Time Slot Defaults
@@ -2581,7 +2841,7 @@
 			</div>
 		</section>
 
-		<div class="flex justify-end">
+		<div class:hidden={activeSettingsTab !== 'workspace'} class="flex justify-end">
 			<Button onclick={saveSettings} disabled={saving}>
 				{#if saving}
 					<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />

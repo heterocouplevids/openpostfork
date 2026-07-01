@@ -7,9 +7,11 @@ All notable changes to this project are documented in this file.
 ### Added
 - Added organization-backed workspace ownership, team listing APIs, organization-scoped billing routes, and team/agency Polar plan configuration for hosted accounts.
 - Added authenticated profile updates and avatar upload/removal endpoints backed by existing media storage.
+- Added an Account settings profile UI with Uppy-powered avatar upload/camera capture.
 
 ### Changed
 - Removed the user-facing Publications surface from the web app, CLI, public API, MCP tools, and docs so drafts/posts plus per-platform renditions remain the canonical workflow.
+- Split Settings into Workspace, Account, Organization, and Admin tabs so user-owned and workspace-owned preferences are clearer.
 - Moved workspace switching into the sidebar footer and clarified Provider Apps settings around Mastodon custom instances and optional provider OAuth key overrides.
 - Made billing subscription snapshots organization-scoped while preserving legacy workspace billing metadata for compatibility.
 

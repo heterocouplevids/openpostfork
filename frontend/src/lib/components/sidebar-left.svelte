@@ -47,6 +47,21 @@
 	let drafts = $state<Post[]>([]);
 	let loadingDrafts = $state(false);
 	const currentWorkspaceName = $derived(workspaceCtx.currentWorkspace?.name ?? 'Select workspace');
+	const currentWorkspaceOrganizationName = $derived(
+		workspaceCtx.currentWorkspace?.organization_name || 'Personal workspace'
+	);
+	const userDisplayName = $derived(
+		authState.user?.display_name || authState.user?.email?.split('@')[0] || m.common_untitled_user()
+	);
+	const userAvatarURL = $derived(authState.user?.avatar_url ?? '');
+	const userInitials = $derived.by(() => {
+		const source = userDisplayName || authState.user?.email || 'U';
+		const parts = source
+			.replace(/@.*/, '')
+			.split(/[\s._-]+/)
+			.filter(Boolean);
+		return ((parts[0]?.[0] ?? 'U') + (parts[1]?.[0] ?? '')).toUpperCase();
+	});
 
 	const monthString = $derived.by(() => {
 		const jsDate = calendarPlaceholder.toDate(getLocalTimeZone());
@@ -408,7 +423,9 @@
 									<span class="truncate font-medium text-sidebar-foreground">
 										{currentWorkspaceName}
 									</span>
-									<span class="truncate text-xs text-sidebar-foreground/70">Workspace</span>
+									<span class="truncate text-xs text-sidebar-foreground/70">
+										{currentWorkspaceOrganizationName}
+									</span>
 								</div>
 								<ChevronsUpDownIcon class="ms-auto size-4 text-sidebar-foreground" />
 							</Sidebar.MenuButton>
@@ -424,15 +441,23 @@
 						<DropdownMenu.Separator />
 						<DropdownMenu.Group>
 							{#each workspaceCtx.workspaces as workspace (workspace.id)}
-								<DropdownMenu.Item onclick={() => switchWorkspace(workspace)}>
+								<DropdownMenu.Item
+									onclick={() => switchWorkspace(workspace)}
+									class="items-start gap-3 py-2"
+								>
 									<CircleDotIcon
-										class={`mr-2 size-4 ${
+										class={`mt-0.5 size-4 ${
 											workspace.id === workspaceCtx.currentWorkspace?.id
 												? 'text-primary'
 												: 'text-muted-foreground'
 										}`}
 									/>
-									<span class="truncate">{workspace.name}</span>
+									<span class="min-w-0">
+										<span class="block truncate text-sm font-medium">{workspace.name}</span>
+										<span class="block truncate text-xs text-muted-foreground">
+											{workspace.organization_name || 'Personal workspace'}
+										</span>
+									</span>
 								</DropdownMenu.Item>
 							{/each}
 							{#if workspaceCtx.workspaces.length === 0}
@@ -440,7 +465,7 @@
 							{/if}
 						</DropdownMenu.Group>
 						<DropdownMenu.Separator />
-						<DropdownMenu.Item onclick={() => goto('/settings#workspace')}>
+						<DropdownMenu.Item onclick={() => goto('/settings?tab=workspace')}>
 							<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
 							<span>Workspace settings</span>
 						</DropdownMenu.Item>
@@ -459,15 +484,17 @@
 								class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
 							>
 								<Avatar.Root class="size-8 rounded-lg">
+									{#if userAvatarURL}
+										<Avatar.Image src={userAvatarURL} alt={userDisplayName} />
+									{/if}
 									<Avatar.Fallback
 										class="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"
 									>
-										{authState.user?.email?.charAt(0).toUpperCase() || 'U'}
+										{userInitials}
 									</Avatar.Fallback>
 								</Avatar.Root>
 								<div class="grid flex-1 text-start text-sm leading-tight">
-									<span class="truncate font-medium text-sidebar-foreground"
-										>{authState.user?.email?.split('@')[0] || m.common_untitled_user()}</span
+									<span class="truncate font-medium text-sidebar-foreground">{userDisplayName}</span
 									>
 									<span class="truncate text-xs text-sidebar-foreground/70"
 										>{authState.user?.email}</span
@@ -486,14 +513,15 @@
 						<DropdownMenu.Label class="p-0 font-normal">
 							<div class="flex items-center gap-2 px-1 py-1.5 text-start text-sm">
 								<Avatar.Root class="size-8 rounded-lg">
+									{#if userAvatarURL}
+										<Avatar.Image src={userAvatarURL} alt={userDisplayName} />
+									{/if}
 									<Avatar.Fallback class="rounded-lg bg-primary text-primary-foreground">
-										{authState.user?.email?.charAt(0).toUpperCase() || 'U'}
+										{userInitials}
 									</Avatar.Fallback>
 								</Avatar.Root>
 								<div class="grid flex-1 text-start text-sm leading-tight">
-									<span class="truncate font-medium"
-										>{authState.user?.email?.split('@')[0] || m.common_untitled_user()}</span
-									>
+									<span class="truncate font-medium">{userDisplayName}</span>
 									<span class="truncate text-xs text-muted-foreground">{authState.user?.email}</span
 									>
 								</div>
@@ -503,6 +531,10 @@
 
 						<!-- Navigation items moved here -->
 						<DropdownMenu.Group>
+							<DropdownMenu.Item onclick={() => goto('/settings?tab=account')}>
+								<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
+								<span>Account settings</span>
+							</DropdownMenu.Item>
 							<DropdownMenu.Item onclick={() => goto('/accounts')}>
 								<UsersIcon class="mr-2 size-4 text-muted-foreground" />
 								<span>{m.sidebar_accounts()}</span>
@@ -515,7 +547,7 @@
 								<LightbulbIcon class="mr-2 size-4 text-muted-foreground" />
 								<span>{m.sidebar_prompts()}</span>
 							</DropdownMenu.Item>
-							<DropdownMenu.Item onclick={() => goto('/settings')}>
+							<DropdownMenu.Item onclick={() => goto('/settings?tab=workspace')}>
 								<SettingsIcon class="mr-2 size-4 text-muted-foreground" />
 								<span>{m.sidebar_settings()}</span>
 							</DropdownMenu.Item>

@@ -21,12 +21,8 @@ test("settings shows billing plan controls for an authenticated workspace", asyn
   }, auth.token);
   await page.goto("/settings");
 
-  await expect(page.getByTestId("settings-section-nav")).toBeVisible();
-  await expect(
-    page
-      .getByTestId("settings-section-nav")
-      .getByRole("link", { name: "Billing" }),
-  ).toHaveAttribute("href", "#billing");
+  await expect(page.getByTestId("settings-tabs")).toBeVisible();
+  await page.getByRole("tab", { name: "Organization" }).click();
   await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
   await expect(page.getByText("No active plan")).toBeVisible();
   await expect(
@@ -34,10 +30,16 @@ test("settings shows billing plan controls for an authenticated workspace", asyn
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Start Checkout" }),
-  ).toHaveCount(3);
+  ).toHaveCount(5);
   await expect(page.getByRole("heading", { name: "Starter" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Creator" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Pro" })).toBeVisible();
+  await expect(
+    page.locator("#billing").getByRole("heading", { name: "Team" }),
+  ).toBeVisible();
+  await expect(
+    page.locator("#billing").getByRole("heading", { name: "Agency" }),
+  ).toBeVisible();
 });
 
 test("settings lets instance admins manage provider apps", async ({ page }) => {
@@ -63,6 +65,8 @@ test("settings lets instance admins manage provider apps", async ({ page }) => {
       json: {
         id: "admin-1",
         email: "admin@example.com",
+        display_name: "Admin User",
+        avatar_url: "",
         is_admin: true,
         created_at: "2026-07-01T00:00:00Z",
       },
@@ -74,16 +78,19 @@ test("settings lets instance admins manage provider apps", async ({ page }) => {
       json: [
         {
           id: "ws-1",
+          organization_id: "org-1",
+          organization_name: "Admin Org",
           name: "Admin Settings",
           created_at: "2026-07-01T00:00:00Z",
         },
       ],
     });
   });
-  await page.route("**/api/v1/billing/status?**", async (route) => {
+  await page.route("**/api/v1/organizations/org-1/billing/status", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       json: {
+        organization_id: "org-1",
         workspace_id: "ws-1",
         status: "inactive",
         cancel_at_period_end: false,
@@ -109,6 +116,8 @@ test("settings lets instance admins manage provider apps", async ({ page }) => {
         user: {
           id: "admin-1",
           email: "admin@example.com",
+          display_name: "Admin User",
+          avatar_url: "",
           created_at: "2026-07-01T00:00:00Z",
         },
         totp_enabled: false,
@@ -181,11 +190,7 @@ test("settings lets instance admins manage provider apps", async ({ page }) => {
 
   await page.goto("/settings");
 
-  await expect(
-    page
-      .getByTestId("settings-section-nav")
-      .getByRole("link", { name: "Provider Apps" }),
-  ).toHaveAttribute("href", "#provider-apps");
+  await page.getByRole("tab", { name: "Admin" }).click();
   await expect(page.getByTestId("provider-apps-settings")).toBeVisible();
 
   await page.locator("#provider-app-name").fill("Production X");
@@ -251,6 +256,7 @@ test("settings shows recent MCP activity for an authenticated user", async ({
     window.localStorage.setItem("token", token);
   }, auth.token);
   await page.goto("/settings");
+  await page.getByRole("tab", { name: "Account" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Recent MCP Activity" }),
@@ -259,6 +265,34 @@ test("settings shows recent MCP activity for an authenticated user", async ({
     "list_workspaces",
   );
   await expect(page.getByTestId("mcp-activity-list")).toContainText("success");
+});
+
+test("settings account tab updates the user profile", async ({
+  page,
+  request,
+}) => {
+  const unique = Date.now().toString(36);
+  const email = `profile-${unique}@example.com`;
+
+  const auth = await registerUser(request, email);
+  await createWorkspace(request, auth.token, "Profile E2E");
+
+  await page.addInitScript((token) => {
+    window.localStorage.setItem("token", token);
+  }, auth.token);
+  await page.goto("/settings?tab=account");
+
+  await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+  await page.getByLabel("Display name").fill("Profile E2E User");
+  await page.getByRole("button", { name: "Save Profile" }).click();
+  await expect(page.getByText("Profile updated")).toBeVisible();
+
+  const me = await request.get("/api/v1/auth/me", {
+    headers: { Authorization: `Bearer ${auth.token}` },
+  });
+  expect(me.ok()).toBeTruthy();
+  const meBody = await me.json();
+  expect(meBody.display_name).toBe("Profile E2E User");
 });
 
 test("settings lists and revokes active web sessions", async ({
@@ -281,22 +315,26 @@ test("settings lists and revokes active web sessions", async ({
     window.localStorage.setItem("token", token);
   }, auth.token);
   await page.goto("/settings");
+  await page.getByRole("tab", { name: "Account" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Active Sessions" }),
   ).toBeVisible();
   await expect(page.getByTestId("auth-session-list")).toContainText("Current");
   await expect(page.getByTestId("auth-session-list")).toContainText(
+    "Browser on device",
+  );
+  await expect(page.getByTestId("auth-session-list")).not.toContainText(
     "E2E Other Browser",
   );
 
   page.on("dialog", (dialog) => dialog.accept());
   const otherSession = page
     .getByTestId("auth-session-row")
-    .filter({ hasText: "E2E Other Browser" });
+    .filter({ hasText: "Browser on device" });
   await otherSession.getByRole("button", { name: "Revoke" }).click();
   await expect(page.getByTestId("auth-session-list")).not.toContainText(
-    "E2E Other Browser",
+    "Browser on device",
   );
 });
 
@@ -311,6 +349,7 @@ test("settings creates MCP-scoped API tokens", async ({ page, request }) => {
     window.localStorage.setItem("token", token);
   }, auth.token);
   await page.goto("/settings");
+  await page.getByRole("tab", { name: "Account" }).click();
 
   await expect(page.getByTestId("api-token-scope")).toContainText(
     "MCP / ChatGPT App",
@@ -341,13 +380,11 @@ test("settings creates and accepts workspace invitations", async ({
     window.localStorage.setItem("token", token);
   }, adminAuth.token);
   await page.goto("/settings");
+  await page.getByRole("tab", { name: "Organization" }).click();
 
   await expect(
-    page
-      .getByTestId("settings-section-nav")
-      .getByRole("link", { name: "Team" }),
-  ).toHaveAttribute("href", "#team");
-  await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
+    page.locator("#team").getByRole("heading", { name: "Team" }),
+  ).toBeVisible();
 
   await page.getByTestId("team-invite-email").fill(inviteEmail);
   await page.getByRole("button", { name: "Send Invite" }).click();
@@ -385,9 +422,9 @@ test("settings creates and accepts workspace invitations", async ({
   await expect(invitedPage.getByText("editor access")).toBeVisible();
 
   await invitedPage.getByRole("button", { name: "Open Settings" }).click();
-  await expect(invitedPage).toHaveURL(/\/settings#team$/);
+  await expect(invitedPage).toHaveURL(/\/settings\?tab=organization$/);
   await expect(
-    invitedPage.getByRole("heading", { name: "Team" }),
+    invitedPage.locator("#team").getByRole("heading", { name: "Team" }),
   ).toBeVisible();
   await expect(invitedPage.getByTestId("team-members-list")).toContainText(
     inviteEmail,
@@ -401,9 +438,11 @@ test("plan selection from signup starts checkout after onboarding", async ({
   const unique = Date.now().toString(36);
   const email = `plan-signup-${unique}@example.com`;
   let checkoutBody: { workspace_id?: string; plan_id?: string } | undefined;
+  let checkoutURL = "";
 
   await routeBrowserRegistration(page, email);
-  await page.route("**/api/v1/billing/checkout", async (route) => {
+  await page.route("**/api/v1/**/billing/checkout", async (route) => {
+    checkoutURL = route.request().url();
     checkoutBody = JSON.parse(route.request().postData() ?? "{}");
     await route.fulfill({
       contentType: "application/json",
@@ -422,6 +461,6 @@ test("plan selection from signup starts checkout after onboarding", async ({
   await page.getByRole("button", { name: "Get Started" }).click();
 
   await expect(page).toHaveURL(/\/settings\?checkout=creator/);
-  expect(checkoutBody?.workspace_id).toBeTruthy();
+  expect(checkoutURL).toContain("/organizations/");
   expect(checkoutBody?.plan_id).toBe("creator");
 });

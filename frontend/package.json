@@ -23,6 +23,7 @@
 		"generate:types": "openapi-typescript openapi.json -o src/lib/api/types.d.ts"
 	},
 	"devDependencies": {
+		"@capacitor/assets": "^3.0.5",
 		"@eslint/compat": "^2.0.2",
 		"@eslint/js": "^9.39.2",
 		"@inlang/paraglide-js": "^2.10.0",
@@ -55,7 +56,6 @@
 		"vaul-svelte": "^1.0.0-next.7",
 		"vite": "^7.3.1",
 		"vite-plugin-pwa": "^1.1.0",
-		"@capacitor/assets": "^3.0.5",
 		"vitest": "^4.1.0",
 		"vitest-browser-svelte": "^2.0.2"
 	},
@@ -67,6 +67,12 @@
 		"@capacitor/splash-screen": "^8.0.1",
 		"@capacitor/status-bar": "^8.0.2",
 		"@fontsource-variable/geist": "^5.2.8",
+		"@uppy/core": "^5.2.0",
+		"@uppy/dashboard": "^5.1.1",
+		"@uppy/image-editor": "^4.2.0",
+		"@uppy/svelte": "^5.2.0",
+		"@uppy/webcam": "^5.1.0",
+		"@uppy/xhr-upload": "^5.2.0",
 		"bits-ui": "^2.16.3",
 		"clsx": "^2.1.1",
 		"estree-walker": "2.0.2",

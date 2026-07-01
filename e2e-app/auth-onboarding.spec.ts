@@ -54,11 +54,13 @@ test("login honors same-origin redirects for existing workspaces", async ({
   const auth = await registerUser(request, email);
   await createWorkspace(request, auth.token, "Login Redirect E2E");
 
-  await page.goto(`/login?redirect=${encodeURIComponent("/settings#billing")}`);
+  await page.goto(
+    `/login?redirect=${encodeURIComponent("/settings?tab=organization")}`,
+  );
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign In" }).click();
 
-  await expect(page).toHaveURL(/\/settings#billing$/);
+  await expect(page).toHaveURL(/\/settings\?tab=organization$/);
   await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
 });

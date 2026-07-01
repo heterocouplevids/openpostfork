@@ -177,6 +177,30 @@ export const billingPlans = [
 		price: '$24',
 		description: 'Higher limits for teams, heavier media use, and larger publishing operations.',
 		limits: ['10 workspaces', '15 social accounts', '2,500 scheduled posts/month', '25 GB media']
+	},
+	{
+		id: 'team',
+		name: 'Team',
+		price: '$49',
+		description: 'Seat-based collaboration for small teams and multi-brand operators.',
+		limits: [
+			'10 workspaces',
+			'25 social accounts',
+			'5,000 scheduled posts/month',
+			'3 included seats'
+		]
+	},
+	{
+		id: 'agency',
+		name: 'Agency',
+		price: '$99',
+		description: 'Agency workspace management with higher account and media limits.',
+		limits: [
+			'50 workspaces',
+			'150 social accounts',
+			'25,000 scheduled posts/month',
+			'5 included seats'
+		]
 	}
 ];
 
@@ -209,6 +233,8 @@ export interface SecurityStatus {
 	user: {
 		id: string;
 		email: string;
+		display_name?: string;
+		avatar_url?: string;
 		created_at: string;
 	};
 	totp_enabled: boolean;
@@ -219,6 +245,7 @@ export interface SecurityStatus {
 export interface AuthSessionSummary {
 	id: string;
 	user_agent: string;
+	device_name?: string;
 	ip_address: string;
 	current: boolean;
 	expires_at: string;
@@ -253,6 +280,7 @@ export interface MCPActivityItem {
 }
 
 export interface BillingStatus {
+	organization_id: string;
 	workspace_id: string;
 	provider?: string;
 	status: string;

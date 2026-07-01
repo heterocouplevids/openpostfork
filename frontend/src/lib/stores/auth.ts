@@ -129,6 +129,13 @@ function createAuthStore() {
 			setToken(null);
 			localStorage.removeItem('token');
 			set({ user: null, isLoading: false, isAuthenticated: false });
+		},
+		setUser(user: User | null) {
+			update((state) => ({
+				...state,
+				user,
+				isAuthenticated: Boolean(user)
+			}));
 		}
 	};
 }
