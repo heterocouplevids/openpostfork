@@ -88,8 +88,8 @@ test("accounts page shows configured and unavailable providers", async ({
           display_name: "Facebook",
           auth_mode: "oauth",
           configured: false,
-          status: "planned",
-          description: "Planned adapter for Facebook Pages publishing.",
+          status: "needs_configuration",
+          description: "Requires a Meta provider app.",
           capabilities: ["Page posts", "Media posts", "Scheduling"],
         },
         {
@@ -130,7 +130,14 @@ test("accounts page shows configured and unavailable providers", async ({
       .getByRole("button", { name: "Connect" }),
   ).toBeEnabled();
 
-  for (const platform of ["x", "mastodon", "linkedin", "threads", "tiktok"]) {
+  for (const platform of [
+    "x",
+    "mastodon",
+    "linkedin",
+    "threads",
+    "facebook",
+    "tiktok",
+  ]) {
     await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
       "Needs app config",
     );
@@ -141,7 +148,7 @@ test("accounts page shows configured and unavailable providers", async ({
     ).toBeDisabled();
   }
 
-  for (const platform of ["instagram", "facebook", "youtube"]) {
+  for (const platform of ["instagram", "youtube"]) {
     await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
       "Planned",
     );

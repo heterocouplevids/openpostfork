@@ -69,6 +69,25 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 | `THREADS_CLIENT_ID` | Yes for Threads | empty | Meta app ID. Leave empty to disable Threads. |
 | `THREADS_CLIENT_SECRET` | Yes for Threads | empty | Meta app secret. |
 | `THREADS_REDIRECT_URI` | No | derived from `OPENPOST_APP_URL` | Threads callback URL override. Threads production redirects must use HTTPS. |
+| `META_GRAPH_API_VERSION` | No | `v25.0` | Meta Graph API version used by the Facebook Pages adapter. |
+
+## Facebook
+
+Facebook Pages publishing is configured through `OPENPOST_PROVIDER_APPS` instead of legacy provider-specific env vars.
+
+Example:
+
+```json
+[
+  {
+    "provider": "facebook",
+    "client_id": "your-meta-app-id",
+    "client_secret": "your-meta-app-secret"
+  }
+]
+```
+
+If `redirect_uri` is omitted, OpenPost derives `https://your-domain.com/api/v1/accounts/facebook/callback` from `OPENPOST_APP_URL`. Facebook media publishing requires `OPENPOST_MEDIA_URL` or `OPENPOST_S3_PUBLIC_BASE_URL` to point at public HTTPS media URLs.
 
 ## TikTok
 
@@ -92,8 +111,8 @@ TikTok direct video publishing requires `OPENPOST_MEDIA_URL` or `OPENPOST_S3_PUB
 ## Notes
 
 - The preferred names above are what new deployments should use.
-- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. It currently supports implemented adapters only: `x`, `mastodon`, `linkedin`, `threads`, and `tiktok`; Bluesky is enabled separately through app-password login. Planned providers such as Instagram, Facebook, and YouTube are visible in provider discovery but are rejected in app config until their adapters land.
+- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. It currently supports implemented adapters only: `x`, `mastodon`, `linkedin`, `threads`, `facebook`, and `tiktok`; Bluesky is enabled separately through app-password login. Planned providers such as Instagram and YouTube are visible in provider discovery but are rejected in app config until their adapters land.
 - Backward-compatible aliases still work for existing installs: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.
 - The root `.env.example` is the best copy-paste starting point.
 - Set explicit public URLs in production even when defaults exist.
-- For Threads and TikTok, treat `OPENPOST_MEDIA_URL` as mandatory unless S3/R2 public media URLs are configured.
+- For Threads, Facebook, and TikTok, treat `OPENPOST_MEDIA_URL` as mandatory unless S3/R2 public media URLs are configured.

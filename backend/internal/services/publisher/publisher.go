@@ -545,7 +545,7 @@ func isExpiredTokenError(err error) bool {
 }
 
 func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.Adapter, token string, media models.MediaAttachment) (string, error) {
-	if account.Platform == "threads" || account.Platform == "tiktok" {
+	if account.Platform == "threads" || account.Platform == "tiktok" || account.Platform == "facebook" {
 		return s.getPublicMediaURL(media), nil
 	}
 

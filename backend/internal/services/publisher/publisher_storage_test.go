@@ -113,3 +113,24 @@ func TestUploadMediaToPlatformUsesPublicURLForTikTok(t *testing.T) {
 	require.Empty(t, storage.opened)
 	require.Empty(t, adapter.uploadedBody)
 }
+
+func TestUploadMediaToPlatformUsesPublicURLForFacebook(t *testing.T) {
+	storage := &fakePublisherStorage{body: "stored-media"}
+	adapter := &fakePublisherAdapter{}
+	service := NewService(nil, nil)
+	service.SetStorage(storage)
+	service.SetPublicMediaURL("https://media.openpost.test/media")
+
+	got, err := service.uploadMediaToPlatform(
+		context.Background(),
+		&models.SocialAccount{Platform: "facebook", AccountID: "acct-1"},
+		adapter,
+		"token",
+		models.MediaAttachment{ID: "media-1", FilePath: "media/example.jpg", MimeType: "image/jpeg"},
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, "https://media.openpost.test/media/media-1.jpg", got)
+	require.Empty(t, storage.opened)
+	require.Empty(t, adapter.uploadedBody)
+}

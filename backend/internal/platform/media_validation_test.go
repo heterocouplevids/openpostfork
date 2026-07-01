@@ -57,3 +57,23 @@ func TestValidateMediaTikTokRequiresOneVideo(t *testing.T) {
 		t.Fatalf("expected no issues for one video, got %#v", issues)
 	}
 }
+
+func TestValidateMediaFacebookRejectsMultipleAttachments(t *testing.T) {
+	RegisterAllMediaValidators()
+
+	issues := ValidateMedia(providerFacebook, []MediaItem{
+		{ID: "first", MimeType: "image/png"},
+		{ID: "second", MimeType: "image/png"},
+	})
+	if len(issues) != 1 {
+		t.Fatalf("expected one issue, got %d", len(issues))
+	}
+	if issues[0].Severity != severityError {
+		t.Fatalf("expected error severity, got %q", issues[0].Severity)
+	}
+
+	issues = ValidateMedia(providerFacebook, []MediaItem{{ID: "image", MimeType: "image/png"}})
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues for one attachment, got %#v", issues)
+	}
+}

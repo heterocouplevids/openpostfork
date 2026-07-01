@@ -35,6 +35,7 @@ var MediaValidators = map[string]MediaValidator{}
 
 func RegisterAllMediaValidators() {
 	MediaValidators[providerBluesky] = validateBlueskyMedia
+	MediaValidators[providerFacebook] = validateFacebookMedia
 	MediaValidators[providerLinkedIn] = validateLinkedInMedia
 	MediaValidators[providerMastodon] = validateMastodonMedia
 	MediaValidators[providerTikTok] = validateTikTokMedia

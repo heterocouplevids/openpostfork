@@ -106,7 +106,7 @@ func TestListProvidersReportsConfiguredProviders(t *testing.T) {
 	require.Equal(t, providerStatusPlanned, out[5].Status)
 	require.False(t, out[5].Configured)
 	require.Equal(t, "facebook", out[6].Platform)
-	require.Equal(t, providerStatusPlanned, out[6].Status)
+	require.Equal(t, providerStatusNeedsConfiguration, out[6].Status)
 	require.Equal(t, "youtube", out[7].Platform)
 	require.Equal(t, providerStatusPlanned, out[7].Status)
 	require.Equal(t, "tiktok", out[8].Platform)

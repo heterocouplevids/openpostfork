@@ -15,24 +15,23 @@ The provider discovery API returns current and planned providers so clients can 
 | Provider  | Initial product focus                                                                       |
 | --------- | ------------------------------------------------------------------------------------------- |
 | Instagram | Images, Reels, scheduling, per-platform variants, agent workflows.                          |
-| Facebook  | Facebook Pages publishing, media posts, scheduling, per-platform variants, agent workflows. |
 | YouTube   | Shorts, video publishing, scheduling, agent workflows.                                      |
 
 ## Implemented first slices
 
 | Provider | Current product focus                                                                                   |
 | -------- | ------------------------------------------------------------------------------------------------------- |
+| Facebook | Selected Page publishing for text, one public HTTPS image URL, or one public HTTPS video URL. |
 | TikTok   | One-video direct publishing through public HTTPS media URLs, scheduling, per-platform variants, MCP workflows. |
 
 ## Account-selection requirement
 
 Some planned providers cannot be modeled as a single OAuth user profile:
 
-- Facebook should connect a selected Page and save the Page token.
 - Instagram should connect the selected Instagram Business account behind a Facebook Page.
 - YouTube should connect the selected channel.
 
-These adapters must implement the backend account-selection flow before they move from `planned` to connectable. TikTok uses a direct OAuth account flow and is connectable when configured, but its initial adapter is intentionally video-only.
+Instagram and YouTube must implement the backend account-selection flow before they move from `planned` to connectable. Facebook already uses this flow to connect a selected Page and save the Page token. TikTok uses a direct OAuth account flow and is connectable when configured, but its initial adapter is intentionally video-only.
 
 ## Implementation contract
 

@@ -47,6 +47,12 @@ var appBuilders = map[string]appBuilder{
 	providerBluesky: func(_ AppConfig, _ RegistryOptions) (Adapter, error) {
 		return NewBlueskyAdapter(""), nil
 	},
+	providerFacebook: func(app AppConfig, _ RegistryOptions) (Adapter, error) {
+		if strings.TrimSpace(app.ClientID) == "" {
+			return nil, fmt.Errorf("facebook provider app requires client_id")
+		}
+		return NewFacebookAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
+	},
 	providerLinkedIn: func(app AppConfig, opts RegistryOptions) (Adapter, error) {
 		if strings.TrimSpace(app.ClientID) == "" {
 			return nil, fmt.Errorf("linkedin provider app requires client_id")

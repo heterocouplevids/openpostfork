@@ -246,9 +246,11 @@ func defaultProviderAppConfig(cfg *Config, apps []platform.AppConfig) []platform
 func providerRedirectURI(cfg *Config, provider string) string {
 	redirects := map[string]string{
 		"x":        cfg.TwitterRedirectURI,
+		"facebook": oauthRedirectFromFrontend("", "", cfg.FrontendURL, "/api/v1/accounts/facebook/callback"),
 		"mastodon": cfg.MastodonRedirectURI,
 		"linkedin": cfg.LinkedInRedirectURI,
 		"threads":  cfg.ThreadsRedirectURI,
+		"tiktok":   oauthRedirectFromFrontend("", "", cfg.FrontendURL, "/api/v1/accounts/tiktok/callback"),
 	}
 	return redirects[provider]
 }

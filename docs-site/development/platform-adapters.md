@@ -9,13 +9,14 @@ Provider integrations live under `backend/internal/platform/`.
 - `bluesky.go`
 - `linkedin.go`
 - `threads.go`
+- `facebook.go`
 - `tiktok.go`
 
 ## Account selection
 
-Most current providers can save a connected account directly after OAuth profile lookup. Some larger platforms need a second step:
+Most providers can save a connected account directly after OAuth profile lookup. Some larger platforms need a second step:
 
-- Facebook requires selecting a Page.
+- Facebook uses this flow to select a Page and save the Page token.
 - Instagram Business requires selecting the connected Instagram account behind a Facebook Page.
 - YouTube requires selecting a channel.
 

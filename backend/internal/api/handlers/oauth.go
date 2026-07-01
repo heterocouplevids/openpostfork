@@ -116,7 +116,7 @@ type ListMastodonServersOutput struct {
 }
 
 type GetAuthURLInput struct {
-	Platform    string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads)"`
+	Platform    string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads, facebook, tiktok)"`
 	WorkspaceID string `query:"workspace_id" required:"true" doc:"Workspace ID to link account to"`
 	ServerName  string `query:"server_name" doc:"Mastodon server name from config (required for mastodon)"`
 	InstanceURL string `query:"instance_url" doc:"Mastodon instance URL to dynamically register"`
@@ -264,8 +264,7 @@ var providerCatalog = []ProviderInfo{
 		Platform:     "facebook",
 		DisplayName:  "Facebook",
 		AuthMode:     "oauth",
-		Status:       providerStatusPlanned,
-		Description:  "Planned Meta adapter for Facebook Pages publishing.",
+		Description:  "Meta OAuth connection for Facebook Pages publishing.",
 		Capabilities: []string{"Page posts", "Media posts", "Scheduling", "Platform variants", "MCP workflows"},
 	},
 	{

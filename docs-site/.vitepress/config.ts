@@ -88,6 +88,7 @@ const docsSidebar = [
 			{ text: 'Bluesky', link: '/providers/bluesky' },
 			{ text: 'LinkedIn', link: '/providers/linkedin' },
 			{ text: 'Threads', link: '/providers/threads' },
+			{ text: 'Facebook', link: '/providers/facebook' },
 			{ text: 'TikTok', link: '/providers/tiktok' },
 		],
 	},
@@ -144,7 +145,7 @@ const developmentSidebar = [
 
 export default defineConfig({
 	title: 'OpenPost',
-	description: 'Self-hosted Buffer/Hootsuite alternative. Schedule posts to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server.',
+	description: 'Self-hosted Buffer/Hootsuite alternative. Schedule posts to X, Mastodon, Bluesky, Threads, LinkedIn, Facebook Pages, and TikTok from your own server.',
 	base: docsBase,
 	cleanUrls: true,
 	lastUpdated: true,
@@ -152,7 +153,7 @@ export default defineConfig({
 		['link', { rel: 'icon', href: `${docsBase}assets/brand/icon.svg` }],
 		['meta', { property: 'og:type', content: 'website' }],
 		['meta', { property: 'og:title', content: 'OpenPost' }],
-		['meta', { property: 'og:description', content: 'Self-hosted Buffer/Hootsuite alternative. Schedule posts to X, Mastodon, Bluesky, Threads, and LinkedIn from your own server.' }],
+		['meta', { property: 'og:description', content: 'Self-hosted Buffer/Hootsuite alternative. Schedule posts to X, Mastodon, Bluesky, Threads, LinkedIn, Facebook Pages, and TikTok from your own server.' }],
 		['meta', { property: 'og:image', content: `${docsBase}assets/brand/og-image.svg` }],
 	],
 	themeConfig: {
