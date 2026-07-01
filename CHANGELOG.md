@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.21] - 2026-07-01
+
 ### Fixed
 - Installed Playwright Chromium in local, CI, and release frontend test gates before browser-backed Vitest and E2E checks run.
 
