@@ -40,6 +40,187 @@ test("settings shows billing plan controls for an authenticated workspace", asyn
   await expect(page.getByRole("heading", { name: "Pro" })).toBeVisible();
 });
 
+test("settings lets instance admins manage provider apps", async ({ page }) => {
+  let providerApps: Array<{
+    id: string;
+    provider: string;
+    name?: string;
+    client_id: string;
+    redirect_uri?: string;
+    instance_url?: string;
+    is_active: boolean;
+    secret_configured: boolean;
+    created_at: string;
+    updated_at: string;
+  }> = [];
+
+  await page.addInitScript(() => {
+    window.localStorage.setItem("token", "admin-settings-token");
+  });
+  await page.route("**/api/v1/auth/me", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        id: "admin-1",
+        email: "admin@example.com",
+        is_admin: true,
+        created_at: "2026-07-01T00:00:00Z",
+      },
+    });
+  });
+  await page.route("**/api/v1/workspaces**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: [
+        {
+          id: "ws-1",
+          name: "Admin Settings",
+          created_at: "2026-07-01T00:00:00Z",
+        },
+      ],
+    });
+  });
+  await page.route("**/api/v1/billing/status?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        workspace_id: "ws-1",
+        status: "inactive",
+        cancel_at_period_end: false,
+        limits: {},
+        usage: {},
+        period_start: "2026-07-01T00:00:00Z",
+      },
+    });
+  });
+  await page.route("**/api/v1/workspaces/ws-1/team", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: { members: [], invitations: [], current_seats: 0 },
+    });
+  });
+  await page.route("**/api/v1/posting-schedules?**", async (route) => {
+    await route.fulfill({ contentType: "application/json", json: [] });
+  });
+  await page.route("**/api/v1/auth/security", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        user: {
+          id: "admin-1",
+          email: "admin@example.com",
+          created_at: "2026-07-01T00:00:00Z",
+        },
+        totp_enabled: false,
+        passkeys: [],
+        methods: [],
+      },
+    });
+  });
+  await page.route("**/api/v1/auth/sessions", async (route) => {
+    await route.fulfill({ contentType: "application/json", json: [] });
+  });
+  await page.route("**/api/v1/api-tokens", async (route) => {
+    await route.fulfill({ contentType: "application/json", json: [] });
+  });
+  await page.route("**/api/v1/mcp/activity?**", async (route) => {
+    await route.fulfill({ contentType: "application/json", json: [] });
+  });
+  await page.route("**/api/v1/admin/provider-apps", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        contentType: "application/json",
+        json: providerApps,
+      });
+      return;
+    }
+    const body = route.request().postDataJSON() as {
+      provider: string;
+      name?: string;
+      client_id: string;
+      client_secret?: string;
+      redirect_uri?: string;
+      instance_url?: string;
+      is_active?: boolean;
+    };
+    const existing = providerApps.find(
+      (app) =>
+        app.provider === body.provider &&
+        (app.instance_url ?? "") === (body.instance_url ?? ""),
+    );
+    const saved = {
+      id: existing?.id ?? "provider-app-1",
+      provider: body.provider,
+      name: body.name,
+      client_id: body.client_id,
+      redirect_uri: body.redirect_uri,
+      instance_url: body.instance_url,
+      is_active: body.is_active ?? true,
+      secret_configured: Boolean(
+        body.client_secret || existing?.secret_configured,
+      ),
+      created_at: existing?.created_at ?? "2026-07-01T00:00:00Z",
+      updated_at: "2026-07-01T00:00:00Z",
+    };
+    providerApps = existing
+      ? providerApps.map((app) => (app.id === existing.id ? saved : app))
+      : [...providerApps, saved];
+    await route.fulfill({
+      contentType: "application/json",
+      json: { app: saved, existed: Boolean(existing), requires_restart: true },
+    });
+  });
+  await page.route("**/api/v1/admin/provider-apps/*", async (route) => {
+    const id = route.request().url().split("/").pop();
+    providerApps = providerApps.filter((app) => app.id !== id);
+    await route.fulfill({
+      contentType: "application/json",
+      json: { requires_restart: true },
+    });
+  });
+
+  await page.goto("/settings");
+
+  await expect(
+    page
+      .getByTestId("settings-section-nav")
+      .getByRole("link", { name: "Provider Apps" }),
+  ).toHaveAttribute("href", "#provider-apps");
+  await expect(page.getByTestId("provider-apps-settings")).toBeVisible();
+
+  await page.locator("#provider-app-name").fill("Production X");
+  await page.getByTestId("provider-app-client-id").fill("x-client-id");
+  await page.getByTestId("provider-app-client-secret").fill("x-client-secret");
+  await page.getByTestId("provider-app-save").click();
+
+  await expect(page.getByTestId("provider-app-restart-required")).toBeVisible();
+  await expect(page.getByTestId("provider-app-list")).toContainText(
+    "X / Twitter",
+  );
+  await expect(page.getByTestId("provider-app-list")).toContainText(
+    "Production X",
+  );
+  await expect(page.getByTestId("provider-app-list")).toContainText("stored");
+
+  const providerAppRow = page.getByTestId("provider-app-row");
+  await providerAppRow.getByRole("button", { name: "Edit" }).click();
+  await expect(page.getByTestId("provider-app-client-id")).toHaveValue(
+    "x-client-id",
+  );
+  await page.getByTestId("provider-app-client-id").fill("x-client-id-rotated");
+  await page.getByTestId("provider-app-save").click();
+  await expect(page.getByTestId("provider-app-list")).toContainText(
+    "x-client-id-rotated",
+  );
+  await expect(page.getByTestId("provider-app-list")).toContainText("stored");
+
+  page.on("dialog", (dialog) => dialog.accept());
+  await providerAppRow.getByRole("button", { name: "Delete" }).click();
+  await expect(
+    page.getByText("No database-backed provider apps are configured yet"),
+  ).toBeVisible();
+});
+
 test("settings shows recent MCP activity for an authenticated user", async ({
   page,
   request,

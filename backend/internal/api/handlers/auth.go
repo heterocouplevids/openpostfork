@@ -155,6 +155,7 @@ type RemovePasskeyInput struct {
 type UserProfile struct {
 	ID        string    `json:"id" doc:"User ID"`
 	Email     string    `json:"email" doc:"User email address"`
+	IsAdmin   bool      `json:"is_admin" doc:"Whether this user can manage instance-level settings"`
 	CreatedAt time.Time `json:"created_at" doc:"Account creation time"`
 }
 
@@ -1133,6 +1134,7 @@ func toUserProfile(user *models.User) *UserProfile {
 	return &UserProfile{
 		ID:        user.ID,
 		Email:     user.Email,
+		IsAdmin:   user.IsAdmin,
 		CreatedAt: user.CreatedAt,
 	}
 }

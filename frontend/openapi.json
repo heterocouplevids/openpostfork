@@ -3607,9 +3607,13 @@
 					"id": {
 						"description": "User ID",
 						"type": "string"
+					},
+					"is_admin": {
+						"description": "Whether this user can manage instance-level settings",
+						"type": "boolean"
 					}
 				},
-				"required": ["id", "email", "created_at"],
+				"required": ["id", "email", "is_admin", "created_at"],
 				"type": "object"
 			},
 			"UserSessionSummary": {

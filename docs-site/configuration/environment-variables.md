@@ -45,6 +45,8 @@ Database rows are intended for hosted/operator-managed installs. They store `cli
 
 Instance admins can manage encrypted database rows through `GET /api/v1/admin/provider-apps`, `POST /api/v1/admin/provider-apps`, and `DELETE /api/v1/admin/provider-apps/{id}`. API responses never return client secrets; send `client_secret` only when creating a row or rotating the existing secret.
 
+The web app also exposes this registry in **Settings -> Provider Apps** for instance admins. Saves and deletes take effect after the next OpenPost server restart.
+
 ## X
 
 | Variable | Required | Default | Description |

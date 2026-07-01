@@ -3142,6 +3142,8 @@ export interface components {
             email: string;
             /** @description User ID */
             id: string;
+            /** @description Whether this user can manage instance-level settings */
+            is_admin: boolean;
         };
         UserSessionSummary: {
             /**

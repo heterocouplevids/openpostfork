@@ -34,6 +34,7 @@
 	import LogOutIcon from 'lucide-svelte/icons/log-out';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { client } from '$lib/api/client';
+	import type { components } from '$lib/api/types';
 	import { getLocaleTag } from '$lib/i18n';
 	import { hostedPlanFromSearchParams } from '$lib/billing';
 
@@ -196,6 +197,14 @@
 	let inviteEmail = $state('');
 	let inviteRole = $state('editor');
 	let createdInviteURL = $state('');
+	let providerApps = $state.raw<ProviderApp[]>([]);
+	let providerAppsLoading = $state(false);
+	let providerAppsBusy = $state(false);
+	let providerAppsError = $state('');
+	let providerAppsRestartRequired = $state(false);
+	let editingProviderAppID = $state('');
+	let providerAppForm = $state<ProviderAppForm>(emptyProviderAppForm());
+	let providerAppsLoadedForAdmin = false;
 
 	interface APITokenSummary {
 		id: string;
@@ -262,7 +271,76 @@
 		current_seats: number;
 	}
 
+	type ProviderApp = components['schemas']['ProviderAppResponse'];
+	type SaveProviderAppInput = components['schemas']['SaveProviderAppInputBody'];
+
+	interface ProviderAppForm {
+		provider: string;
+		name: string;
+		client_id: string;
+		client_secret: string;
+		redirect_uri: string;
+		instance_url: string;
+		is_active: boolean;
+	}
+
+	function emptyProviderAppForm(): ProviderAppForm {
+		return {
+			provider: 'x',
+			name: '',
+			client_id: '',
+			client_secret: '',
+			redirect_uri: '',
+			instance_url: '',
+			is_active: true
+		};
+	}
+
+	const providerAppOptions = [
+		{
+			value: 'x',
+			label: 'X / Twitter',
+			description: 'OAuth app for X publishing and account connection.'
+		},
+		{
+			value: 'mastodon',
+			label: 'Mastodon',
+			description: 'OAuth app for one federated Mastodon instance.'
+		},
+		{
+			value: 'linkedin',
+			label: 'LinkedIn',
+			description: 'LinkedIn app for company and member posting.'
+		},
+		{
+			value: 'threads',
+			label: 'Threads',
+			description: 'Meta app credentials for Threads publishing.'
+		},
+		{
+			value: 'facebook',
+			label: 'Facebook Pages',
+			description: 'Meta app credentials for Facebook Page publishing.'
+		},
+		{
+			value: 'instagram',
+			label: 'Instagram Business',
+			description: 'Meta app credentials for Instagram media publishing.'
+		},
+		{
+			value: 'youtube',
+			label: 'YouTube',
+			description: 'Google OAuth app for YouTube channel uploads.'
+		},
+		{
+			value: 'tiktok',
+			label: 'TikTok',
+			description: 'TikTok developer app for video publishing.'
+		}
+	];
+
 	const authState = $derived($auth);
+	const userIsInstanceAdmin = $derived(Boolean(authState.user?.is_admin));
 	const passkeyCount = $derived(securityStatus?.passkeys.length ?? 0);
 	const teamMembers = $derived(workspaceTeam?.members ?? []);
 	const pendingInvitations = $derived(workspaceTeam?.invitations ?? []);
@@ -338,10 +416,22 @@
 			limits: ['10 workspaces', '15 social accounts', '2,500 scheduled posts/month', '25 GB media']
 		}
 	];
-	const settingsSections = [
+	const selectedProviderAppOption = $derived(
+		providerAppOptions.find((option) => option.value === providerAppForm.provider) ??
+			providerAppOptions[0]
+	);
+	const editingProviderApp = $derived(
+		providerApps.find((app) => app.id === editingProviderAppID) ?? null
+	);
+	const providerAppNeedsInstanceURL = $derived(providerAppForm.provider === 'mastodon');
+	const providerAppNeedsSecret = $derived(
+		providerAppForm.provider === 'mastodon' && !editingProviderApp?.secret_configured
+	);
+	const settingsSections = $derived([
 		{ id: 'workspace', label: 'Workspace' },
 		{ id: 'team', label: 'Team' },
 		{ id: 'billing', label: 'Billing' },
+		...(userIsInstanceAdmin ? [{ id: 'provider-apps', label: 'Provider Apps' }] : []),
 		{ id: 'security', label: 'Security' },
 		{ id: 'tokens', label: 'Tokens & MCP' },
 		{ id: 'date-time', label: 'Date & Time' },
@@ -349,7 +439,7 @@
 		{ id: 'posting-schedule', label: 'Posting Schedule' },
 		{ id: 'natural-posting', label: 'Natural Posting' },
 		{ id: 'slot-defaults', label: 'Slot Defaults' }
-	];
+	]);
 	const billingMetricLabels: Record<string, string> = {
 		scheduled_posts_monthly: 'Scheduled posts',
 		published_posts_monthly: 'Published posts',
@@ -637,6 +727,118 @@
 			billingError = (e as Error).message;
 		} finally {
 			billingPortalBusy = false;
+		}
+	}
+
+	function providerAppLabel(provider: string): string {
+		return providerAppOptions.find((option) => option.value === provider)?.label ?? provider;
+	}
+
+	function resetProviderAppForm() {
+		providerAppForm = emptyProviderAppForm();
+		editingProviderAppID = '';
+		providerAppsError = '';
+	}
+
+	function editProviderApp(app: ProviderApp) {
+		providerAppForm = {
+			provider: app.provider,
+			name: app.name ?? '',
+			client_id: app.client_id,
+			client_secret: '',
+			redirect_uri: app.redirect_uri ?? '',
+			instance_url: app.instance_url ?? '',
+			is_active: app.is_active
+		};
+		editingProviderAppID = app.id;
+		providerAppsError = '';
+	}
+
+	async function loadProviderApps() {
+		if (!userIsInstanceAdmin) return;
+		providerAppsLoading = true;
+		providerAppsError = '';
+		try {
+			const { data, error: err } = await client.GET('/admin/provider-apps');
+			if (err) throw new Error(err.detail || 'Failed to load provider apps');
+			providerApps = data ?? [];
+		} catch (e) {
+			providerApps = [];
+			providerAppsError = (e as Error).message;
+		} finally {
+			providerAppsLoading = false;
+		}
+	}
+
+	async function saveProviderApp(event: SubmitEvent) {
+		event.preventDefault();
+		providerAppsError = '';
+		const clientID = providerAppForm.client_id.trim();
+		const instanceURL = providerAppForm.instance_url.trim();
+		if (!clientID) {
+			providerAppsError = 'Client ID is required.';
+			return;
+		}
+		if (providerAppNeedsInstanceURL && !instanceURL) {
+			providerAppsError = 'Mastodon provider apps need an instance URL.';
+			return;
+		}
+		if (providerAppNeedsSecret && !providerAppForm.client_secret.trim()) {
+			providerAppsError = 'Mastodon provider apps need a client secret.';
+			return;
+		}
+
+		const body: SaveProviderAppInput = {
+			provider: providerAppForm.provider,
+			client_id: clientID,
+			is_active: providerAppForm.is_active
+		};
+		const name = providerAppForm.name.trim();
+		const redirectURI = providerAppForm.redirect_uri.trim();
+		const clientSecret = providerAppForm.client_secret.trim();
+		if (name) body.name = name;
+		if (redirectURI) body.redirect_uri = redirectURI;
+		if (instanceURL) body.instance_url = instanceURL;
+		if (clientSecret) body.client_secret = clientSecret;
+
+		providerAppsBusy = true;
+		try {
+			const { data, error: err } = await client.POST('/admin/provider-apps', { body });
+			if (err || !data) throw new Error(err?.detail || 'Failed to save provider app');
+			providerAppsRestartRequired = providerAppsRestartRequired || data.requires_restart;
+			toastMessage = data.existed ? 'Provider app updated' : 'Provider app created';
+			resetProviderAppForm();
+			await loadProviderApps();
+		} catch (e) {
+			providerAppsError = (e as Error).message;
+		} finally {
+			providerAppsBusy = false;
+		}
+	}
+
+	async function deleteProviderApp(app: ProviderApp) {
+		if (
+			!confirm(
+				`Delete ${providerAppLabel(app.provider)} provider app? Connected accounts keep their stored tokens, but new OAuth connections for this provider may stop working after restart.`
+			)
+		) {
+			return;
+		}
+		providerAppsBusy = true;
+		providerAppsError = '';
+		try {
+			const { data, error: err } = await client.DELETE('/admin/provider-apps/{id}', {
+				params: { path: { id: app.id } }
+			});
+			if (err) throw new Error(err.detail || 'Failed to delete provider app');
+			providerAppsRestartRequired = providerAppsRestartRequired || Boolean(data?.requires_restart);
+			if (editingProviderAppID === app.id) resetProviderAppForm();
+			await loadProviderApps();
+			toastMessage = 'Provider app deleted';
+		} catch (e) {
+			providerAppsError = (e as Error).message;
+		} finally {
+			providerAppsBusy = false;
 		}
 	}
 
@@ -1102,6 +1304,17 @@
 	});
 
 	$effect(() => {
+		if (userIsInstanceAdmin) {
+			if (!providerAppsLoadedForAdmin) {
+				providerAppsLoadedForAdmin = true;
+				loadProviderApps();
+			}
+		} else {
+			providerAppsLoadedForAdmin = false;
+		}
+	});
+
+	$effect(() => {
 		intervalInput = String(workspaceCtx.settings.slot_interval_minutes);
 		draftGapInput = String(workspaceCtx.settings.draft_gap_minutes);
 	});
@@ -1475,6 +1688,270 @@
 				</div>
 			{/if}
 		</section>
+
+		{#if userIsInstanceAdmin}
+			<section
+				id="provider-apps"
+				data-testid="provider-apps-settings"
+				class="scroll-mt-24 rounded-lg border p-6"
+			>
+				<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+					<div>
+						<h2 class="flex items-center gap-2 text-lg font-semibold">
+							<KeyRoundIcon class="h-5 w-5 text-muted-foreground" />
+							Provider Apps
+						</h2>
+						<p class="mt-2 text-sm text-muted-foreground">
+							Manage encrypted OAuth app credentials used for new social account connections.
+						</p>
+					</div>
+					<Button variant="outline" onclick={loadProviderApps} disabled={providerAppsLoading}>
+						{#if providerAppsLoading}
+							<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+						{/if}
+						Refresh
+					</Button>
+				</div>
+
+				{#if providerAppsRestartRequired}
+					<div
+						data-testid="provider-app-restart-required"
+						class="mb-4 rounded-md border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-950"
+					>
+						Provider app changes are saved. Restart the OpenPost server before adapter registry
+						changes apply.
+					</div>
+				{/if}
+
+				{#if providerAppsError}
+					<div
+						data-testid="provider-app-error"
+						class="mb-4 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+					>
+						{providerAppsError}
+					</div>
+				{/if}
+
+				<form onsubmit={saveProviderApp} class="mb-6 rounded-lg border bg-muted/20 p-4">
+					<div class="mb-4 flex flex-col gap-1">
+						<h3 class="text-sm font-semibold">
+							{editingProviderAppID ? 'Edit provider app' : 'Add provider app'}
+						</h3>
+						<p class="text-sm text-muted-foreground">
+							Secrets are write-only. Leave the secret blank while editing to keep the stored value.
+						</p>
+					</div>
+
+					<div class="grid gap-4 lg:grid-cols-2">
+						<div class="space-y-2">
+							<Label for="provider-app-provider">Provider</Label>
+							{#if editingProviderAppID}
+								<Input
+									id="provider-app-provider"
+									value={selectedProviderAppOption.label}
+									disabled
+								/>
+							{:else}
+								<Select.Root
+									type="single"
+									value={providerAppForm.provider}
+									onValueChange={(value) => {
+										if (!value) return;
+										providerAppForm.provider = value;
+										if (value !== 'mastodon') providerAppForm.instance_url = '';
+									}}
+								>
+									<Select.Trigger
+										id="provider-app-provider"
+										data-testid="provider-app-provider"
+										class="w-full"
+									>
+										{selectedProviderAppOption.label}
+									</Select.Trigger>
+									<Select.Content>
+										{#each providerAppOptions as option (option.value)}
+											<Select.Item value={option.value}>
+												<div class="flex flex-col gap-0.5 text-left">
+													<span>{option.label}</span>
+													<span class="text-xs text-muted-foreground">{option.description}</span>
+												</div>
+											</Select.Item>
+										{/each}
+									</Select.Content>
+								</Select.Root>
+							{/if}
+						</div>
+
+						<div class="space-y-2">
+							<Label for="provider-app-name">Display name</Label>
+							<Input
+								id="provider-app-name"
+								bind:value={providerAppForm.name}
+								placeholder="Production app, EU Mastodon, Meta main"
+							/>
+						</div>
+
+						{#if providerAppNeedsInstanceURL}
+							<div class="space-y-2">
+								<Label for="provider-app-instance">Instance URL</Label>
+								<Input
+									id="provider-app-instance"
+									bind:value={providerAppForm.instance_url}
+									placeholder="https://mastodon.social"
+									disabled={Boolean(editingProviderAppID)}
+									required
+								/>
+							</div>
+						{/if}
+
+						<div class="space-y-2">
+							<Label for="provider-app-client-id">Client ID</Label>
+							<Input
+								id="provider-app-client-id"
+								data-testid="provider-app-client-id"
+								bind:value={providerAppForm.client_id}
+								placeholder="OAuth client ID"
+								autocomplete="off"
+								required
+							/>
+						</div>
+
+						<div class="space-y-2">
+							<Label for="provider-app-client-secret">
+								Client secret{providerAppNeedsSecret ? '' : ' (optional on edit)'}
+							</Label>
+							<Input
+								id="provider-app-client-secret"
+								data-testid="provider-app-client-secret"
+								type="password"
+								bind:value={providerAppForm.client_secret}
+								placeholder={editingProviderApp?.secret_configured
+									? 'Leave blank to keep stored secret'
+									: 'OAuth client secret'}
+								autocomplete="off"
+								required={providerAppNeedsSecret}
+							/>
+						</div>
+
+						<div class="space-y-2 lg:col-span-2">
+							<Label for="provider-app-redirect">Redirect URI</Label>
+							<Input
+								id="provider-app-redirect"
+								bind:value={providerAppForm.redirect_uri}
+								placeholder="Optional. Defaults to the provider callback under OPENPOST_APP_URL."
+							/>
+						</div>
+					</div>
+
+					<div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<label class="flex items-center gap-2 text-sm">
+							<Checkbox
+								checked={providerAppForm.is_active}
+								onCheckedChange={(checked) => (providerAppForm.is_active = checked === true)}
+							/>
+							<span>Active after the next server start</span>
+						</label>
+						<div class="flex gap-2">
+							{#if editingProviderAppID}
+								<Button type="button" variant="outline" onclick={resetProviderAppForm}>
+									Cancel
+								</Button>
+							{/if}
+							<Button
+								type="submit"
+								data-testid="provider-app-save"
+								disabled={providerAppsBusy || !providerAppForm.client_id.trim()}
+							>
+								{#if providerAppsBusy}
+									<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
+								{/if}
+								{editingProviderAppID ? 'Update App' : 'Save App'}
+							</Button>
+						</div>
+					</div>
+				</form>
+
+				{#if providerAppsLoading}
+					<div class="grid gap-3 lg:grid-cols-2">
+						<Skeleton class="h-28 rounded-lg" />
+						<Skeleton class="h-28 rounded-lg" />
+					</div>
+				{:else if providerApps.length === 0}
+					<p class="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
+						No database-backed provider apps are configured yet. Legacy env and JSON bootstrap apps
+						still load at server startup.
+					</p>
+				{:else}
+					<div data-testid="provider-app-list" class="grid gap-3 lg:grid-cols-2">
+						{#each providerApps as app (app.id)}
+							<div data-testid="provider-app-row" class="flex flex-col gap-3 rounded-lg border p-4">
+								<div class="flex items-start justify-between gap-3">
+									<div class="min-w-0">
+										<div class="flex flex-wrap items-center gap-2">
+											<h3 class="font-semibold">{providerAppLabel(app.provider)}</h3>
+											<span
+												class={[
+													'rounded-full border px-2 py-0.5 text-xs font-medium',
+													app.is_active
+														? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700'
+														: 'bg-muted text-muted-foreground'
+												]}
+											>
+												{app.is_active ? 'Active' : 'Inactive'}
+											</span>
+										</div>
+										{#if app.name}
+											<p class="mt-1 text-sm text-muted-foreground">{app.name}</p>
+										{/if}
+										{#if app.instance_url}
+											<p class="mt-1 font-mono text-xs break-all text-muted-foreground">
+												{app.instance_url}
+											</p>
+										{/if}
+									</div>
+									<div class="flex shrink-0 gap-1">
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onclick={() => editProviderApp(app)}
+											disabled={providerAppsBusy}
+										>
+											Edit
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											class="text-destructive hover:text-destructive"
+											onclick={() => deleteProviderApp(app)}
+											disabled={providerAppsBusy}
+										>
+											Delete
+										</Button>
+									</div>
+								</div>
+								<div class="rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
+									<p>
+										Client ID
+										<span class="font-mono break-all text-foreground">{app.client_id}</span>
+									</p>
+									<p class="mt-1">
+										Client secret:
+										<span class="font-medium text-foreground">
+											{app.secret_configured ? 'stored' : 'not stored'}
+										</span>
+									</p>
+									{#if app.redirect_uri}
+										<p class="mt-1 break-all">Redirect URI {app.redirect_uri}</p>
+									{/if}
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</section>
+		{/if}
 
 		<section id="security" class="scroll-mt-24 rounded-lg border p-6">
 			<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold">
