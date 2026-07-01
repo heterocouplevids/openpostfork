@@ -143,7 +143,7 @@ func (h *MCPHandler) handle(c echo.Context) error {
 		challenge := h.mcpWWWAuthenticate(c.Request())
 		c.Response().Header().Set("WWW-Authenticate", challenge)
 		return c.JSON(http.StatusUnauthorized, map[string]any{
-			"error": "unauthorized",
+			fieldError: "unauthorized",
 			"_meta": map[string]any{
 				"mcp/www_authenticate": challenge,
 			},

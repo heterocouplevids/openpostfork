@@ -88,11 +88,11 @@ func (h *BillingHandler) RegisterAPIRoutes(api huma.API) {
 
 func (h *BillingHandler) handlePolarWebhook(c echo.Context) error {
 	if h.billing == nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "billing service is not configured"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: "billing service is not configured"})
 	}
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "failed to read webhook body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: "failed to read webhook body"})
 	}
 	result, err := h.billing.ProcessPolarWebhook(c.Request().Context(), body, billing.WebhookHeaders{
 		ID:        c.Request().Header.Get("webhook-id"),
@@ -100,7 +100,7 @@ func (h *BillingHandler) handlePolarWebhook(c echo.Context) error {
 		Signature: c.Request().Header.Get("webhook-signature"),
 	})
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		return c.JSON(http.StatusUnauthorized, map[string]string{fieldError: err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, PolarWebhookOutput{

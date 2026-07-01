@@ -143,7 +143,7 @@ func (h *MCPOAuthHandler) token(c echo.Context) error {
 
 func (h *MCPOAuthHandler) oauthError(c echo.Context, status int, code, description string) error {
 	return c.JSON(status, map[string]string{
-		"error":             code,
+		fieldError:          code,
 		"error_description": description,
 	})
 }

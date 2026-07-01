@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Fixed release preflight backend lint failures in MCP and billing error responses.
+
 ## [1.0.18] - 2026-07-01
 
 ### Added
