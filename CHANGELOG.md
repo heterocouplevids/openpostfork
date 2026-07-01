@@ -69,6 +69,7 @@ All notable changes to this project are documented in this file.
 - Added dedicated docs overview pages that separate user-facing web/CLI/MCP docs, self-hosting operations docs, and developer implementation docs.
 - Added marketing SEO pages for free social post tools and publishing tips, including interactive character counting, thread splitting, and platform previews.
 - Added a UTM campaign-link builder to the marketing tools page with Playwright coverage for generated tracking URLs.
+- Added a source-publication context panel in the composer, including source brief metadata, source reuse, and publication media metadata hydration.
 - Added static marketing-site `robots.txt` and `sitemap.xml` routes for the landing, tools, and tips pages.
 - Added a cloud bootstrap entitlement so hosted users can create one workspace before checkout while paid workspace expansion uses active subscription snapshots.
 - Added a database-backed `/api/v1/ready` endpoint for deployment readiness checks while keeping `/api/v1/health` as a liveness probe.

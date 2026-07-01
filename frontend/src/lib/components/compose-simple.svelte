@@ -19,6 +19,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import ComposePreviewPanel, { type PreviewGroup } from './compose-preview-panel.svelte';
 	import PlatformIcon from './platform-icon.svelte';
+	import { Badge } from '$lib/components/ui/badge';
 	import { getPlatformKey, getPlatformName } from '$lib/utils';
 	import { CalendarDate, getLocalTimeZone, today, isEqualDay } from '@internationalized/date';
 	import LoaderIcon from 'lucide-svelte/icons/loader-2';
@@ -255,6 +256,9 @@
 		);
 		return Math.min(...limits);
 	});
+	const linkedPublicationMediaCount = $derived(
+		linkedPublication?.media_ids?.filter(Boolean).length ?? 0
+	);
 
 	const previewGroups = $derived.by<PreviewGroup[]>(() => {
 		const groups: PreviewGroup[] = [];
@@ -472,6 +476,19 @@
 		return Object.fromEntries(
 			mediaIds.map((id) => [id, mediaMimeTypes.get(id) ?? '']).filter(([, mimeType]) => mimeType)
 		);
+	}
+
+	function mergeMediaIds(current: string[], incoming: string[]): string[] {
+		const seen = new Set<string>();
+		const merged: string[] = [];
+		for (const id of [...current, ...incoming]) {
+			const clean = id.trim();
+			if (!clean || seen.has(clean)) continue;
+			seen.add(clean);
+			merged.push(clean);
+			if (merged.length >= 4) break;
+		}
+		return merged;
 	}
 
 	function isVideoMedia(mediaId: string): boolean {
@@ -724,6 +741,9 @@
 			});
 			if (err) throw err;
 			linkedPublication = data ?? null;
+			if (data?.media_ids?.length) {
+				await hydrateMediaMetadata(data.workspace_id, data.media_ids.filter(Boolean));
+			}
 			if (data && !isEditMode && !hasAnyContent(posts)) {
 				posts = posts.map((post, index) =>
 					index === 0
@@ -742,6 +762,42 @@
 			linkedPublication = null;
 		} finally {
 			loadingLinkedPublication = false;
+		}
+	}
+
+	async function hydrateMediaMetadata(workspaceId: string, mediaIds: string[]) {
+		const missingIds = Array.from(new Set(mediaIds.filter(Boolean))).filter(
+			(id) => !mediaMimeTypes.has(id)
+		);
+		if (!workspaceId || missingIds.length === 0) return;
+
+		try {
+			const token = getToken();
+			const resp = await fetch(
+				`${getApiBase()}/api/v1/media/metadata?workspace_id=${encodeURIComponent(
+					workspaceId
+				)}&media_ids=${encodeURIComponent(missingIds.join(','))}`,
+				{
+					headers: token ? { Authorization: `Bearer ${token}` } : {}
+				}
+			);
+			if (!resp.ok) return;
+
+			const mediaData = await resp.json();
+			const nextMimeTypes = new Map(mediaMimeTypes);
+			const nextAltTexts = new Map(mediaAltTexts);
+			for (const media of mediaData.media ?? []) {
+				if (media.mime_type) {
+					nextMimeTypes.set(media.id, media.mime_type);
+				}
+				if (media.alt_text) {
+					nextAltTexts.set(media.id, media.alt_text);
+				}
+			}
+			mediaMimeTypes = nextMimeTypes;
+			mediaAltTexts = nextAltTexts;
+		} catch (e) {
+			console.error('Failed to load publication media metadata:', e);
 		}
 	}
 
@@ -861,6 +917,28 @@
 		linkedPublication = null;
 		lastLoadedPublicationId = '';
 		scheduleAutoSave();
+	}
+
+	function useLinkedPublicationSource() {
+		if (!linkedPublication) return;
+		const sourceMediaIds = linkedPublication.media_ids?.filter(Boolean) ?? [];
+		posts = posts.map((post, index) =>
+			index === 0
+				? {
+						...post,
+						content: linkedPublication?.source_content ?? '',
+						mediaIds: mergeMediaIds(post.mediaIds, sourceMediaIds)
+					}
+				: post
+		);
+		activePostIndex = 0;
+		if (sourceMediaIds.length > 0) {
+			hydrateMediaMetadata(linkedPublication.workspace_id, sourceMediaIds);
+		}
+		scheduleAutoSave();
+		tick().then(() => {
+			document.getElementById('post-textarea-0')?.focus();
+		});
 	}
 
 	// --------------------------------------------------------------------------
@@ -1339,25 +1417,7 @@
 			// Fetch MIME types for variant-only media IDs not already in mediaMimeTypes
 			const missingIds = [...variantMediaIds].filter((id) => !mediaMimeTypes.has(id));
 			if (missingIds.length > 0) {
-				const token = getToken();
-				const resp = await fetch(
-					`${getApiBase()}/api/v1/media/metadata?workspace_id=${encodeURIComponent(
-						initialPost?.workspace_id ?? ''
-					)}&media_ids=${encodeURIComponent(missingIds.join(','))}`,
-					{
-						headers: token ? { Authorization: `Bearer ${token}` } : {}
-					}
-				);
-				if (resp.ok) {
-					const mediaData = await resp.json();
-					const nextMimeTypes = new Map(mediaMimeTypes);
-					for (const m of mediaData.media ?? []) {
-						if (m.mime_type) {
-							nextMimeTypes.set(m.id, m.mime_type);
-						}
-					}
-					mediaMimeTypes = nextMimeTypes;
-				}
+				await hydrateMediaMetadata(initialPost?.workspace_id ?? '', missingIds);
 			}
 		} catch (e) {
 			console.error('Failed to load variants:', e);
@@ -1924,7 +1984,7 @@
 			<div class="flex min-w-0 items-center gap-2">
 				<Link2Icon class="h-4 w-4 shrink-0 text-muted-foreground" />
 				<div class="min-w-0">
-					<div class="text-xs font-medium text-muted-foreground">Source publication</div>
+					<div class="text-xs font-medium text-muted-foreground">Linked source</div>
 					<div class="truncate text-sm">
 						{#if loadingLinkedPublication}
 							Loading source...
@@ -1962,6 +2022,63 @@
 		<!-- Compose Column -->
 		<div class="flex flex-1 flex-col overflow-y-auto">
 			<div class="mx-auto w-full max-w-2xl px-3 py-4 md:px-6 md:py-6">
+				{#if linkedPublication}
+					<section
+						class="mb-5 rounded-lg border bg-muted/25 p-4"
+						aria-label="Source publication context"
+						data-testid="source-publication-context"
+					>
+						<div class="flex flex-wrap items-start justify-between gap-3">
+							<div class="min-w-0 space-y-1">
+								<div class="flex flex-wrap items-center gap-2">
+									<Badge class="capitalize">{linkedPublication.status}</Badge>
+									<span class="text-xs font-medium text-muted-foreground">Source publication</span>
+								</div>
+								<h2 class="truncate text-base font-semibold">{linkedPublication.title}</h2>
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								{#if linkedPublication.source_url}
+									<a
+										href={linkedPublication.source_url}
+										target="_blank"
+										rel="noreferrer"
+										class="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors hover:bg-background"
+									>
+										<Link2Icon class="h-3.5 w-3.5" />
+										Source
+									</a>
+								{/if}
+								<Button
+									variant="outline"
+									size="sm"
+									class="gap-1.5"
+									onclick={useLinkedPublicationSource}
+								>
+									<LightbulbIcon class="h-3.5 w-3.5" />
+									Use source
+								</Button>
+							</div>
+						</div>
+						<p class="mt-3 line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+							{linkedPublication.source_content}
+						</p>
+						<div class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+							<div class="rounded-md border bg-background/50 px-3 py-2">
+								<div class="font-medium text-foreground">Goal</div>
+								<div class="mt-0.5 truncate">{linkedPublication.goal || '-'}</div>
+							</div>
+							<div class="rounded-md border bg-background/50 px-3 py-2">
+								<div class="font-medium text-foreground">Audience</div>
+								<div class="mt-0.5 truncate">{linkedPublication.audience || '-'}</div>
+							</div>
+							<div class="rounded-md border bg-background/50 px-3 py-2">
+								<div class="font-medium text-foreground">Assets</div>
+								<div class="mt-0.5">{linkedPublicationMediaCount}</div>
+							</div>
+						</div>
+					</section>
+				{/if}
+
 				<!-- Prompt Card -->
 				{#if showPromptCard}
 					<div class="relative mb-5 rounded border bg-muted/30 p-4">
