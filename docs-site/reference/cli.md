@@ -409,6 +409,7 @@ openpost instance
 | Command | Description |
 | --- | --- |
 | `openpost instance add` | Add or update an instance profile |
+| `openpost instance diagnostics` | Collect a safe support snapshot for an OpenPost instance |
 | `openpost instance health` | Check the active instance liveness and readiness |
 | `openpost instance list` | List configured instances |
 | `openpost instance remove` | Remove an instance profile |
@@ -422,6 +423,29 @@ Add or update an instance profile
 
 ```text
 openpost instance add &lt;name&gt; &lt;url&gt;
+```
+
+**Inherited Flags**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--instance` | `-` | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE) |
+| `--json` | `false` | emit machine-readable JSON instead of tables/prose |
+| `--no-color` | `false` | disable ANSI colors |
+| `--profile` | `-` | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet` | `false` | suppress non-error output |
+| `--token` | `-` | API token override (default: keyring or $OPENPOST_TOKEN) |
+| `--workspace` | `-` | workspace name or ID (default: profile or $OPENPOST_WORKSPACE) |
+| `--yes` | `false` | skip interactive confirmations |
+
+### `openpost instance diagnostics`
+
+Collect a safe support snapshot for an OpenPost instance
+
+**Usage**
+
+```text
+openpost instance diagnostics
 ```
 
 **Inherited Flags**

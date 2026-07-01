@@ -76,6 +76,90 @@ func TestInstanceHealthFailsWhenReadinessIsNotReady(t *testing.T) {
 	}
 }
 
+func TestInstanceDiagnosticsWithoutTokenUsesPublicProbes(t *testing.T) {
+	t.Setenv("OPENPOST_CONFIG_DIR", t.TempDir())
+
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/health":
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		case "/api/v1/ready":
+			_, _ = w.Write([]byte(`{"status":"ready","database":"ok"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := executeRootCaptureStdout(t, "--instance", srv.URL, "--json", "instance", "diagnostics")
+	if err != nil {
+		t.Fatalf("instance diagnostics returned error: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode json output: %v\noutput:\n%s", err, out)
+	}
+	if got["token"] != false || got["authenticated"] != false {
+		t.Fatalf("diagnostics auth fields = %#v", got)
+	}
+	if got["health"] != "ok" || got["ready"] != "ready" || got["database"] != "ok" {
+		t.Fatalf("diagnostics probes = %#v, want ok/ready/ok", got)
+	}
+	wantPaths := []string{"/api/v1/health", "/api/v1/ready"}
+	if !reflect.DeepEqual(paths, wantPaths) {
+		t.Fatalf("paths = %#v, want %#v", paths, wantPaths)
+	}
+}
+
+func TestInstanceDiagnosticsWithTokenIncludesAuthSummary(t *testing.T) {
+	t.Setenv("OPENPOST_CONFIG_DIR", t.TempDir())
+
+	var authHeaders []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/health":
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		case "/api/v1/ready":
+			_, _ = w.Write([]byte(`{"status":"ready","database":"ok"}`))
+		case "/api/v1/auth/me":
+			authHeaders = append(authHeaders, r.Header.Get("Authorization"))
+			_, _ = w.Write([]byte(`{"id":"user-1","email":"operator@example.com","created_at":"2026-01-01T00:00:00Z"}`))
+		case "/api/v1/workspaces":
+			authHeaders = append(authHeaders, r.Header.Get("Authorization"))
+			_, _ = w.Write([]byte(`[{"id":"ws-1","name":"Production","created_at":"2026-01-01T00:00:00Z"}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := executeRootCaptureStdout(t, "--instance", srv.URL, "--token", "op_cli_test", "--json", "instance", "diagnostics")
+	if err != nil {
+		t.Fatalf("instance diagnostics returned error: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode json output: %v\noutput:\n%s", err, out)
+	}
+	if got["token"] != true || got["token_source"] != "flag/env" || got["authenticated"] != true {
+		t.Fatalf("diagnostics auth fields = %#v", got)
+	}
+	if got["user_email"] != "operator@example.com" || got["workspace_count"] != float64(1) {
+		t.Fatalf("diagnostics user/workspaces = %#v", got)
+	}
+	for _, header := range authHeaders {
+		if header != "Bearer op_cli_test" {
+			t.Fatalf("authorization header = %q, want bearer token", header)
+		}
+	}
+}
+
 func executeRootCaptureStdout(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 

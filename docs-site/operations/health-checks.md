@@ -58,10 +58,22 @@ openpost instance health --instance https://app.openpost.example --json
 The JSON output is useful for logs and monitors because it includes the checked
 instance URL, liveness result, readiness result, and database readiness status.
 
+For support snapshots, use diagnostics:
+
+```bash
+openpost instance diagnostics --instance https://app.openpost.example --json
+```
+
+Diagnostics includes the CLI version, OS/architecture, profile, instance URL,
+config paths, liveness/readiness/database status, token presence/source, and
+authenticated user/workspace counts when a token is available. It never prints
+raw API tokens or server secrets.
+
 ## Recommended probes
 
 - Load balancer liveness: `GET /api/v1/health`
 - Deploy rollout readiness: `GET /api/v1/ready`
 - External uptime monitor: `GET /api/v1/ready`
 - Operator smoke from a shell: `openpost instance health`
+- Support snapshot from a shell: `openpost instance diagnostics --json`
 - Mobile app instance setup: the app validates `/api/v1/ready` before saving the instance URL.

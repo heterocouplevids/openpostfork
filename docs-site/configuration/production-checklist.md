@@ -17,6 +17,7 @@ changes live in [Developer Docs](/development/).
 - [ ] Confirm `GET /api/v1/health` returns `{"status":"ok"}`.
 - [ ] Confirm `GET /api/v1/ready` returns `{"status":"ready","database":"ok"}`.
 - [ ] Confirm `openpost instance health --instance <public-url>` succeeds against the public URL.
+- [ ] Capture `openpost instance diagnostics --instance <public-url> --json` for the launch/support handoff.
 
 ## Self-Hosted Storage
 

@@ -142,6 +142,7 @@ Useful diagnostics:
 
 ```sh
 openpost auth status
+openpost instance diagnostics --json
 openpost auth token list
 openpost completion bash
 openpost --version
