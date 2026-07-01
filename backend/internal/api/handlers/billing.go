@@ -84,6 +84,36 @@ func (h *BillingHandler) RegisterAPIRoutes(api huma.API) {
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 		Errors:      []int{400, 403, 503},
 	}, h.createPortalSession)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-organization-billing-status",
+		Method:      http.MethodGet,
+		Path:        "/organizations/{id}/billing/status",
+		Summary:     "Get organization billing status",
+		Tags:        []string{"Billing"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403},
+	}, h.getOrganizationStatus)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "create-organization-billing-checkout",
+		Method:      http.MethodPost,
+		Path:        "/organizations/{id}/billing/checkout",
+		Summary:     "Create organization billing checkout",
+		Tags:        []string{"Billing"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 503},
+	}, h.createOrganizationCheckout)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "create-organization-billing-portal-session",
+		Method:      http.MethodPost,
+		Path:        "/organizations/{id}/billing/portal",
+		Summary:     "Create organization billing portal session",
+		Tags:        []string{"Billing"},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 503},
+	}, h.createOrganizationPortalSession)
 }
 
 func (h *BillingHandler) handlePolarWebhook(c echo.Context) error {
@@ -112,10 +142,12 @@ func (h *BillingHandler) handlePolarWebhook(c echo.Context) error {
 }
 
 type GetBillingStatusInput struct {
-	WorkspaceID string `query:"workspace_id" doc:"Workspace ID"`
+	WorkspaceID    string `query:"workspace_id" doc:"Workspace ID"`
+	OrganizationID string `query:"organization_id" doc:"Organization ID"`
 }
 
 type BillingStatusResponse struct {
+	OrganizationID    string           `json:"organization_id" doc:"Organization ID"`
 	WorkspaceID       string           `json:"workspace_id" doc:"Workspace ID"`
 	Provider          string           `json:"provider,omitempty" doc:"Billing provider"`
 	Status            string           `json:"status" doc:"Subscription status"`
@@ -136,28 +168,54 @@ func (h *BillingHandler) getStatus(ctx context.Context, input *GetBillingStatusI
 	if err := h.ensureReady(); err != nil {
 		return nil, err
 	}
-	if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
+	organizationID, workspaceID, err := h.resolveBillingScope(ctx, input.OrganizationID, input.WorkspaceID, userID)
+	if err != nil {
 		return nil, err
 	}
+	return h.billingStatusForOrganization(ctx, organizationID, workspaceID)
+}
 
+type GetOrganizationBillingStatusInput struct {
+	PathID string `path:"id" doc:"Organization ID"`
+}
+
+func (h *BillingHandler) getOrganizationStatus(ctx context.Context, input *GetOrganizationBillingStatusInput) (*BillingStatusOutput, error) {
+	if err := h.ensureReady(); err != nil {
+		return nil, err
+	}
+	userID := middleware.GetUserID(ctx)
+	if err := h.checkOrganizationAccess(ctx, input.PathID, userID, false); err != nil {
+		return nil, err
+	}
+	return h.billingStatusForOrganization(ctx, input.PathID, "")
+}
+
+func (h *BillingHandler) billingStatusForOrganization(ctx context.Context, organizationID, workspaceID string) (*BillingStatusOutput, error) {
 	now := time.Now().UTC()
-	usageSnapshot, err := h.usage.SnapshotMonthly(ctx, input.WorkspaceID, now)
+	usageSnapshot, err := h.usage.SnapshotOrganizationMonthly(ctx, organizationID, now)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("failed to load billing usage")
 	}
 	response := BillingStatusResponse{
-		WorkspaceID: input.WorkspaceID,
-		Status:      "none",
-		Limits:      map[string]int64{},
-		Usage:       usageSnapshotToStrings(usageSnapshot),
-		PeriodStart: usage.MonthStart(now).Format(time.RFC3339),
+		OrganizationID: organizationID,
+		WorkspaceID:    workspaceID,
+		Status:         "none",
+		Limits:         map[string]int64{},
+		Usage:          usageSnapshotToStrings(usageSnapshot),
+		PeriodStart:    usage.MonthStart(now).Format(time.RFC3339),
 	}
 
 	var sub models.BillingSubscription
 	err = h.db.NewSelect().
 		Model(&sub).
-		Where("workspace_id = ?", input.WorkspaceID).
+		Where("organization_id = ?", organizationID).
 		Scan(ctx)
+	if err == sql.ErrNoRows && workspaceID != "" {
+		err = h.db.NewSelect().
+			Model(&sub).
+			Where("workspace_id = ?", workspaceID).
+			Scan(ctx)
+	}
 	if err == sql.ErrNoRows {
 		return &BillingStatusOutput{Body: response}, nil
 	}
@@ -182,8 +240,9 @@ func (h *BillingHandler) getStatus(ctx context.Context, input *GetBillingStatusI
 
 type CreateBillingCheckoutInput struct {
 	Body struct {
-		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
-		PlanID      string `json:"plan_id" doc:"Plan ID: starter, creator, or pro"`
+		WorkspaceID    string `json:"workspace_id,omitempty" doc:"Workspace ID"`
+		OrganizationID string `json:"organization_id,omitempty" doc:"Organization ID"`
+		PlanID         string `json:"plan_id" doc:"Plan ID: starter, creator, pro, team, or agency"`
 	}
 }
 
@@ -201,8 +260,14 @@ func (h *BillingHandler) createCheckout(ctx context.Context, input *CreateBillin
 	if err := h.ensureReady(); err != nil {
 		return nil, err
 	}
-	if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+	organizationID, workspaceID, err := h.resolveBillingScope(ctx, input.Body.OrganizationID, input.Body.WorkspaceID, userID)
+	if err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(input.Body.OrganizationID) != "" {
+		if err := h.checkOrganizationAccess(ctx, organizationID, userID, true); err != nil {
+			return nil, err
+		}
 	}
 	email, err := h.userEmail(ctx, userID)
 	if err != nil {
@@ -210,10 +275,11 @@ func (h *BillingHandler) createCheckout(ctx context.Context, input *CreateBillin
 	}
 
 	result, err := h.billing.CreateCheckout(ctx, billing.CreateCheckoutInput{
-		WorkspaceID:   input.Body.WorkspaceID,
-		UserID:        userID,
-		CustomerEmail: email,
-		PlanID:        input.Body.PlanID,
+		OrganizationID: organizationID,
+		WorkspaceID:    workspaceID,
+		UserID:         userID,
+		CustomerEmail:  email,
+		PlanID:         input.Body.PlanID,
 	})
 	if err != nil {
 		return nil, billingAPIError(err)
@@ -223,7 +289,8 @@ func (h *BillingHandler) createCheckout(ctx context.Context, input *CreateBillin
 
 type CreateBillingPortalInput struct {
 	Body struct {
-		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
+		WorkspaceID    string `json:"workspace_id,omitempty" doc:"Workspace ID"`
+		OrganizationID string `json:"organization_id,omitempty" doc:"Organization ID"`
 	}
 }
 
@@ -232,11 +299,67 @@ func (h *BillingHandler) createPortalSession(ctx context.Context, input *CreateB
 	if err := h.ensureReady(); err != nil {
 		return nil, err
 	}
-	if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+	organizationID, _, err := h.resolveBillingScope(ctx, input.Body.OrganizationID, input.Body.WorkspaceID, userID)
+	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(input.Body.OrganizationID) != "" {
+		if err := h.checkOrganizationAccess(ctx, organizationID, userID, true); err != nil {
+			return nil, err
+		}
+	}
 
-	result, err := h.billing.CreateCustomerPortalSession(ctx, input.Body.WorkspaceID)
+	result, err := h.billing.CreateCustomerPortalSession(ctx, organizationID)
+	if err != nil {
+		return nil, billingAPIError(err)
+	}
+	return &BillingURLOutput{Body: BillingURLResponse{ID: result.ID, URL: result.URL}}, nil
+}
+
+type CreateOrganizationBillingCheckoutInput struct {
+	PathID string `path:"id" doc:"Organization ID"`
+	Body   struct {
+		PlanID string `json:"plan_id" doc:"Plan ID: starter, creator, pro, team, or agency"`
+	}
+}
+
+func (h *BillingHandler) createOrganizationCheckout(ctx context.Context, input *CreateOrganizationBillingCheckoutInput) (*BillingURLOutput, error) {
+	userID := middleware.GetUserID(ctx)
+	if err := h.ensureReady(); err != nil {
+		return nil, err
+	}
+	if err := h.checkOrganizationAccess(ctx, input.PathID, userID, true); err != nil {
+		return nil, err
+	}
+	email, err := h.userEmail(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	result, err := h.billing.CreateCheckout(ctx, billing.CreateCheckoutInput{
+		OrganizationID: input.PathID,
+		UserID:         userID,
+		CustomerEmail:  email,
+		PlanID:         input.Body.PlanID,
+	})
+	if err != nil {
+		return nil, billingAPIError(err)
+	}
+	return &BillingURLOutput{Body: BillingURLResponse{ID: result.ID, URL: result.URL}}, nil
+}
+
+type CreateOrganizationBillingPortalInput struct {
+	PathID string `path:"id" doc:"Organization ID"`
+}
+
+func (h *BillingHandler) createOrganizationPortalSession(ctx context.Context, input *CreateOrganizationBillingPortalInput) (*BillingURLOutput, error) {
+	userID := middleware.GetUserID(ctx)
+	if err := h.ensureReady(); err != nil {
+		return nil, err
+	}
+	if err := h.checkOrganizationAccess(ctx, input.PathID, userID, true); err != nil {
+		return nil, err
+	}
+	result, err := h.billing.CreateCustomerPortalSession(ctx, input.PathID)
 	if err != nil {
 		return nil, billingAPIError(err)
 	}
@@ -270,6 +393,59 @@ func (h *BillingHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, 
 	}
 	if count == 0 {
 		return huma.Error403Forbidden("workspace not accessible")
+	}
+	return nil
+}
+
+func (h *BillingHandler) resolveBillingScope(ctx context.Context, organizationID, workspaceID, userID string) (string, string, error) {
+	organizationID = strings.TrimSpace(organizationID)
+	workspaceID = strings.TrimSpace(workspaceID)
+	if organizationID != "" {
+		if err := h.checkOrganizationAccess(ctx, organizationID, userID, false); err != nil {
+			return "", "", err
+		}
+		return organizationID, workspaceID, nil
+	}
+	if workspaceID == "" {
+		return "", "", huma.Error400BadRequest("organization_id or workspace_id is required")
+	}
+	if err := h.checkWorkspaceAccess(ctx, workspaceID, userID); err != nil {
+		return "", "", err
+	}
+	var workspace models.Workspace
+	err := h.db.NewSelect().
+		Model(&workspace).
+		Column("id", "organization_id").
+		Where("id = ?", workspaceID).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return "", "", huma.Error404NotFound("workspace not found")
+	}
+	if err != nil {
+		return "", "", huma.Error500InternalServerError("failed to load workspace")
+	}
+	if strings.TrimSpace(workspace.OrganizationID) == "" {
+		return "org_" + workspaceID, workspaceID, nil
+	}
+	return workspace.OrganizationID, workspaceID, nil
+}
+
+func (h *BillingHandler) checkOrganizationAccess(ctx context.Context, organizationID, userID string, requireAdmin bool) error {
+	countQuery := h.db.NewSelect().
+		Model((*models.OrganizationMember)(nil)).
+		Where("organization_id = ? AND user_id = ?", organizationID, userID)
+	if requireAdmin {
+		countQuery = countQuery.Where("role IN (?)", bun.List([]string{models.OrganizationRoleOwner, models.OrganizationRoleAdmin}))
+	}
+	count, err := countQuery.Count(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("failed to check organization access")
+	}
+	if count == 0 {
+		if requireAdmin {
+			return huma.Error403Forbidden("organization admin role required")
+		}
+		return huma.Error403Forbidden("organization not accessible")
 	}
 	return nil
 }

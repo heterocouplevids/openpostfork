@@ -153,10 +153,19 @@ type RemovePasskeyInput struct {
 }
 
 type UserProfile struct {
-	ID        string    `json:"id" doc:"User ID"`
-	Email     string    `json:"email" doc:"User email address"`
-	IsAdmin   bool      `json:"is_admin" doc:"Whether this user can manage instance-level settings"`
-	CreatedAt time.Time `json:"created_at" doc:"Account creation time"`
+	ID          string    `json:"id" doc:"User ID"`
+	Email       string    `json:"email" doc:"User email address"`
+	DisplayName string    `json:"display_name" doc:"User display name"`
+	AvatarURL   string    `json:"avatar_url" doc:"Profile avatar URL"`
+	IsAdmin     bool      `json:"is_admin" doc:"Whether this user can manage instance-level settings"`
+	CreatedAt   time.Time `json:"created_at" doc:"Account creation time"`
+}
+
+type UpdateProfileInput struct {
+	Body struct {
+		DisplayName *string `json:"display_name,omitempty" maxLength:"120" doc:"User display name"`
+		AvatarURL   *string `json:"avatar_url,omitempty" maxLength:"1000" doc:"Profile avatar URL"`
+	}
 }
 
 type AuthOutput struct {
@@ -192,6 +201,7 @@ type SecurityStatusOutput struct {
 type UserSessionSummary struct {
 	ID         string    `json:"id" doc:"Session ID"`
 	UserAgent  string    `json:"user_agent" doc:"Recorded user agent"`
+	DeviceName string    `json:"device_name" doc:"Human-readable browser and device label"`
 	IPAddress  string    `json:"ip_address" doc:"Recorded client IP address"`
 	Current    bool      `json:"current" doc:"Whether this is the session used for the request"`
 	ExpiresAt  time.Time `json:"expires_at" doc:"Session expiry time"`
@@ -561,6 +571,50 @@ func (h *AuthHandler) Me(api huma.API) {
 			return nil, huma.Error404NotFound("user not found")
 		}
 
+		return &MeOutput{Body: toUserProfile(user)}, nil
+	})
+}
+
+func (h *AuthHandler) UpdateProfile(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "update-profile",
+		Method:      http.MethodPatch,
+		Path:        "/auth/profile",
+		Summary:     "Update current user profile",
+		Tags:        []string{tagAuth},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator)},
+		Errors:      []int{400, 401},
+	}, func(ctx context.Context, input *UpdateProfileInput) (*MeOutput, error) {
+		userID := middleware.GetUserID(ctx)
+
+		update := h.db.NewUpdate().Model((*models.User)(nil)).Where("id = ?", userID)
+		hasChange := false
+		if input.Body.DisplayName != nil {
+			displayName := strings.TrimSpace(*input.Body.DisplayName)
+			if len(displayName) > 120 {
+				return nil, huma.Error400BadRequest("display name must be at most 120 characters")
+			}
+			update = update.Set("display_name = ?", displayName)
+			hasChange = true
+		}
+		if input.Body.AvatarURL != nil {
+			avatarURL := strings.TrimSpace(*input.Body.AvatarURL)
+			if len(avatarURL) > 1000 {
+				return nil, huma.Error400BadRequest("avatar url must be at most 1000 characters")
+			}
+			update = update.Set("avatar_url = ?", avatarURL)
+			hasChange = true
+		}
+		if hasChange {
+			if _, err := update.Exec(ctx); err != nil {
+				return nil, huma.Error500InternalServerError("failed to update profile")
+			}
+		}
+
+		user, err := h.getUserByID(ctx, userID)
+		if err != nil {
+			return nil, huma.Error404NotFound("user not found")
+		}
 		return &MeOutput{Body: toUserProfile(user)}, nil
 	})
 }
@@ -1132,10 +1186,12 @@ func (h *AuthHandler) securityStatusResponse(ctx context.Context, userID string)
 
 func toUserProfile(user *models.User) *UserProfile {
 	return &UserProfile{
-		ID:        user.ID,
-		Email:     user.Email,
-		IsAdmin:   user.IsAdmin,
-		CreatedAt: user.CreatedAt,
+		ID:          user.ID,
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		AvatarURL:   user.AvatarURL,
+		IsAdmin:     user.IsAdmin,
+		CreatedAt:   user.CreatedAt,
 	}
 }
 
@@ -1158,6 +1214,7 @@ func userSessionSummaries(items []models.UserSession, currentSessionID string) [
 		out = append(out, UserSessionSummary{
 			ID:         session.ID,
 			UserAgent:  session.UserAgent,
+			DeviceName: summarizeUserAgent(session.UserAgent),
 			IPAddress:  session.IPAddress,
 			Current:    session.ID == currentSessionID,
 			ExpiresAt:  session.ExpiresAt,
@@ -1166,4 +1223,49 @@ func userSessionSummaries(items []models.UserSession, currentSessionID string) [
 		})
 	}
 	return out
+}
+
+func summarizeUserAgent(userAgent string) string {
+	ua := strings.TrimSpace(userAgent)
+	if ua == "" {
+		return "Unknown browser"
+	}
+
+	return browserName(ua) + " on " + deviceName(ua)
+}
+
+func browserName(ua string) string {
+	browser := "Browser"
+	switch {
+	case strings.Contains(ua, "Edg/"):
+		browser = "Edge"
+	case strings.Contains(ua, "OPR/") || strings.Contains(ua, "Opera"):
+		browser = "Opera"
+	case strings.Contains(ua, "Firefox/"):
+		browser = "Firefox"
+	case strings.Contains(ua, "Chrome/") || strings.Contains(ua, "CriOS/"):
+		browser = "Chrome"
+	case strings.Contains(ua, "Safari/"):
+		browser = "Safari"
+	}
+	return browser
+}
+
+func deviceName(ua string) string {
+	device := "device"
+	switch {
+	case strings.Contains(ua, "Macintosh") || strings.Contains(ua, "Mac OS X"):
+		device = "MacBook"
+	case strings.Contains(ua, "Windows"):
+		device = "Windows"
+	case strings.Contains(ua, "iPhone"):
+		device = "iPhone"
+	case strings.Contains(ua, "iPad"):
+		device = "iPad"
+	case strings.Contains(ua, "Android"):
+		device = "Android"
+	case strings.Contains(ua, "Linux"):
+		device = "Linux"
+	}
+	return device
 }

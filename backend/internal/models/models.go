@@ -31,10 +31,54 @@ const (
 	WorkspaceRoleViewer = "viewer"
 )
 
+// Organization role values stored in the `organization_members.role` column.
+const (
+	OrganizationRoleOwner  = "owner"
+	OrganizationRoleAdmin  = "admin"
+	OrganizationRoleMember = "member"
+)
+
+type Organization struct {
+	bun.BaseModel `bun:"table:organizations"`
+
+	ID          string    `bun:",pk" json:"id"`
+	Name        string    `bun:",notnull" json:"name"`
+	CreatedByID string    `bun:"created_by,notnull" json:"created_by"`
+	CreatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt   time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+type OrganizationMember struct {
+	bun.BaseModel `bun:"table:organization_members"`
+
+	OrganizationID string    `bun:",pk" json:"organization_id"`
+	UserID         string    `bun:",pk" json:"user_id"`
+	Role           string    `bun:",notnull" json:"role"` // 'owner', 'admin', 'member'
+	CreatedAt      time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+type OrganizationInvitation struct {
+	bun.BaseModel `bun:"table:organization_invitations"`
+
+	ID                 string    `bun:",pk" json:"id"`
+	OrganizationID     string    `bun:",notnull" json:"organization_id"`
+	Email              string    `bun:",notnull" json:"email"`
+	Role               string    `bun:",notnull,default:'member'" json:"role"`
+	InvitedByUserID    string    `bun:",notnull" json:"invited_by_user_id"`
+	AcceptedByUserID   string    `bun:",nullzero" json:"accepted_by_user_id"`
+	DefaultWorkspaceID string    `bun:",nullzero" json:"default_workspace_id"`
+	TokenHash          string    `bun:",unique,notnull" json:"-"`
+	ExpiresAt          time.Time `bun:",notnull" json:"expires_at"`
+	AcceptedAt         time.Time `bun:",nullzero" json:"accepted_at"`
+	RevokedAt          time.Time `bun:",nullzero" json:"revoked_at"`
+	CreatedAt          time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 type Workspace struct {
 	bun.BaseModel `bun:"table:workspaces"`
 
 	ID                  string    `bun:",pk" json:"id"`
+	OrganizationID      string    `bun:"organization_id" json:"organization_id"`
 	Name                string    `bun:",notnull" json:"name"`
 	Timezone            string    `bun:",default:'UTC'" json:"timezone"`
 	WeekStart           int       `bun:",default:1" json:"week_start"`             // 0=Sunday, 1=Monday
@@ -52,6 +96,9 @@ type User struct {
 
 	ID               string    `bun:",pk" json:"id"`
 	Email            string    `bun:",unique,notnull" json:"email"`
+	DisplayName      string    `json:"display_name"`
+	AvatarURL        string    `json:"avatar_url"`
+	AvatarObjectKey  string    `json:"-"`
 	PasswordHash     string    `bun:",notnull" json:"-"`
 	IsAdmin          bool      `bun:",notnull,default:false" json:"is_admin"`
 	TOTPSecretEnc    []byte    `bun:"totp_secret_encrypted" json:"-"`
@@ -190,7 +237,8 @@ type UsageCounter struct {
 type BillingSubscription struct {
 	bun.BaseModel `bun:"table:billing_subscriptions"`
 
-	WorkspaceID            string    `bun:",pk" json:"workspace_id"`
+	OrganizationID         string    `bun:",pk" json:"organization_id"`
+	WorkspaceID            string    `json:"workspace_id,omitempty"`
 	Provider               string    `bun:",notnull,default:'polar'" json:"provider"`
 	ProviderCustomerID     string    `bun:",notnull" json:"provider_customer_id"`
 	ProviderSubscriptionID string    `bun:",notnull,unique" json:"provider_subscription_id"`

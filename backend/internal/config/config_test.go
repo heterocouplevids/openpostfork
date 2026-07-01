@@ -8,6 +8,71 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMain(m *testing.M) {
+	for _, key := range configTestEnvKeys {
+		_ = os.Unsetenv(key)
+		_ = os.Unsetenv(key + "_FILE")
+	}
+	os.Exit(m.Run())
+}
+
+var configTestEnvKeys = []string{
+	"OPENPOST_APP_URL",
+	"OPENPOST_FRONTEND_URL",
+	"OPENPOST_PUBLIC_URL",
+	"OPENPOST_EDITION",
+	"OPENPOST_DATABASE_DRIVER",
+	"OPENPOST_DATABASE_PATH",
+	"OPENPOST_DB_PATH",
+	"OPENPOST_DATABASE_URL",
+	"DATABASE_URL",
+	"OPENPOST_JWT_SECRET",
+	"JWT_SECRET",
+	"OPENPOST_ENCRYPTION_KEY",
+	"ENCRYPTION_KEY",
+	"OPENPOST_DISABLE_REGISTRATIONS",
+	"OPENPOST_EXTRA_CORS_ORIGINS",
+	"OPENPOST_CORS_EXTRA_ORIGINS",
+	"X_CLIENT_ID",
+	"TWITTER_CLIENT_ID",
+	"X_CLIENT_SECRET",
+	"TWITTER_CLIENT_SECRET",
+	"X_REDIRECT_URI",
+	"TWITTER_REDIRECT_URI",
+	"MASTODON_REDIRECT_URI",
+	"MASTODON_SERVERS",
+	"LINKEDIN_CLIENT_ID",
+	"LINKEDIN_CLIENT_SECRET",
+	"LINKEDIN_REDIRECT_URI",
+	"LINKEDIN_DISABLE_THREAD_REPLIES",
+	"OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES",
+	"THREADS_CLIENT_ID",
+	"THREADS_CLIENT_SECRET",
+	"THREADS_REDIRECT_URI",
+	"OPENPOST_PROVIDER_APPS",
+	"OPENPOST_STORAGE_DRIVER",
+	"OPENPOST_MEDIA_PATH",
+	"OPENPOST_MEDIA_URL",
+	"OPENPOST_S3_ENDPOINT",
+	"OPENPOST_S3_REGION",
+	"OPENPOST_S3_BUCKET",
+	"OPENPOST_S3_ACCESS_KEY_ID",
+	"OPENPOST_S3_SECRET_ACCESS_KEY",
+	"OPENPOST_S3_PUBLIC_BASE_URL",
+	"OPENPOST_S3_FORCE_PATH_STYLE",
+	"OPENPOST_POLAR_ACCESS_TOKEN",
+	"OPENPOST_POLAR_API_BASE_URL",
+	"OPENPOST_POLAR_WEBHOOK_SECRET",
+	"OPENPOST_POLAR_CHECKOUT_SUCCESS_URL",
+	"OPENPOST_POLAR_RETURN_URL",
+	"OPENPOST_POLAR_CUSTOMER_PORTAL_URL",
+	"OPENPOST_POLAR_STARTER_PRODUCT_ID",
+	"OPENPOST_POLAR_CREATOR_PRODUCT_ID",
+	"OPENPOST_POLAR_PRO_PRODUCT_ID",
+	"OPENPOST_POLAR_TEAM_PRODUCT_ID",
+	"OPENPOST_POLAR_AGENCY_PRODUCT_ID",
+}
+
 func TestLoadProductionPrimitiveDefaults(t *testing.T) {
 	t.Setenv("OPENPOST_APP_URL", "https://openpost.example.com")
 
@@ -74,6 +139,8 @@ func TestLoadSupportsFileBackedEnvValues(t *testing.T) {
 	t.Setenv("OPENPOST_POLAR_STARTER_PRODUCT_ID_FILE", writeEnvFile(t, "polar-starter-product", "starter-product\n"))
 	t.Setenv("OPENPOST_POLAR_CREATOR_PRODUCT_ID_FILE", writeEnvFile(t, "polar-creator-product", "creator-product\n"))
 	t.Setenv("OPENPOST_POLAR_PRO_PRODUCT_ID_FILE", writeEnvFile(t, "polar-pro-product", "pro-product\n"))
+	t.Setenv("OPENPOST_POLAR_TEAM_PRODUCT_ID_FILE", writeEnvFile(t, "polar-team-product", "team-product\n"))
+	t.Setenv("OPENPOST_POLAR_AGENCY_PRODUCT_ID_FILE", writeEnvFile(t, "polar-agency-product", "agency-product\n"))
 
 	cfg := Load()
 
@@ -96,6 +163,8 @@ func TestLoadSupportsFileBackedEnvValues(t *testing.T) {
 	require.Equal(t, "starter-product", cfg.PolarStarterProductID)
 	require.Equal(t, "creator-product", cfg.PolarCreatorProductID)
 	require.Equal(t, "pro-product", cfg.PolarProProductID)
+	require.Equal(t, "team-product", cfg.PolarTeamProductID)
+	require.Equal(t, "agency-product", cfg.PolarAgencyProductID)
 	require.NoError(t, cfg.ValidateRuntime())
 }
 
@@ -231,6 +300,8 @@ func TestValidateRuntimeRejectsCloudMissingPolarPrimitives(t *testing.T) {
 	cfg.PolarStarterProductID = ""
 	cfg.PolarCreatorProductID = ""
 	cfg.PolarProProductID = ""
+	cfg.PolarTeamProductID = ""
+	cfg.PolarAgencyProductID = ""
 
 	err := cfg.ValidateRuntime()
 
@@ -242,6 +313,8 @@ func TestValidateRuntimeRejectsCloudMissingPolarPrimitives(t *testing.T) {
 	require.ErrorContains(t, err, "OPENPOST_POLAR_STARTER_PRODUCT_ID")
 	require.ErrorContains(t, err, "OPENPOST_POLAR_CREATOR_PRODUCT_ID")
 	require.ErrorContains(t, err, "OPENPOST_POLAR_PRO_PRODUCT_ID")
+	require.ErrorContains(t, err, "OPENPOST_POLAR_TEAM_PRODUCT_ID")
+	require.ErrorContains(t, err, "OPENPOST_POLAR_AGENCY_PRODUCT_ID")
 }
 
 func TestValidateRuntimeRejectsCloudWildcardCORSOrigins(t *testing.T) {
@@ -273,6 +346,8 @@ func validCloudRuntimeConfig() *Config {
 		PolarStarterProductID: "starter-product",
 		PolarCreatorProductID: "creator-product",
 		PolarProProductID:     "pro-product",
+		PolarTeamProductID:    "team-product",
+		PolarAgencyProductID:  "agency-product",
 	}
 }
 
@@ -286,6 +361,8 @@ func TestLoadPolarPrimitives(t *testing.T) {
 	t.Setenv("OPENPOST_POLAR_STARTER_PRODUCT_ID", "starter-product")
 	t.Setenv("OPENPOST_POLAR_CREATOR_PRODUCT_ID", "creator-product")
 	t.Setenv("OPENPOST_POLAR_PRO_PRODUCT_ID", "pro-product")
+	t.Setenv("OPENPOST_POLAR_TEAM_PRODUCT_ID", "team-product")
+	t.Setenv("OPENPOST_POLAR_AGENCY_PRODUCT_ID", "agency-product")
 
 	cfg := Load()
 
@@ -297,6 +374,8 @@ func TestLoadPolarPrimitives(t *testing.T) {
 	require.Equal(t, "starter-product", cfg.PolarStarterProductID)
 	require.Equal(t, "creator-product", cfg.PolarCreatorProductID)
 	require.Equal(t, "pro-product", cfg.PolarProProductID)
+	require.Equal(t, "team-product", cfg.PolarTeamProductID)
+	require.Equal(t, "agency-product", cfg.PolarAgencyProductID)
 }
 
 func TestLoadPolarReturnURLLegacyAlias(t *testing.T) {

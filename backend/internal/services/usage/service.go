@@ -111,3 +111,28 @@ func (s *Service) SnapshotMonthly(ctx context.Context, workspaceID string, at ti
 	}
 	return snapshot, nil
 }
+
+func (s *Service) SnapshotOrganizationMonthly(ctx context.Context, organizationID string, at time.Time) (map[entitlements.LimitKey]int64, error) {
+	var rows []struct {
+		Metric string `bun:"metric"`
+		Value  int64  `bun:"value"`
+	}
+	err := s.db.NewSelect().
+		TableExpr("usage_counters AS uc").
+		ColumnExpr("uc.metric").
+		ColumnExpr("SUM(uc.value) AS value").
+		Join("JOIN workspaces AS w ON w.id = uc.workspace_id").
+		Where("w.organization_id = ?", organizationID).
+		Where("uc.period_start = ?", MonthStart(at)).
+		Group("uc.metric").
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, err
+	}
+
+	snapshot := make(map[entitlements.LimitKey]int64, len(rows))
+	for _, row := range rows {
+		snapshot[entitlements.LimitKey(row.Metric)] = row.Value
+	}
+	return snapshot, nil
+}

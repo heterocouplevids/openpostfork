@@ -313,6 +313,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update current user profile */
+        patch: operations["update-profile"];
+        trace?: never;
+    };
     "/auth/register": {
         parameters: {
             query?: never;
@@ -799,6 +816,91 @@ export interface paths {
         };
         /** Get posts that use a media attachment */
         get: operations["get-media-usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List organizations for the current user */
+        get: operations["list-organizations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{id}/billing/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create organization billing checkout */
+        post: operations["create-organization-billing-checkout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{id}/billing/portal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create organization billing portal session */
+        post: operations["create-organization-billing-portal-session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{id}/billing/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get organization billing status */
+        get: operations["get-organization-billing-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organizations/{id}/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List organization members */
+        get: operations["list-organization-team"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1434,6 +1536,8 @@ export interface components {
             limits: {
                 [key: string]: number;
             };
+            /** @description Organization ID */
+            organization_id: string;
             /** @description UTC month start for the usage counters */
             period_start: string;
             /** @description Plan ID */
@@ -1553,10 +1657,12 @@ export interface components {
              * @example https://example.com/schemas/CreateBillingCheckoutInputBody.json
              */
             readonly $schema?: string;
-            /** @description Plan ID: starter, creator, or pro */
+            /** @description Organization ID */
+            organization_id?: string;
+            /** @description Plan ID: starter, creator, pro, team, or agency */
             plan_id: string;
             /** @description Workspace ID */
-            workspace_id: string;
+            workspace_id?: string;
         };
         CreateBillingPortalInputBody: {
             /**
@@ -1565,8 +1671,10 @@ export interface components {
              * @example https://example.com/schemas/CreateBillingPortalInputBody.json
              */
             readonly $schema?: string;
+            /** @description Organization ID */
+            organization_id?: string;
             /** @description Workspace ID */
-            workspace_id: string;
+            workspace_id?: string;
         };
         CreateMCPOAuthAuthorizationInputBody: {
             /**
@@ -1640,6 +1748,16 @@ export interface components {
             media_id: string;
             /** @description Direct upload request details */
             upload: components["schemas"]["DirectMediaUploadTarget"];
+        };
+        CreateOrganizationBillingCheckoutInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateOrganizationBillingCheckoutInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Plan ID: starter, creator, pro, team, or agency */
+            plan_id: string;
         };
         CreatePostInputBody: {
             /**
@@ -1786,6 +1904,8 @@ export interface components {
             readonly $schema?: string;
             /** @description Workspace name */
             name: string;
+            /** @description Organization ID. Omit to create a personal organization for this workspace. */
+            organization_id?: string;
         };
         CreateWorkspaceInvitationInputBody: {
             /**
@@ -1815,6 +1935,7 @@ export interface components {
             created_at: string;
             id: string;
             name: string;
+            organization_id: string;
         };
         DeleteMediaOutputBody: {
             /**
@@ -2104,6 +2225,8 @@ export interface components {
             created_at: string;
             id: string;
             name: string;
+            organization_id: string;
+            organization_name: string;
         };
         JobResponse: {
             /**
@@ -2284,6 +2407,35 @@ export interface components {
             slot?: components["schemas"]["PostingScheduleResponse"];
             /** @description The suggested time in ISO 8601 format */
             slot_time: string;
+        };
+        OrganizationMemberResponse: {
+            /** @description User email */
+            email: string;
+            /** @description Organization role */
+            role: string;
+            /** @description User ID */
+            user_id: string;
+        };
+        OrganizationResponse: {
+            /** @description Organization creation time */
+            created_at: string;
+            /** @description Organization ID */
+            id: string;
+            /** @description Organization name */
+            name: string;
+            /** @description Current user's organization role */
+            role: string;
+        };
+        OrganizationTeamOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/OrganizationTeamOutputBody.json
+             */
+            readonly $schema?: string;
+            /** Format: int64 */
+            current_seats: number;
+            members: components["schemas"]["OrganizationMemberResponse"][] | null;
         };
         PasskeyCeremonyOutputBody: {
             /**
@@ -2924,6 +3076,18 @@ export interface components {
              */
             utc_minute?: number;
         };
+        UpdateProfileInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UpdateProfileInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Profile avatar URL */
+            avatar_url?: string;
+            /** @description User display name */
+            display_name?: string;
+        };
         UpdateSetInputBody: {
             /**
              * Format: uri
@@ -3009,11 +3173,15 @@ export interface components {
              * @example https://example.com/schemas/UserProfile.json
              */
             readonly $schema?: string;
+            /** @description Profile avatar URL */
+            avatar_url: string;
             /**
              * Format: date-time
              * @description Account creation time
              */
             created_at: string;
+            /** @description User display name */
+            display_name: string;
             /** @description User email address */
             email: string;
             /** @description User ID */
@@ -3029,6 +3197,8 @@ export interface components {
             created_at: string;
             /** @description Whether this is the session used for the request */
             current: boolean;
+            /** @description Human-readable browser and device label */
+            device_name: string;
             /**
              * Format: date-time
              * @description Session expiry time
@@ -4151,6 +4321,66 @@ export interface operations {
             };
         };
     };
+    "update-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProfile"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     register: {
         parameters: {
             query?: never;
@@ -4861,6 +5091,8 @@ export interface operations {
             query?: {
                 /** @description Workspace ID */
                 workspace_id?: string;
+                /** @description Organization ID */
+                organization_id?: string;
             };
             header?: never;
             path?: never;
@@ -5893,6 +6125,293 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GetMediaUsageOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponse"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-organization-billing-checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrganizationBillingCheckoutInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingURLResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-organization-billing-portal-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingURLResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-organization-billing-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingStatusResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-organization-team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationTeamOutputBody"];
                 };
             };
             /** @description Forbidden */

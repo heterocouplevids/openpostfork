@@ -20,10 +20,12 @@ func TestRunMigrationsCreatesBillingSubscriptionSchema(t *testing.T) {
 	row := db.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE name = 'billing_subscriptions'")
 	var schema string
 	require.NoError(t, row.Scan(&schema))
-	require.Contains(t, schema, "workspace_id TEXT PRIMARY KEY")
+	require.Contains(t, schema, "organization_id TEXT PRIMARY KEY")
+	require.Contains(t, schema, "workspace_id TEXT")
 	require.Contains(t, schema, "provider_subscription_id TEXT NOT NULL UNIQUE")
 	require.Contains(t, schema, "entitlement_snapshot TEXT NOT NULL DEFAULT '{}'")
-	require.Contains(t, schema, "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE")
+	require.Contains(t, schema, "FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE")
+	require.Contains(t, schema, "FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE SET NULL")
 
 	var indexCount int
 	require.NoError(t, db.NewSelect().
@@ -44,9 +46,12 @@ func TestRunMigrationsBillingSubscriptionsIdempotent(t *testing.T) {
 	require.NoError(t, RunMigrations(db))
 	require.NoError(t, RunMigrations(db))
 
-	_, err := db.NewInsert().Model(&models.Workspace{ID: "ws-billing", Name: "Billing"}).Exec(ctx)
+	_, err := db.NewInsert().Model(&models.Organization{ID: "org-billing", Name: "Billing", CreatedByID: "user-1"}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.Workspace{ID: "ws-billing", OrganizationID: "org-billing", Name: "Billing"}).Exec(ctx)
 	require.NoError(t, err)
 	_, err = db.NewInsert().Model(&models.BillingSubscription{
+		OrganizationID:         "org-billing",
 		WorkspaceID:            "ws-billing",
 		Provider:               "polar",
 		ProviderCustomerID:     "customer-1",
@@ -57,7 +62,7 @@ func TestRunMigrationsBillingSubscriptionsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestRunMigrationsBillingSubscriptionsCascadeWithWorkspace(t *testing.T) {
+func TestRunMigrationsBillingSubscriptionsCascadeWithOrganization(t *testing.T) {
 	t.Parallel()
 
 	db := newMigrationsTestDB(t)
@@ -65,9 +70,12 @@ func TestRunMigrationsBillingSubscriptionsCascadeWithWorkspace(t *testing.T) {
 	seedMigrationUser(ctx, t, db)
 	require.NoError(t, RunMigrations(db))
 
-	_, err := db.NewInsert().Model(&models.Workspace{ID: "ws-billing", Name: "Billing"}).Exec(ctx)
+	_, err := db.NewInsert().Model(&models.Organization{ID: "org-billing", Name: "Billing", CreatedByID: "user-1"}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.Workspace{ID: "ws-billing", OrganizationID: "org-billing", Name: "Billing"}).Exec(ctx)
 	require.NoError(t, err)
 	_, err = db.NewInsert().Model(&models.BillingSubscription{
+		OrganizationID:         "org-billing",
 		WorkspaceID:            "ws-billing",
 		Provider:               "polar",
 		ProviderCustomerID:     "customer-1",
@@ -76,7 +84,7 @@ func TestRunMigrationsBillingSubscriptionsCascadeWithWorkspace(t *testing.T) {
 	}).Exec(ctx)
 	require.NoError(t, err)
 
-	_, err = db.ExecContext(ctx, "DELETE FROM workspaces WHERE id = ?", "ws-billing")
+	_, err = db.ExecContext(ctx, "DELETE FROM organizations WHERE id = ?", "org-billing")
 	require.NoError(t, err)
 
 	var count int

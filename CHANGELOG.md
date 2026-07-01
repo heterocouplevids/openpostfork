@@ -4,9 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added organization-backed workspace ownership, team listing APIs, organization-scoped billing routes, and team/agency Polar plan configuration for hosted accounts.
+- Added authenticated profile updates and avatar upload/removal endpoints backed by existing media storage.
+
 ### Changed
 - Removed the user-facing Publications surface from the web app, CLI, public API, MCP tools, and docs so drafts/posts plus per-platform renditions remain the canonical workflow.
 - Moved workspace switching into the sidebar footer and clarified Provider Apps settings around Mastodon custom instances and optional provider OAuth key overrides.
+- Made billing subscription snapshots organization-scoped while preserving legacy workspace billing metadata for compatibility.
 
 ### Fixed
 - Replaced raw browser User-Agent strings in active sessions with readable browser/device labels.

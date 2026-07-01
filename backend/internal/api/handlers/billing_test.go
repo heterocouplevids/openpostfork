@@ -65,11 +65,16 @@ func newBillingHandlerTestServer(t *testing.T, secret string, now time.Time) *bi
 
 	db := createHandlerTestDB(
 		t,
+		(*models.Organization)(nil),
+		(*models.OrganizationMember)(nil),
 		(*models.Workspace)(nil),
 		(*models.BillingSubscription)(nil),
 		(*models.BillingWebhookEvent)(nil),
 	)
-	_, err := db.NewInsert().Model(&models.Workspace{ID: "ws-1", Name: "Launch"}).Exec(context.Background())
+	ctx := context.Background()
+	_, err := db.NewInsert().Model(&models.Organization{ID: "org_ws-1", Name: "Launch", CreatedByID: "user-1"}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.Workspace{ID: "ws-1", OrganizationID: "org_ws-1", Name: "Launch"}).Exec(ctx)
 	require.NoError(t, err)
 
 	e := echo.New()
@@ -106,6 +111,8 @@ func newBillingAPITestServerWithPolarConfig(t *testing.T, client *billingHTTPCli
 	db := createHandlerTestDB(
 		t,
 		(*models.User)(nil),
+		(*models.Organization)(nil),
+		(*models.OrganizationMember)(nil),
 		(*models.Workspace)(nil),
 		(*models.WorkspaceMember)(nil),
 		(*models.BillingSubscription)(nil),
@@ -118,7 +125,15 @@ func newBillingAPITestServerWithPolarConfig(t *testing.T, client *billingHTTPCli
 		PasswordHash: "hash",
 	}).Exec(ctx)
 	require.NoError(t, err)
-	_, err = db.NewInsert().Model(&models.Workspace{ID: "ws-1", Name: "Launch"}).Exec(ctx)
+	_, err = db.NewInsert().Model(&models.Organization{ID: "org_ws-1", Name: "Launch", CreatedByID: "user-1"}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.OrganizationMember{
+		OrganizationID: "org_ws-1",
+		UserID:         "user-1",
+		Role:           models.OrganizationRoleOwner,
+	}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.Workspace{ID: "ws-1", OrganizationID: "org_ws-1", Name: "Launch"}).Exec(ctx)
 	require.NoError(t, err)
 	_, err = db.NewInsert().Model(&models.WorkspaceMember{
 		WorkspaceID: "ws-1",
@@ -247,9 +262,10 @@ func TestCreateBillingCheckoutRoute(t *testing.T) {
 	req := srv.client.requests[0]
 	require.Equal(t, "/v1/checkouts/", req.Path)
 	require.Equal(t, "user@example.com", req.Body["customer_email"])
-	require.Equal(t, "ws-1", req.Body["external_customer_id"])
+	require.Equal(t, "org_ws-1", req.Body["external_customer_id"])
 	metadata := req.Body["metadata"].(map[string]any)
 	require.Equal(t, "creator", metadata["plan_id"])
+	require.Equal(t, "org_ws-1", metadata["organization_id"])
 	require.Equal(t, "ws-1", metadata["workspace_id"])
 }
 
@@ -296,6 +312,7 @@ func TestGetBillingStatusRouteWithSubscriptionAndUsage(t *testing.T) {
 	srv := newBillingAPITestServer(t)
 	ctx := context.Background()
 	_, err := srv.db.NewInsert().Model(&models.BillingSubscription{
+		OrganizationID:         "org_ws-1",
 		WorkspaceID:            "ws-1",
 		Provider:               "polar",
 		ProviderCustomerID:     "cus-1",
@@ -348,5 +365,5 @@ func TestCreateBillingPortalRoute(t *testing.T) {
 	require.Len(t, srv.client.requests, 1)
 	req := srv.client.requests[0]
 	require.Equal(t, "/v1/customer-sessions/", req.Path)
-	require.Equal(t, "ws-1", req.Body["external_customer_id"])
+	require.Equal(t, "org_ws-1", req.Body["external_customer_id"])
 }

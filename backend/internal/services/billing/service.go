@@ -58,7 +58,15 @@ type PlanConfig struct {
 	Limits    map[entitlements.LimitKey]int64
 }
 
-func DefaultPlanCatalog(starterProductID, creatorProductID, proProductID string) map[string]PlanConfig {
+func DefaultPlanCatalog(starterProductID, creatorProductID, proProductID string, extraProductIDs ...string) map[string]PlanConfig {
+	teamProductID := ""
+	agencyProductID := ""
+	if len(extraProductIDs) > 0 {
+		teamProductID = extraProductIDs[0]
+	}
+	if len(extraProductIDs) > 1 {
+		agencyProductID = extraProductIDs[1]
+	}
 	return map[string]PlanConfig{
 		"starter": {
 			ProductID: starterProductID,
@@ -88,6 +96,28 @@ func DefaultPlanCatalog(starterProductID, creatorProductID, proProductID string)
 				entitlements.LimitScheduledPostsMonthly:     2_500,
 				entitlements.LimitMediaBytesStored:          25_000_000_000,
 				entitlements.LimitMediaBytesUploadedMonthly: 25_000_000_000,
+				entitlements.LimitTeamMembers:               5,
+			},
+		},
+		"team": {
+			ProductID: teamProductID,
+			Limits: map[entitlements.LimitKey]int64{
+				entitlements.LimitWorkspaces:                10,
+				entitlements.LimitSocialAccounts:            25,
+				entitlements.LimitScheduledPostsMonthly:     5_000,
+				entitlements.LimitMediaBytesStored:          50_000_000_000,
+				entitlements.LimitMediaBytesUploadedMonthly: 50_000_000_000,
+				entitlements.LimitTeamMembers:               3,
+			},
+		},
+		"agency": {
+			ProductID: agencyProductID,
+			Limits: map[entitlements.LimitKey]int64{
+				entitlements.LimitWorkspaces:                50,
+				entitlements.LimitSocialAccounts:            150,
+				entitlements.LimitScheduledPostsMonthly:     25_000,
+				entitlements.LimitMediaBytesStored:          250_000_000_000,
+				entitlements.LimitMediaBytesUploadedMonthly: 250_000_000_000,
 				entitlements.LimitTeamMembers:               5,
 			},
 		},
@@ -124,10 +154,11 @@ func (s *Service) SetHTTPClientForTest(client httpDoer) {
 }
 
 type CreateCheckoutInput struct {
-	WorkspaceID   string
-	UserID        string
-	CustomerEmail string
-	PlanID        string
+	OrganizationID string
+	WorkspaceID    string
+	UserID         string
+	CustomerEmail  string
+	PlanID         string
 }
 
 type CheckoutResult struct {
@@ -140,8 +171,12 @@ func (s *Service) CreateCheckout(ctx context.Context, input CreateCheckoutInput)
 	if err != nil {
 		return CheckoutResult{}, err
 	}
-	if strings.TrimSpace(input.WorkspaceID) == "" {
-		return CheckoutResult{}, fmt.Errorf("workspace id is required")
+	organizationID := strings.TrimSpace(input.OrganizationID)
+	if organizationID == "" {
+		organizationID = strings.TrimSpace(input.WorkspaceID)
+	}
+	if organizationID == "" {
+		return CheckoutResult{}, fmt.Errorf("organization id is required")
 	}
 	if strings.TrimSpace(input.CustomerEmail) == "" {
 		return CheckoutResult{}, fmt.Errorf("customer email is required")
@@ -149,13 +184,13 @@ func (s *Service) CreateCheckout(ctx context.Context, input CreateCheckoutInput)
 
 	payload := map[string]any{
 		"products":             []string{plan.ProductID},
-		"external_customer_id": input.WorkspaceID,
+		"external_customer_id": organizationID,
 		"customer_email":       input.CustomerEmail,
 		"success_url":          s.polar.SuccessURL,
 		"return_url":           s.polar.ReturnURL,
-		"metadata":             checkoutMetadata(input.WorkspaceID, input.UserID, input.PlanID, plan.Limits),
+		"metadata":             checkoutMetadata(organizationID, input.WorkspaceID, input.UserID, input.PlanID, plan.Limits),
 		"customer_metadata": map[string]any{
-			"workspace_id": input.WorkspaceID,
+			"organization_id": organizationID,
 		},
 	}
 	var out struct {
@@ -176,12 +211,12 @@ type CustomerPortalResult struct {
 	URL string
 }
 
-func (s *Service) CreateCustomerPortalSession(ctx context.Context, workspaceID string) (CustomerPortalResult, error) {
-	if strings.TrimSpace(workspaceID) == "" {
-		return CustomerPortalResult{}, fmt.Errorf("workspace id is required")
+func (s *Service) CreateCustomerPortalSession(ctx context.Context, organizationID string) (CustomerPortalResult, error) {
+	if strings.TrimSpace(organizationID) == "" {
+		return CustomerPortalResult{}, fmt.Errorf("organization id is required")
 	}
 	payload := map[string]any{
-		"external_customer_id": workspaceID,
+		"external_customer_id": organizationID,
 		"return_url":           s.polar.ReturnURL,
 	}
 	var out struct {
@@ -220,15 +255,22 @@ func polarProductEnvVar(planID string) string {
 		return "OPENPOST_POLAR_CREATOR_PRODUCT_ID"
 	case "pro":
 		return "OPENPOST_POLAR_PRO_PRODUCT_ID"
+	case "team":
+		return "OPENPOST_POLAR_TEAM_PRODUCT_ID"
+	case "agency":
+		return "OPENPOST_POLAR_AGENCY_PRODUCT_ID"
 	default:
 		return "OPENPOST_POLAR_" + strings.ToUpper(strings.ReplaceAll(planID, "-", "_")) + "_PRODUCT_ID"
 	}
 }
 
-func checkoutMetadata(workspaceID, userID, planID string, limits map[entitlements.LimitKey]int64) map[string]any {
+func checkoutMetadata(organizationID, workspaceID, userID, planID string, limits map[entitlements.LimitKey]int64) map[string]any {
 	metadata := map[string]any{
-		"workspace_id": workspaceID,
-		"plan_id":      planID,
+		"organization_id": organizationID,
+		"plan_id":         planID,
+	}
+	if workspaceID != "" {
+		metadata["workspace_id"] = workspaceID
 	}
 	if userID != "" {
 		metadata["user_id"] = userID
@@ -296,10 +338,11 @@ type WebhookHeaders struct {
 }
 
 type WebhookResult struct {
-	EventID     string
-	EventType   string
-	WorkspaceID string
-	Duplicate   bool
+	EventID        string
+	EventType      string
+	OrganizationID string
+	WorkspaceID    string
+	Duplicate      bool
 }
 
 func (s *Service) ProcessPolarWebhook(ctx context.Context, body []byte, headers WebhookHeaders) (WebhookResult, error) {
@@ -337,6 +380,7 @@ func (s *Service) ProcessPolarWebhook(ctx context.Context, body []byte, headers 
 		if err != nil {
 			return err
 		}
+		result.OrganizationID = subscription.OrganizationID
 		result.WorkspaceID = subscription.WorkspaceID
 		return upsertSubscription(txCtx, tx, subscription)
 	})
@@ -364,7 +408,8 @@ func insertWebhookEvent(ctx context.Context, tx bun.Tx, eventID, eventType strin
 func upsertSubscription(ctx context.Context, tx bun.Tx, subscription *models.BillingSubscription) error {
 	_, err := tx.NewInsert().
 		Model(subscription).
-		On("CONFLICT (workspace_id) DO UPDATE").
+		On("CONFLICT (organization_id) DO UPDATE").
+		Set("workspace_id = EXCLUDED.workspace_id").
 		Set("provider = EXCLUDED.provider").
 		Set("provider_customer_id = EXCLUDED.provider_customer_id").
 		Set("provider_subscription_id = EXCLUDED.provider_subscription_id").
@@ -462,15 +507,22 @@ func subscriptionFromPolarEvent(event polarEvent) (*models.BillingSubscription, 
 		return nil, fmt.Errorf("invalid subscription payload: %w", err)
 	}
 
+	organizationID := firstMetadataString(data.Metadata, "organization_id")
+	if organizationID == "" {
+		organizationID = firstMetadataString(data.Customer.Metadata, "organization_id")
+	}
+	if organizationID == "" {
+		organizationID = data.Customer.ExternalID
+	}
 	workspaceID := firstMetadataString(data.Metadata, "workspace_id")
 	if workspaceID == "" {
 		workspaceID = firstMetadataString(data.Customer.Metadata, "workspace_id")
 	}
-	if workspaceID == "" {
-		workspaceID = data.Customer.ExternalID
+	if organizationID == "" && workspaceID != "" {
+		organizationID = "org_" + workspaceID
 	}
-	if workspaceID == "" {
-		return nil, fmt.Errorf("subscription webhook missing workspace_id metadata")
+	if organizationID == "" {
+		return nil, fmt.Errorf("subscription webhook missing organization_id metadata")
 	}
 
 	customerID := data.CustomerID
@@ -495,6 +547,7 @@ func subscriptionFromPolarEvent(event polarEvent) (*models.BillingSubscription, 
 	rawPayload, _ := json.Marshal(event.Data)
 	now := time.Now().UTC()
 	return &models.BillingSubscription{
+		OrganizationID:         organizationID,
 		WorkspaceID:            workspaceID,
 		Provider:               ProviderPolar,
 		ProviderCustomerID:     customerID,

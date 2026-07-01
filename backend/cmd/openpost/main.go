@@ -85,6 +85,8 @@ func main() {
 			cfg.PolarStarterProductID,
 			cfg.PolarCreatorProductID,
 			cfg.PolarProProductID,
+			cfg.PolarTeamProductID,
+			cfg.PolarAgencyProductID,
 		),
 	})
 	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
@@ -156,6 +158,7 @@ func main() {
 	publishSvc.SetStorage(storage)
 	mediaHandler := handlers.NewMediaHandler(db, storage, authService, authenticator, mediaSigner)
 	mediaHandler.SetEntitlement(entitlementService)
+	profileHandler := handlers.NewProfileHandler(db, authenticator, storage)
 
 	worker := queue.NewWorker(db, "worker-1", 1*time.Second, publishSvc, tokenManager, storage)
 
@@ -164,6 +167,7 @@ func main() {
 	api := humaecho.NewWithGroup(e, apiGroup, humaConfig)
 
 	mediaHandler.RegisterLegacyRoutes(e)
+	profileHandler.RegisterRoutes(e)
 	billingHandler := handlers.NewBillingHandler(billingService, db, authenticator)
 	billingHandler.RegisterRoutes(e)
 

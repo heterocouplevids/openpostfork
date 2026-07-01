@@ -41,13 +41,15 @@ func (h *WorkspaceHandler) SetFrontendURL(frontendURL string) {
 
 type CreateWorkspaceInput struct {
 	Body struct {
-		Name string `json:"name" minLength:"1" maxLength:"100" doc:"Workspace name"`
+		Name           string `json:"name" minLength:"1" maxLength:"100" doc:"Workspace name"`
+		OrganizationID string `json:"organization_id,omitempty" doc:"Organization ID. Omit to create a personal organization for this workspace."`
 	}
 }
 
 type CreateWorkspaceOutput struct {
 	Body struct {
 		WorkspaceID        string `json:"id"`
+		OrganizationID     string `json:"organization_id"`
 		WorkspaceName      string `json:"name"`
 		WorkspaceCreatedAt string `json:"created_at"`
 	}
@@ -56,8 +58,38 @@ type CreateWorkspaceOutput struct {
 type ListWorkspacesOutput struct {
 	Body []struct {
 		WorkspaceID        string `json:"id"`
+		OrganizationID     string `json:"organization_id"`
+		OrganizationName   string `json:"organization_name"`
 		WorkspaceName      string `json:"name"`
 		WorkspaceCreatedAt string `json:"created_at"`
+	}
+}
+
+type OrganizationResponse struct {
+	ID        string `json:"id" doc:"Organization ID"`
+	Name      string `json:"name" doc:"Organization name"`
+	Role      string `json:"role" doc:"Current user's organization role"`
+	CreatedAt string `json:"created_at" doc:"Organization creation time"`
+}
+
+type ListOrganizationsOutput struct {
+	Body []OrganizationResponse
+}
+
+type OrganizationTeamInput struct {
+	PathID string `path:"id" doc:"Organization ID"`
+}
+
+type OrganizationMemberResponse struct {
+	UserID string `json:"user_id" doc:"User ID"`
+	Email  string `json:"email" doc:"User email"`
+	Role   string `json:"role" doc:"Organization role"`
+}
+
+type OrganizationTeamOutput struct {
+	Body struct {
+		Members      []OrganizationMemberResponse `json:"members"`
+		CurrentSeats int64                        `json:"current_seats"`
 	}
 }
 
@@ -145,14 +177,41 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		if middleware.GetWorkspaceID(ctx) != "" {
 			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
-		if err := h.checkCreateWorkspaceEntitlement(ctx, userID); err != nil {
+
+		organizationID := strings.TrimSpace(input.Body.OrganizationID)
+		if organizationID != "" {
+			if err := h.requireOrganizationAdmin(ctx, organizationID, userID); err != nil {
+				return nil, err
+			}
+		}
+		if err := h.checkCreateWorkspaceEntitlement(ctx, organizationID, userID); err != nil {
 			return nil, err
+		}
+		now := time.Now().UTC()
+		var organization *models.Organization
+		var organizationMember *models.OrganizationMember
+		if organizationID == "" {
+			organization = &models.Organization{
+				ID:          uuid.New().String(),
+				Name:        input.Body.Name,
+				CreatedByID: userID,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+			organizationID = organization.ID
+			organizationMember = &models.OrganizationMember{
+				OrganizationID: organizationID,
+				UserID:         userID,
+				Role:           models.OrganizationRoleOwner,
+				CreatedAt:      now,
+			}
 		}
 
 		workspace := &models.Workspace{
-			ID:        uuid.New().String(),
-			Name:      input.Body.Name,
-			CreatedAt: time.Now().UTC(),
+			ID:             uuid.New().String(),
+			OrganizationID: organizationID,
+			Name:           input.Body.Name,
+			CreatedAt:      now,
 		}
 
 		member := &models.WorkspaceMember{
@@ -162,6 +221,16 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		}
 
 		err := h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+			if organization != nil {
+				if _, err := tx.NewInsert().Model(organization).Exec(txCtx); err != nil {
+					return err
+				}
+			}
+			if organizationMember != nil {
+				if _, err := tx.NewInsert().Model(organizationMember).Exec(txCtx); err != nil {
+					return err
+				}
+			}
 			if _, err := tx.NewInsert().Model(workspace).Exec(txCtx); err != nil {
 				return err
 			}
@@ -176,6 +245,7 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 
 		resp := &CreateWorkspaceOutput{}
 		resp.Body.WorkspaceID = workspace.ID
+		resp.Body.OrganizationID = workspace.OrganizationID
 		resp.Body.WorkspaceName = workspace.Name
 		resp.Body.WorkspaceCreatedAt = workspace.CreatedAt.Format(time.RFC3339)
 		return resp, nil
@@ -209,6 +279,69 @@ func (h *WorkspaceHandler) ListWorkspaceTeam(api huma.API) {
 		resp.Body.Members = members
 		resp.Body.Invitations = workspaceInvitationResponses(invitations, "", "")
 		resp.Body.CurrentSeats = int64(len(members) + len(invitations))
+		return resp, nil
+	})
+}
+
+func (h *WorkspaceHandler) ListOrganizations(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-organizations",
+		Method:      http.MethodGet,
+		Path:        "/organizations",
+		Summary:     "List organizations for the current user",
+		Tags:        []string{tagWorkspaces},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+	}, func(ctx context.Context, _ *struct{}) (*ListOrganizationsOutput, error) {
+		userID := middleware.GetUserID(ctx)
+		var rows []struct {
+			ID        string    `bun:"id"`
+			Name      string    `bun:"name"`
+			Role      string    `bun:"role"`
+			CreatedAt time.Time `bun:"created_at"`
+		}
+		err := h.db.NewSelect().
+			TableExpr("organizations AS o").
+			ColumnExpr("o.id, o.name, om.role, o.created_at").
+			Join("JOIN organization_members AS om ON om.organization_id = o.id").
+			Where("om.user_id = ?", userID).
+			Order("o.name ASC").
+			Scan(ctx, &rows)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch organizations")
+		}
+		resp := &ListOrganizationsOutput{Body: []OrganizationResponse{}}
+		for _, row := range rows {
+			resp.Body = append(resp.Body, OrganizationResponse{
+				ID:        row.ID,
+				Name:      row.Name,
+				Role:      row.Role,
+				CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339),
+			})
+		}
+		return resp, nil
+	})
+}
+
+func (h *WorkspaceHandler) ListOrganizationTeam(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-organization-team",
+		Method:      http.MethodGet,
+		Path:        "/organizations/{id}/team",
+		Summary:     "List organization members",
+		Tags:        []string{tagWorkspaces},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{403, 404},
+	}, func(ctx context.Context, input *OrganizationTeamInput) (*OrganizationTeamOutput, error) {
+		if _, err := h.requireOrganizationMember(ctx, input.PathID, middleware.GetUserID(ctx)); err != nil {
+			return nil, err
+		}
+		members, err := h.listOrganizationMembers(ctx, input.PathID)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to fetch organization members")
+		}
+		resp := &OrganizationTeamOutput{}
+		resp.Body.Members = members
+		resp.Body.CurrentSeats = int64(len(members))
 		return resp, nil
 	})
 }
@@ -395,21 +528,32 @@ func (h *WorkspaceHandler) AcceptWorkspaceInvitation(api huma.API) {
 	})
 }
 
-func (h *WorkspaceHandler) checkCreateWorkspaceEntitlement(ctx context.Context, userID string) error {
+func (h *WorkspaceHandler) checkCreateWorkspaceEntitlement(ctx context.Context, organizationID, userID string) error {
 	var current int
-	if err := h.db.NewSelect().
-		ColumnExpr("COUNT(*)").
-		Model((*models.WorkspaceMember)(nil)).
-		Where("user_id = ?", userID).
-		Scan(ctx, &current); err != nil {
-		return huma.Error500InternalServerError("failed to check workspace limit")
+	if organizationID != "" {
+		if err := h.db.NewSelect().
+			ColumnExpr("COUNT(*)").
+			Model((*models.Workspace)(nil)).
+			Where("organization_id = ?", organizationID).
+			Scan(ctx, &current); err != nil {
+			return huma.Error500InternalServerError("failed to check workspace limit")
+		}
+	} else {
+		if err := h.db.NewSelect().
+			ColumnExpr("COUNT(*)").
+			Model((*models.WorkspaceMember)(nil)).
+			Where("user_id = ?", userID).
+			Scan(ctx, &current); err != nil {
+			return huma.Error500InternalServerError("failed to check workspace limit")
+		}
 	}
 
 	decision, err := h.entitlement.Check(ctx, entitlements.Request{
-		UserID:  userID,
-		Limit:   entitlements.LimitWorkspaces,
-		Current: int64(current),
-		Amount:  1,
+		OrganizationID: organizationID,
+		UserID:         userID,
+		Limit:          entitlements.LimitWorkspaces,
+		Current:        int64(current),
+		Amount:         1,
 	})
 	if err != nil {
 		return huma.Error500InternalServerError("failed to check workspace limit")
@@ -451,6 +595,44 @@ func (h *WorkspaceHandler) requireWorkspaceAdmin(ctx context.Context, workspaceI
 		return huma.Error403Forbidden("workspace admin role required")
 	}
 	return nil
+}
+
+func (h *WorkspaceHandler) requireOrganizationAdmin(ctx context.Context, organizationID, userID string) error {
+	member, err := h.requireOrganizationMember(ctx, organizationID, userID)
+	if err != nil {
+		return err
+	}
+	if member.Role != models.OrganizationRoleOwner && member.Role != models.OrganizationRoleAdmin {
+		return huma.Error403Forbidden("organization admin role required")
+	}
+	return nil
+}
+
+func (h *WorkspaceHandler) requireOrganizationMember(ctx context.Context, organizationID, userID string) (*models.OrganizationMember, error) {
+	var member models.OrganizationMember
+	err := h.db.NewSelect().
+		Model(&member).
+		Where("organization_id = ? AND user_id = ?", organizationID, userID).
+		Scan(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, huma.Error403Forbidden("organization not accessible")
+	}
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to validate organization access")
+	}
+	return &member, nil
+}
+
+func (h *WorkspaceHandler) listOrganizationMembers(ctx context.Context, organizationID string) ([]OrganizationMemberResponse, error) {
+	var rows []OrganizationMemberResponse
+	err := h.db.NewSelect().
+		TableExpr("organization_members AS om").
+		ColumnExpr("om.user_id, u.email, om.role").
+		Join("JOIN users AS u ON u.id = om.user_id").
+		Where("om.organization_id = ?", organizationID).
+		Order("u.email ASC").
+		Scan(ctx, &rows)
+	return rows, err
 }
 
 func (h *WorkspaceHandler) listWorkspaceMembers(ctx context.Context, workspaceID string) ([]WorkspaceMemberResponse, error) {
@@ -549,31 +731,46 @@ func (h *WorkspaceHandler) ListWorkspaces(api huma.API) {
 	}, func(ctx context.Context, _ *struct{}) (*ListWorkspacesOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
-		var workspaces []models.Workspace
+		var rows []struct {
+			ID               string    `bun:"id"`
+			OrganizationID   string    `bun:"organization_id"`
+			OrganizationName string    `bun:"organization_name"`
+			Name             string    `bun:"name"`
+			CreatedAt        time.Time `bun:"created_at"`
+		}
 		query := h.db.NewSelect().
-			Model(&workspaces).
-			Join("JOIN workspace_members AS wm ON wm.workspace_id = workspace.id").
+			TableExpr("workspaces AS w").
+			ColumnExpr("w.id, w.organization_id, w.name, w.created_at").
+			ColumnExpr("COALESCE(o.name, '') AS organization_name").
+			Join("JOIN workspace_members AS wm ON wm.workspace_id = w.id").
+			Join("LEFT JOIN organizations AS o ON o.id = w.organization_id").
 			Where("wm.user_id = ?", userID)
 		if workspaceID := middleware.GetWorkspaceID(ctx); workspaceID != "" {
-			query = query.Where("workspace.id = ?", workspaceID)
+			query = query.Where("w.id = ?", workspaceID)
 		}
-		err := query.Scan(ctx)
+		err := query.Order("organization_name ASC", "w.name ASC").Scan(ctx, &rows)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch workspaces")
 		}
 
 		resp := &ListWorkspacesOutput{Body: []struct {
 			WorkspaceID        string `json:"id"`
+			OrganizationID     string `json:"organization_id"`
+			OrganizationName   string `json:"organization_name"`
 			WorkspaceName      string `json:"name"`
 			WorkspaceCreatedAt string `json:"created_at"`
 		}{}}
-		for _, ws := range workspaces {
+		for _, ws := range rows {
 			resp.Body = append(resp.Body, struct {
 				WorkspaceID        string `json:"id"`
+				OrganizationID     string `json:"organization_id"`
+				OrganizationName   string `json:"organization_name"`
 				WorkspaceName      string `json:"name"`
 				WorkspaceCreatedAt string `json:"created_at"`
 			}{
 				WorkspaceID:        ws.ID,
+				OrganizationID:     ws.OrganizationID,
+				OrganizationName:   ws.OrganizationName,
 				WorkspaceName:      ws.Name,
 				WorkspaceCreatedAt: ws.CreatedAt.Format(time.RFC3339),
 			})

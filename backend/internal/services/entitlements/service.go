@@ -19,11 +19,12 @@ const (
 )
 
 type Request struct {
-	WorkspaceID string
-	UserID      string
-	Limit       LimitKey
-	Current     int64
-	Amount      int64
+	OrganizationID string
+	WorkspaceID    string
+	UserID         string
+	Limit          LimitKey
+	Current        int64
+	Amount         int64
 }
 
 type Decision struct {

@@ -72,6 +72,9 @@ func initPostgresDB(dsn string) (*bun.DB, error) {
 func CreateSchema(db *bun.DB) error {
 	ctx := context.Background()
 	m := []interface{}{
+		(*models.Organization)(nil),
+		(*models.OrganizationMember)(nil),
+		(*models.OrganizationInvitation)(nil),
 		(*models.Workspace)(nil),
 		(*models.User)(nil),
 		(*models.WorkspaceMember)(nil),

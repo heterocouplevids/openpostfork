@@ -70,6 +70,8 @@ type Config struct {
 	PolarStarterProductID string
 	PolarCreatorProductID string
 	PolarProProductID     string
+	PolarTeamProductID    string
+	PolarAgencyProductID  string
 }
 
 const minSecretLength = 32
@@ -144,6 +146,8 @@ func Load() *Config {
 		PolarStarterProductID: getEnvDefault("OPENPOST_POLAR_STARTER_PRODUCT_ID", ""),
 		PolarCreatorProductID: getEnvDefault("OPENPOST_POLAR_CREATOR_PRODUCT_ID", ""),
 		PolarProProductID:     getEnvDefault("OPENPOST_POLAR_PRO_PRODUCT_ID", ""),
+		PolarTeamProductID:    getEnvDefault("OPENPOST_POLAR_TEAM_PRODUCT_ID", ""),
+		PolarAgencyProductID:  getEnvDefault("OPENPOST_POLAR_AGENCY_PRODUCT_ID", ""),
 	}
 
 	if cfg.PublicURL == "" {
@@ -352,6 +356,12 @@ func (c *Config) missingCloudBillingConfig() []string {
 	}
 	if strings.TrimSpace(c.PolarProProductID) == "" {
 		missing = append(missing, "OPENPOST_POLAR_PRO_PRODUCT_ID")
+	}
+	if strings.TrimSpace(c.PolarTeamProductID) == "" {
+		missing = append(missing, "OPENPOST_POLAR_TEAM_PRODUCT_ID")
+	}
+	if strings.TrimSpace(c.PolarAgencyProductID) == "" {
+		missing = append(missing, "OPENPOST_POLAR_AGENCY_PRODUCT_ID")
 	}
 	return missing
 }

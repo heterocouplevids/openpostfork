@@ -25,30 +25,18 @@ type subscriptionSnapshot struct {
 }
 
 func (s *SubscriptionService) Check(ctx context.Context, req Request) (Decision, error) {
-	if strings.TrimSpace(req.WorkspaceID) == "" {
-		if req.Limit == LimitWorkspaces && strings.TrimSpace(req.UserID) != "" {
-			decision, found, err := s.checkUserWorkspaceLimit(ctx, req)
-			if err != nil {
-				return Decision{}, err
-			}
-			if found {
-				return decision, nil
-			}
-		}
-		if s.fallback != nil {
-			return s.fallback.Check(ctx, req)
-		}
-		return Decision{Allowed: false, Current: req.Current, Amount: req.Amount}, fmt.Errorf("workspace id is required")
+	organizationID, err := s.resolveOrganizationID(ctx, req)
+	if err != nil {
+		return Decision{}, err
+	}
+	if strings.TrimSpace(req.WorkspaceID) == "" && organizationID == "" {
+		return s.checkUnscoped(ctx, req)
 	}
 	if req.Amount <= 0 {
 		return Decision{Allowed: false, Current: req.Current, Amount: req.Amount}, fmt.Errorf("entitlement check amount must be positive")
 	}
 
-	var sub models.BillingSubscription
-	err := s.db.NewSelect().
-		Model(&sub).
-		Where("workspace_id = ?", req.WorkspaceID).
-		Scan(ctx)
+	sub, err := s.loadSubscription(ctx, organizationID, strings.TrimSpace(req.WorkspaceID))
 	if err == sql.ErrNoRows {
 		return Decision{
 			Allowed: false,
@@ -80,15 +68,82 @@ func (s *SubscriptionService) Check(ctx context.Context, req Request) (Decision,
 	return static.Check(ctx, req)
 }
 
+func (s *SubscriptionService) resolveOrganizationID(ctx context.Context, req Request) (string, error) {
+	organizationID := strings.TrimSpace(req.OrganizationID)
+	if organizationID != "" || strings.TrimSpace(req.WorkspaceID) == "" {
+		return organizationID, nil
+	}
+	return s.organizationForWorkspace(ctx, strings.TrimSpace(req.WorkspaceID))
+}
+
+func (s *SubscriptionService) checkUnscoped(ctx context.Context, req Request) (Decision, error) {
+	if req.Limit == LimitWorkspaces && strings.TrimSpace(req.UserID) != "" {
+		decision, found, err := s.checkUserWorkspaceLimit(ctx, req)
+		if err != nil {
+			return Decision{}, err
+		}
+		if found {
+			return decision, nil
+		}
+	}
+	if s.fallback != nil {
+		return s.fallback.Check(ctx, req)
+	}
+	return Decision{Allowed: false, Current: req.Current, Amount: req.Amount}, fmt.Errorf("workspace id is required")
+}
+
+func (s *SubscriptionService) loadSubscription(ctx context.Context, organizationID, workspaceID string) (models.BillingSubscription, error) {
+	var sub models.BillingSubscription
+	err := s.db.NewSelect().
+		Model(&sub).
+		Where("organization_id = ?", organizationID).
+		Scan(ctx)
+	if err == sql.ErrNoRows && workspaceID != "" {
+		err = s.db.NewSelect().
+			Model(&sub).
+			Where("workspace_id = ?", workspaceID).
+			Scan(ctx)
+	}
+	return sub, err
+}
+
+func (s *SubscriptionService) organizationForWorkspace(ctx context.Context, workspaceID string) (string, error) {
+	var workspace models.Workspace
+	err := s.db.NewSelect().
+		Model(&workspace).
+		Column("id", "organization_id").
+		Where("id = ?", workspaceID).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return "org_" + workspaceID, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("loading workspace organization: %w", err)
+	}
+	if strings.TrimSpace(workspace.OrganizationID) != "" {
+		return strings.TrimSpace(workspace.OrganizationID), nil
+	}
+	return "org_" + workspaceID, nil
+}
+
 func (s *SubscriptionService) checkUserWorkspaceLimit(ctx context.Context, req Request) (Decision, bool, error) {
 	var subscriptions []models.BillingSubscription
-	err := s.db.NewSelect().
+	query := s.db.NewSelect().
 		Model(&subscriptions).
 		ModelTableExpr("billing_subscriptions AS bs").
 		ColumnExpr("bs.*").
-		Join("JOIN workspace_members AS wm ON wm.workspace_id = bs.workspace_id").
-		Where("wm.user_id = ?", req.UserID).
-		Scan(ctx)
+		Join("JOIN organization_members AS om ON om.organization_id = bs.organization_id").
+		Where("om.user_id = ?", req.UserID)
+	err := query.Scan(ctx)
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "organization_members") {
+		err = s.db.NewSelect().
+			Model(&subscriptions).
+			ModelTableExpr("billing_subscriptions AS bs").
+			ColumnExpr("bs.*").
+			Join("JOIN workspace_members AS wm ON wm.workspace_id = bs.workspace_id").
+			Where("wm.user_id = ?", req.UserID).
+			Scan(ctx)
+	}
 	if err != nil {
 		return Decision{}, false, fmt.Errorf("loading user subscriptions: %w", err)
 	}

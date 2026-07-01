@@ -35,6 +35,8 @@ func newWorkspaceTestServerWithAuthenticator(t *testing.T, entitlement entitleme
 	db := createHandlerTestDB(
 		t,
 		(*models.User)(nil),
+		(*models.Organization)(nil),
+		(*models.OrganizationMember)(nil),
 		(*models.Workspace)(nil),
 		(*models.WorkspaceMember)(nil),
 		(*models.WorkspaceInvitation)(nil),
