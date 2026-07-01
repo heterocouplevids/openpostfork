@@ -197,30 +197,33 @@ func newInstanceHealthCmd() *cobra.Command {
 }
 
 type instanceDiagnostics struct {
-	CLIVersion      string             `json:"cli_version"`
-	Platform        string             `json:"platform"`
-	Profile         string             `json:"profile"`
-	Instance        string             `json:"instance"`
-	ConfigPath      string             `json:"config_path"`
-	CredentialPath  string             `json:"credential_path"`
-	Deployment      string             `json:"deployment_method,omitempty"`
-	Provider        string             `json:"provider,omitempty"`
-	Token           bool               `json:"token"`
-	TokenSource     string             `json:"token_source,omitempty"`
-	Health          string             `json:"health"`
-	Ready           string             `json:"ready"`
-	Database        string             `json:"database"`
-	Authenticated   bool               `json:"authenticated"`
-	UserEmail       string             `json:"user_email,omitempty"`
-	Workspace       string             `json:"workspace,omitempty"`
-	WorkspaceCount  int                `json:"workspace_count"`
-	ProviderSummary string             `json:"provider_summary,omitempty"`
-	ProviderStatus  string             `json:"provider_status,omitempty"`
-	ProviderCatalog []api.ProviderInfo `json:"provider_catalog,omitempty"`
-	LogFile         string             `json:"log_file,omitempty"`
-	LogTailLineCap  int                `json:"log_tail_line_cap,omitempty"`
-	RedactedLogTail []string           `json:"redacted_log_tail,omitempty"`
-	Errors          []string           `json:"errors,omitempty"`
+	CLIVersion       string             `json:"cli_version"`
+	Platform         string             `json:"platform"`
+	Profile          string             `json:"profile"`
+	Instance         string             `json:"instance"`
+	ConfigPath       string             `json:"config_path"`
+	CredentialPath   string             `json:"credential_path"`
+	Deployment       string             `json:"deployment_method,omitempty"`
+	Provider         string             `json:"provider,omitempty"`
+	Token            bool               `json:"token"`
+	TokenSource      string             `json:"token_source,omitempty"`
+	Health           string             `json:"health"`
+	Ready            string             `json:"ready"`
+	Database         string             `json:"database"`
+	Authenticated    bool               `json:"authenticated"`
+	UserEmail        string             `json:"user_email,omitempty"`
+	Workspace        string             `json:"workspace,omitempty"`
+	WorkspaceCount   int                `json:"workspace_count"`
+	BillingWorkspace string             `json:"billing_workspace_id,omitempty"`
+	BillingSummary   string             `json:"billing_summary,omitempty"`
+	Billing          *api.BillingStatus `json:"billing,omitempty"`
+	ProviderSummary  string             `json:"provider_summary,omitempty"`
+	ProviderStatus   string             `json:"provider_status,omitempty"`
+	ProviderCatalog  []api.ProviderInfo `json:"provider_catalog,omitempty"`
+	LogFile          string             `json:"log_file,omitempty"`
+	LogTailLineCap   int                `json:"log_tail_line_cap,omitempty"`
+	RedactedLogTail  []string           `json:"redacted_log_tail,omitempty"`
+	Errors           []string           `json:"errors,omitempty"`
 }
 
 type instanceDiagnosticsFlags struct {
@@ -291,6 +294,17 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 					out.Errors = append(out.Errors, "workspaces: "+err.Error())
 				} else {
 					out.WorkspaceCount = len(workspaces)
+					if workspaceID, ok, err := diagnosticsWorkspaceID(cfg, workspaces); err != nil {
+						out.Errors = append(out.Errors, "billing: "+err.Error())
+					} else if ok {
+						out.BillingWorkspace = workspaceID
+						if billingStatus, err := authClient.BillingStatus(cmd.Context(), workspaceID); err != nil {
+							out.Errors = append(out.Errors, "billing: "+err.Error())
+						} else {
+							out.Billing = billingStatus
+							out.BillingSummary = summarizeBillingStatus(*billingStatus)
+						}
+					}
 				}
 				if providers, err := authClient.ListAccountProviders(cmd.Context()); err != nil {
 					out.Errors = append(out.Errors, "provider catalog: "+err.Error())
@@ -336,6 +350,8 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 				{"User email", emptyDash(out.UserEmail)},
 				{"Workspace", emptyDash(out.Workspace)},
 				{"Workspace count", fmt.Sprintf("%d", out.WorkspaceCount)},
+				{"Billing workspace", emptyDash(out.BillingWorkspace)},
+				{"Billing", emptyDash(out.BillingSummary)},
 				{"Provider catalog", emptyDash(out.ProviderSummary)},
 				{"Provider status", emptyDash(out.ProviderStatus)},
 				{"Log file", emptyDash(out.LogFile)},
@@ -361,6 +377,61 @@ func newInstanceDiagnosticsCmd() *cobra.Command {
 	cmd.Flags().StringVar(&flags.provider, "provider", "", "social provider being tested, such as x, mastodon, youtube, or tiktok")
 	cmd.Flags().StringVar(&flags.logsFile, "logs-file", "", "local OpenPost log file to include as a redacted last-100-line tail")
 	return cmd
+}
+
+func diagnosticsWorkspaceID(cfg *config.Runtime, workspaces []api.Workspace) (string, bool, error) {
+	selector := strings.TrimSpace(cfg.Workspace)
+	if selector == "" {
+		return "", false, nil
+	}
+	if selector == cfg.Profile.WorkspaceID || selector == cfg.Profile.WorkspaceName {
+		if cfg.Profile.WorkspaceID != "" {
+			return cfg.Profile.WorkspaceID, true, nil
+		}
+	}
+	ws, err := findWorkspace(workspaces, selector)
+	if err != nil {
+		return "", true, err
+	}
+	return ws.ID, true, nil
+}
+
+func summarizeBillingStatus(status api.BillingStatus) string {
+	parts := []string{}
+	if status.PlanID != "" {
+		parts = append(parts, status.PlanID)
+	}
+	if status.Status != "" {
+		parts = append(parts, status.Status)
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "unknown")
+	}
+	if status.CancelAtPeriodEnd {
+		parts = append(parts, "canceling")
+	}
+	usage := billingUsageRatios(status.Limits, status.Usage)
+	if len(usage) > 0 {
+		parts = append(parts, strings.Join(usage, ", "))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func billingUsageRatios(limits, usage map[string]int64) []string {
+	if len(limits) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(limits))
+	for key := range limits {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d/%d", key, usage[key], limits[key]))
+	}
+	return parts
 }
 
 func summarizeProviderCatalog(providers []api.ProviderInfo) string {

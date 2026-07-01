@@ -220,6 +220,94 @@ func TestInstanceDiagnosticsIncludesProviderCatalog(t *testing.T) {
 	}
 }
 
+func TestInstanceDiagnosticsIncludesBillingSnapshot(t *testing.T) {
+	t.Setenv("OPENPOST_CONFIG_DIR", t.TempDir())
+
+	var billingQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/health":
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		case "/api/v1/ready":
+			_, _ = w.Write([]byte(`{"status":"ready","database":"ok"}`))
+		case "/api/v1/auth/me":
+			_, _ = w.Write([]byte(`{"id":"user-1","email":"operator@example.com","created_at":"2026-01-01T00:00:00Z"}`))
+		case "/api/v1/workspaces":
+			_, _ = w.Write([]byte(`[{"id":"ws-1","name":"Production","created_at":"2026-01-01T00:00:00Z"}]`))
+		case "/api/v1/billing/status":
+			billingQuery = r.URL.RawQuery
+			_, _ = w.Write([]byte(`{
+				"workspace_id":"ws-1",
+				"provider":"polar",
+				"status":"active",
+				"plan_id":"creator",
+				"cancel_at_period_end":false,
+				"limits":{"scheduled_posts_monthly":500,"social_accounts":6},
+				"usage":{"scheduled_posts_monthly":42,"social_accounts":3},
+				"period_start":"2026-07-01T00:00:00Z"
+			}`))
+		case "/api/v1/accounts/providers":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	out, err := executeRootCaptureStdout(
+		t,
+		"--instance", srv.URL,
+		"--token", "op_cli_test",
+		"--workspace", "Production",
+		"--json",
+		"instance", "diagnostics",
+	)
+	if err != nil {
+		t.Fatalf("instance diagnostics returned error: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode json output: %v\noutput:\n%s", err, out)
+	}
+	if billingQuery != "workspace_id=ws-1" {
+		t.Fatalf("billing query = %q, want workspace_id=ws-1", billingQuery)
+	}
+	if got["billing_workspace_id"] != "ws-1" {
+		t.Fatalf("billing_workspace_id = %#v", got["billing_workspace_id"])
+	}
+	if got["billing_summary"] != "creator; active; scheduled_posts_monthly=42/500, social_accounts=3/6" {
+		t.Fatalf("billing_summary = %#v", got["billing_summary"])
+	}
+	billing, ok := got["billing"].(map[string]any)
+	if !ok || billing["plan_id"] != "creator" || billing["status"] != "active" {
+		t.Fatalf("billing = %#v", got["billing"])
+	}
+}
+
+func TestBillingSummaryHelpers(t *testing.T) {
+	status := api.BillingStatus{
+		Status:            "active",
+		PlanID:            "pro",
+		CancelAtPeriodEnd: true,
+		Limits: map[string]int64{
+			"social_accounts":         15,
+			"scheduled_posts_monthly": 2500,
+		},
+		Usage: map[string]int64{
+			"social_accounts":         4,
+			"scheduled_posts_monthly": 125,
+		},
+	}
+
+	got := summarizeBillingStatus(status)
+	want := "pro; active; canceling; scheduled_posts_monthly=125/2500, social_accounts=4/15"
+	if got != want {
+		t.Fatalf("summarizeBillingStatus() = %q, want %q", got, want)
+	}
+}
+
 func TestProviderCatalogSummaryAndLookupHelpers(t *testing.T) {
 	providers := []api.ProviderInfo{
 		{Platform: "x", DisplayName: "X", Configured: true, Status: "available"},

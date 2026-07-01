@@ -267,6 +267,30 @@ func (c *Client) GetWorkspaceSettings(ctx context.Context, workspaceID string) (
 	return &out, nil
 }
 
+// ----- Billing -----
+
+type BillingStatus struct {
+	WorkspaceID       string           `json:"workspace_id"`
+	Provider          string           `json:"provider,omitempty"`
+	Status            string           `json:"status"`
+	PlanID            string           `json:"plan_id,omitempty"`
+	CurrentPeriodEnd  string           `json:"current_period_end,omitempty"`
+	CancelAtPeriodEnd bool             `json:"cancel_at_period_end"`
+	Limits            map[string]int64 `json:"limits"`
+	Usage             map[string]int64 `json:"usage"`
+	PeriodStart       string           `json:"period_start"`
+}
+
+func (c *Client) BillingStatus(ctx context.Context, workspaceID string) (*BillingStatus, error) {
+	v := url.Values{}
+	v.Set("workspace_id", workspaceID)
+	var out BillingStatus
+	if err := c.GetJSON(ctx, "/api/v1/billing/status?"+v.Encode(), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ----- Posting schedules -----
 
 type PostingSchedule struct {

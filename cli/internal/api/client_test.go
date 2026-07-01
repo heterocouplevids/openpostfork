@@ -107,6 +107,42 @@ func TestListAccountProviders_WireFormat(t *testing.T) {
 	}
 }
 
+func TestBillingStatus_WireFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/billing/status" {
+			t.Fatalf("path = %s, want /api/v1/billing/status", r.URL.Path)
+		}
+		if r.URL.Query().Get("workspace_id") != "ws_1" {
+			t.Fatalf("workspace_id query = %q, want ws_1", r.URL.Query().Get("workspace_id"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"workspace_id":"ws_1",
+			"provider":"polar",
+			"status":"active",
+			"plan_id":"creator",
+			"current_period_end":"2026-07-31T00:00:00Z",
+			"cancel_at_period_end":false,
+			"limits":{"scheduled_posts_monthly":500,"social_accounts":6},
+			"usage":{"scheduled_posts_monthly":42,"social_accounts":3},
+			"period_start":"2026-07-01T00:00:00Z"
+		}`))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, "op_cli_test")
+	got, err := c.BillingStatus(context.Background(), "ws_1")
+	if err != nil {
+		t.Fatalf("BillingStatus returned error: %v", err)
+	}
+	if got.WorkspaceID != "ws_1" || got.Provider != "polar" || got.Status != "active" || got.PlanID != "creator" {
+		t.Fatalf("billing status wrong: %+v", got)
+	}
+	if got.Limits["scheduled_posts_monthly"] != 500 || got.Usage["scheduled_posts_monthly"] != 42 {
+		t.Fatalf("billing usage wrong: %+v", got)
+	}
+}
+
 func TestUpdateAccount_WireFormat(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch {
