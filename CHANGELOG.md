@@ -78,6 +78,7 @@ All notable changes to this project are documented in this file.
 - Added the docs E2E suite to CI and release preflight gates so docs audience separation stays verified automatically.
 - Added the app Playwright E2E suite to CI and release preflight gates for billing, MCP, provider, and publication workflows.
 - Added Playwright app E2E coverage for media-library upload and listing through the local-storage multipart fallback.
+- Added Playwright app E2E coverage for composer scheduling through suggested posting slots.
 - Added the backend OAuth account-selection foundation for page/channel providers, including encrypted pending selection storage and completion APIs used by Facebook and Instagram plus future YouTube adapters.
 - Added a first TikTok adapter slice with OAuth, provider discovery, one-video direct publishing through public HTTPS media URLs, media validation, app UI connection wiring, and provider docs.
 - Added a first Facebook Pages adapter slice with Meta OAuth, Page account selection, Page-token saving, text/single-media publishing through public HTTPS media URLs, provider discovery, and docs.
