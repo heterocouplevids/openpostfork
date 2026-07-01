@@ -16,6 +16,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/api/middleware"
+	dbexpr "github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/entitlements"
@@ -904,12 +905,9 @@ func (h *PostHandler) GetScheduleOverview(api huma.API) {
 			}
 		}
 
-		// Compute the date expression for SQL. If we have a workspace timezone modifier, use it;
-		// otherwise fall back to plain DATE() which uses UTC.
-		dateFn := "DATE(p.scheduled_at)"
-		if workspaceTzModifier != "" {
-			dateFn = fmt.Sprintf("DATE(datetime(p.scheduled_at, '%s'))", workspaceTzModifier)
-		}
+		// Compute a database-portable date expression. If we have a
+		// workspace timezone modifier, apply it before grouping.
+		dateFn := dbexpr.DateExpr(h.db, "p.scheduled_at", workspaceTzModifier)
 
 		// Expand month boundaries to account for timezone offsets
 		// so we capture posts whose local date falls in the target month
