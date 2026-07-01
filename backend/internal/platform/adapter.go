@@ -22,6 +22,14 @@ type MediaItem struct {
 	OriginalFilename string
 }
 
+type UploadMediaRequest struct {
+	MimeType    string
+	Filename    string
+	Title       string
+	Description string
+	Reader      io.Reader
+}
+
 type MediaValidationIssue struct {
 	Provider string
 	MediaID  string
@@ -42,6 +50,7 @@ func RegisterAllMediaValidators() {
 	MediaValidators[providerTikTok] = validateTikTokMedia
 	MediaValidators[providerThreads] = validateThreadsMedia
 	MediaValidators[providerX] = validateXMedia
+	MediaValidators[providerYouTube] = validateYouTubeMedia
 }
 
 func ValidateMedia(platformName string, media []MediaItem) []MediaValidationIssue {
@@ -144,6 +153,12 @@ type Adapter interface {
 	// For Bluesky this is JSON {"uri":"...","cid":"..."} for threading support.
 	// For LinkedIn this is the activity URN for the first post, or comment ID for replies.
 	Publish(ctx context.Context, accessToken, accountID string, req *PublishRequest) (string, error)
+}
+
+// MetadataMediaUploader is an optional extension for providers whose media
+// upload endpoint also creates the published object and needs post metadata.
+type MetadataMediaUploader interface {
+	UploadMediaWithMetadata(ctx context.Context, accessToken, accountID string, req UploadMediaRequest) (string, error)
 }
 
 // AccountSelectionAdapter is implemented by OAuth providers that need a second

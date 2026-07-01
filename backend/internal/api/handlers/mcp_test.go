@@ -639,8 +639,8 @@ func TestMCPCallListProviderCatalog(t *testing.T) {
 	content := result["content"].([]any)
 	text := content[0].(map[string]any)["text"].(string)
 	require.Contains(t, text, "available: Bluesky, X (Twitter), Mastodon")
-	require.Contains(t, text, "needs configuration: LinkedIn, Threads, Instagram, Facebook, TikTok")
-	require.Contains(t, text, "planned: YouTube")
+	require.Contains(t, text, "needs configuration: LinkedIn, Threads, Instagram, Facebook, YouTube, TikTok")
+	require.NotContains(t, text, "planned:")
 
 	structured := result["structuredContent"].(map[string]any)
 	providers := structured["providers"].([]any)
@@ -660,6 +660,8 @@ func TestMCPCallListProviderCatalog(t *testing.T) {
 	require.Equal(t, false, byPlatform["instagram"]["configured"])
 	require.Equal(t, "needs_configuration", byPlatform["tiktok"]["status"])
 	require.Equal(t, false, byPlatform["tiktok"]["configured"])
+	require.Equal(t, "needs_configuration", byPlatform["youtube"]["status"])
+	require.Equal(t, false, byPlatform["youtube"]["configured"])
 	require.Contains(t, byPlatform["youtube"]["capabilities"].([]any), "MCP workflows")
 }
 

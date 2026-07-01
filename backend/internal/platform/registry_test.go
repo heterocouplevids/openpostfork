@@ -15,6 +15,7 @@ func TestBuildAdapterRegistryBuildsCanonicalAndAliasKeys(t *testing.T) {
 		{Provider: "instagram", ClientID: "instagram-client", ClientSecret: "instagram-secret", RedirectURI: "https://app.test/api/v1/accounts/instagram/callback"},
 		{Provider: "x", ClientID: "x-client", ClientSecret: "x-secret", RedirectURI: "https://app.test/api/v1/accounts/x/callback"},
 		{Provider: "tiktok", ClientID: "tiktok-client", ClientSecret: "tiktok-secret", RedirectURI: "https://app.test/api/v1/accounts/tiktok/callback"},
+		{Provider: "youtube", ClientID: "youtube-client", ClientSecret: "youtube-secret", RedirectURI: "https://app.test/api/v1/accounts/youtube/callback"},
 		{
 			Provider:     "mastodon",
 			Name:         "Personal",
@@ -31,16 +32,17 @@ func TestBuildAdapterRegistryBuildsCanonicalAndAliasKeys(t *testing.T) {
 	require.Contains(t, adapters, "instagram")
 	require.Contains(t, adapters, "x")
 	require.Contains(t, adapters, "tiktok")
+	require.Contains(t, adapters, "youtube")
 	require.Contains(t, adapters, "mastodon:https://masto.pt")
 	require.Contains(t, adapters, "mastodon:Personal")
 	require.Same(t, adapters["mastodon:https://masto.pt"], adapters["mastodon:Personal"])
-	require.Len(t, entries, 7)
+	require.Len(t, entries, 8)
 }
 
 func TestBuildAdapterRegistryRejectsUnsupportedOrIncompleteApps(t *testing.T) {
 	t.Parallel()
 
-	_, _, err := BuildAdapterRegistry([]AppConfig{{Provider: "youtube"}}, RegistryOptions{})
+	_, _, err := BuildAdapterRegistry([]AppConfig{{Provider: "unknown"}}, RegistryOptions{})
 	require.ErrorContains(t, err, "unsupported provider app")
 
 	_, _, err = BuildAdapterRegistry([]AppConfig{{Provider: "threads"}}, RegistryOptions{})
@@ -54,4 +56,7 @@ func TestBuildAdapterRegistryRejectsUnsupportedOrIncompleteApps(t *testing.T) {
 
 	_, _, err = BuildAdapterRegistry([]AppConfig{{Provider: "tiktok"}}, RegistryOptions{})
 	require.ErrorContains(t, err, "tiktok provider app requires client_id")
+
+	_, _, err = BuildAdapterRegistry([]AppConfig{{Provider: "youtube"}}, RegistryOptions{})
+	require.ErrorContains(t, err, "youtube provider app requires client_id")
 }

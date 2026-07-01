@@ -225,7 +225,7 @@ type SocialAccount struct {
 	ID               string `bun:",pk" json:"id"`
 	WorkspaceID      string `bun:",notnull" json:"workspace_id"`
 	Slug             string `bun:",notnull" json:"slug"`
-	Platform         string `bun:",notnull" json:"platform"` // 'x', 'threads', 'linkedin', 'mastodon', 'bluesky', 'instagram', 'facebook', 'tiktok'
+	Platform         string `bun:",notnull" json:"platform"` // 'x', 'threads', 'linkedin', 'mastodon', 'bluesky', 'instagram', 'facebook', 'youtube', 'tiktok'
 	AccountID        string `bun:",notnull" json:"account_id"`
 	AccountUsername  string `json:"account_username"`
 	AccountAvatarURL string `json:"account_avatar_url"`

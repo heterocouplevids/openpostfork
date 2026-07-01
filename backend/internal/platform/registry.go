@@ -77,6 +77,12 @@ var appBuilders = map[string]appBuilder{
 		}
 		return NewTikTokAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
 	},
+	providerYouTube: func(app AppConfig, _ RegistryOptions) (Adapter, error) {
+		if strings.TrimSpace(app.ClientID) == "" {
+			return nil, fmt.Errorf("youtube provider app requires client_id")
+		}
+		return NewYouTubeAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
+	},
 }
 
 func BuildAdapterRegistry(apps []AppConfig, opts RegistryOptions) (map[string]Adapter, []RegistryEntry, error) {

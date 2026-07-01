@@ -212,12 +212,13 @@ func TestLoadMergesStructuredProviderApps(t *testing.T) {
 		{"provider":"mastodon","name":"Community","client_id":"masto-client","client_secret":"masto-secret","instance_url":"https://community.example"},
 		{"provider":"facebook","client_id":"facebook-client","client_secret":"facebook-secret"},
 		{"provider":"instagram","client_id":"instagram-client","client_secret":"instagram-secret"},
-		{"provider":"tiktok","client_id":"tiktok-client","client_secret":"tiktok-secret"}
+		{"provider":"tiktok","client_id":"tiktok-client","client_secret":"tiktok-secret"},
+		{"provider":"youtube","client_id":"youtube-client","client_secret":"youtube-secret"}
 	]`)
 
 	cfg := Load()
 
-	require.Len(t, cfg.ProviderApps, 6)
+	require.Len(t, cfg.ProviderApps, 7)
 	require.Equal(t, "bluesky", cfg.ProviderApps[0].Provider)
 	require.Equal(t, "cloud-x-client", cfg.ProviderApps[1].ClientID)
 	require.Equal(t, "https://app.openpost.social/api/v1/accounts/x/callback", cfg.ProviderApps[1].RedirectURI)
@@ -229,6 +230,8 @@ func TestLoadMergesStructuredProviderApps(t *testing.T) {
 	require.Equal(t, "https://app.openpost.social/api/v1/accounts/instagram/callback", cfg.ProviderApps[4].RedirectURI)
 	require.Equal(t, "tiktok", cfg.ProviderApps[5].Provider)
 	require.Equal(t, "https://app.openpost.social/api/v1/accounts/tiktok/callback", cfg.ProviderApps[5].RedirectURI)
+	require.Equal(t, "youtube", cfg.ProviderApps[6].Provider)
+	require.Equal(t, "https://app.openpost.social/api/v1/accounts/youtube/callback", cfg.ProviderApps[6].RedirectURI)
 }
 
 func TestLoadInvalidProductionPrimitiveEnumsFallback(t *testing.T) {

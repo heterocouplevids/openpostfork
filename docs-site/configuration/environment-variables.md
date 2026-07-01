@@ -126,10 +126,28 @@ Example:
 
 TikTok direct video publishing requires `OPENPOST_MEDIA_URL` or `OPENPOST_S3_PUBLIC_BASE_URL` to point at public HTTPS media URLs.
 
+## YouTube
+
+YouTube video uploads are configured through `OPENPOST_PROVIDER_APPS` instead of legacy provider-specific env vars.
+
+Example:
+
+```json
+[
+  {
+    "provider": "youtube",
+    "client_id": "your-google-oauth-client-id",
+    "client_secret": "your-google-oauth-client-secret"
+  }
+]
+```
+
+If `redirect_uri` is omitted, OpenPost derives `https://your-domain.com/api/v1/accounts/youtube/callback` from `OPENPOST_APP_URL`. The first adapter slice uploads one video as a private YouTube video and derives the video title from the first non-empty line of the post or platform variant.
+
 ## Notes
 
 - The preferred names above are what new deployments should use.
-- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. It currently supports implemented adapters only: `x`, `mastodon`, `linkedin`, `threads`, `facebook`, `instagram`, and `tiktok`; Bluesky is enabled separately through app-password login. Planned providers such as YouTube are visible in provider discovery but are rejected in app config until their adapters land.
+- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. It currently supports implemented adapters only: `x`, `mastodon`, `linkedin`, `threads`, `facebook`, `instagram`, `tiktok`, and `youtube`; Bluesky is enabled separately through app-password login.
 - Backward-compatible aliases still work for existing installs: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.
 - The root `.env.example` is the best copy-paste starting point.
 - Set explicit public URLs in production even when defaults exist.

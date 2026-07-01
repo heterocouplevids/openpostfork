@@ -385,11 +385,16 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 		}
 	}
 
+	publishContent := post.Content
+	if variant != nil && variant.IsUnsynced && variant.Content != "" {
+		publishContent = variant.Content
+	}
+
 	var platformMediaIDs []string
 	var mediaAltTexts []string
 	mediaItems := make([]platform.MediaItem, 0, len(mediaAttachments))
 	for _, media := range mediaAttachments {
-		mediaID, err := s.uploadMediaToPlatform(ctx, account, provider, token, media)
+		mediaID, err := s.uploadMediaToPlatform(ctx, account, provider, token, media, publishContent)
 		if err != nil {
 			log.Printf("[Publisher] Failed to upload media %s to %s: %v", media.ID, account.Platform, err)
 			return fmt.Errorf("media upload failed for %s: %w", media.ID, err)
@@ -413,17 +418,11 @@ func (s *Service) publishToDestination(ctx context.Context, post *models.Post, d
 	}
 
 	req := &platform.PublishRequest{
-		Content:          post.Content,
+		Content:          publishContent,
 		PlatformMediaIDs: platformMediaIDs,
 		MediaAltTexts:    mediaAltTexts,
 		Media:            mediaItems,
 		ReplyToID:        replyToID,
-	}
-
-	if variant != nil && variant.IsUnsynced {
-		if variant.Content != "" {
-			req.Content = variant.Content
-		}
 	}
 
 	if err := s.checkMonthlyQuota(ctx, post.WorkspaceID, entitlements.LimitProviderWriteCallsMonthly); err != nil {
@@ -544,7 +543,7 @@ func isExpiredTokenError(err error) bool {
 		(strings.Contains(msg, "expired") && strings.Contains(msg, "token"))
 }
 
-func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.Adapter, token string, media models.MediaAttachment) (string, error) {
+func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.Adapter, token string, media models.MediaAttachment, content string) (string, error) {
 	if account.Platform == "threads" || account.Platform == "tiktok" || account.Platform == "facebook" || account.Platform == "instagram" {
 		return s.getPublicMediaURL(media), nil
 	}
@@ -558,7 +557,35 @@ func (s *Service) uploadMediaToPlatform(ctx context.Context, account *models.Soc
 	}
 	defer data.Close()
 
+	if uploader, ok := provider.(platform.MetadataMediaUploader); ok {
+		return uploader.UploadMediaWithMetadata(ctx, token, account.AccountID, platform.UploadMediaRequest{
+			MimeType:    media.MimeType,
+			Filename:    firstNonEmptyPublisherString(media.OriginalFilename, filepath.Base(media.FilePath)),
+			Title:       firstContentLine(content),
+			Description: strings.TrimSpace(content),
+			Reader:      data,
+		})
+	}
+
 	return provider.UploadMedia(ctx, token, account.AccountID, media.MimeType, data)
+}
+
+func firstContentLine(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyPublisherString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (s *Service) loadVariant(ctx context.Context, postID, socialAccountID string) (*models.PostVariant, error) {

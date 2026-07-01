@@ -97,9 +97,14 @@ test("accounts page shows configured and unavailable providers", async ({
           display_name: "YouTube",
           auth_mode: "oauth",
           configured: false,
-          status: "planned",
-          description: "Planned adapter for Shorts and video workflows.",
-          capabilities: ["Shorts", "Video", "Scheduling", "MCP workflows"],
+          status: "needs_configuration",
+          description: "Requires a Google OAuth provider app.",
+          capabilities: [
+            "Shorts",
+            "Video uploads",
+            "Scheduling",
+            "MCP workflows",
+          ],
         },
         {
           platform: "tiktok",
@@ -137,6 +142,7 @@ test("accounts page shows configured and unavailable providers", async ({
     "threads",
     "instagram",
     "facebook",
+    "youtube",
     "tiktok",
   ]) {
     await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
@@ -146,17 +152,6 @@ test("accounts page shows configured and unavailable providers", async ({
       page
         .getByTestId(`provider-card-${platform}`)
         .getByRole("button", { name: "Unavailable" }),
-    ).toBeDisabled();
-  }
-
-  for (const platform of ["youtube"]) {
-    await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
-      "Planned",
-    );
-    await expect(
-      page
-        .getByTestId(`provider-card-${platform}`)
-        .getByRole("button", { name: "Planned" }),
     ).toBeDisabled();
   }
 });

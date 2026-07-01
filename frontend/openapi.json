@@ -4008,12 +4008,12 @@
 				"operationId": "get-auth-url",
 				"parameters": [
 					{
-						"description": "Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok)",
+						"description": "Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok, youtube)",
 						"in": "path",
 						"name": "platform",
 						"required": true,
 						"schema": {
-							"description": "Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok)",
+							"description": "Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok, youtube)",
 							"type": "string"
 						}
 					},

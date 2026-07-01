@@ -12,9 +12,7 @@ The provider discovery API returns current and planned providers so clients can 
 
 ## Planned adapters
 
-| Provider  | Initial product focus                                                                       |
-| --------- | ------------------------------------------------------------------------------------------- |
-| YouTube   | Shorts, video publishing, scheduling, agent workflows.                                      |
+No planned adapter is exposed as connectable right now. New provider roadmap items should stay in `planned` status until backend publish behavior, provider discovery, UI states, docs, and tests land together.
 
 ## Implemented first slices
 
@@ -23,15 +21,16 @@ The provider discovery API returns current and planned providers so clients can 
 | Facebook | Selected Page publishing for text, one public HTTPS image URL, or one public HTTPS video URL. |
 | Instagram | Selected Instagram Business account publishing for one public HTTPS image URL or Reel video URL. |
 | TikTok   | One-video direct publishing through public HTTPS media URLs, scheduling, per-platform variants, MCP workflows. |
+| YouTube  | Selected channel uploads for one private video, scheduling, per-platform variants, MCP workflows. |
 
 ## Account-selection requirement
 
 Some providers cannot be modeled as a single OAuth user profile:
 
 - Instagram connects the selected Instagram Business account behind a Facebook Page.
-- YouTube should connect the selected channel.
+- YouTube connects the selected channel.
 
-Instagram and Facebook use the backend account-selection flow today. YouTube must implement it before it moves from `planned` to connectable. TikTok uses a direct OAuth account flow and is connectable when configured, but its initial adapter is intentionally video-only.
+Instagram, Facebook, and YouTube use the backend account-selection flow today. TikTok uses a direct OAuth account flow and is connectable when configured, but its initial adapter is intentionally video-only.
 
 ## Implementation contract
 

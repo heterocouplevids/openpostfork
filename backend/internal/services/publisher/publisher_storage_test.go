@@ -71,6 +71,22 @@ func (f *fakePublisherAdapter) Publish(context.Context, string, string, *platfor
 	return "external-post-id", nil
 }
 
+type fakeMetadataPublisherAdapter struct {
+	fakePublisherAdapter
+	uploadReq platform.UploadMediaRequest
+}
+
+func (f *fakeMetadataPublisherAdapter) UploadMediaWithMetadata(_ context.Context, _, _ string, req platform.UploadMediaRequest) (string, error) {
+	body, err := io.ReadAll(req.Reader)
+	if err != nil {
+		return "", err
+	}
+	f.uploadedBody = string(body)
+	req.Reader = nil
+	f.uploadReq = req
+	return "metadata-media-id", nil
+}
+
 var errFakePublishFailed = errors.New("publish failed")
 
 func TestUploadMediaToPlatformReadsFromBlobStorage(t *testing.T) {
@@ -85,6 +101,7 @@ func TestUploadMediaToPlatformReadsFromBlobStorage(t *testing.T) {
 		adapter,
 		"token",
 		models.MediaAttachment{FilePath: "media/example.png", MimeType: "image/png"},
+		"Launch\nDescription",
 	)
 
 	require.NoError(t, err)
@@ -106,6 +123,7 @@ func TestUploadMediaToPlatformUsesPublicURLForTikTok(t *testing.T) {
 		adapter,
 		"token",
 		models.MediaAttachment{ID: "media-1", FilePath: "media/example.mp4", MimeType: "video/mp4"},
+		"Launch video",
 	)
 
 	require.NoError(t, err)
@@ -127,6 +145,7 @@ func TestUploadMediaToPlatformUsesPublicURLForFacebook(t *testing.T) {
 		adapter,
 		"token",
 		models.MediaAttachment{ID: "media-1", FilePath: "media/example.jpg", MimeType: "image/jpeg"},
+		"Launch image",
 	)
 
 	require.NoError(t, err)
@@ -148,10 +167,36 @@ func TestUploadMediaToPlatformUsesPublicURLForInstagram(t *testing.T) {
 		adapter,
 		"token",
 		models.MediaAttachment{ID: "media-1", FilePath: "media/example.jpg", MimeType: "image/jpeg"},
+		"Launch image",
 	)
 
 	require.NoError(t, err)
 	require.Equal(t, "https://media.openpost.test/media/media-1.jpg", got)
 	require.Empty(t, storage.opened)
 	require.Empty(t, adapter.uploadedBody)
+}
+
+func TestUploadMediaToPlatformUsesMetadataUploader(t *testing.T) {
+	storage := &fakePublisherStorage{body: "stored-video"}
+	adapter := &fakeMetadataPublisherAdapter{}
+	service := NewService(nil, nil)
+	service.SetStorage(storage)
+
+	got, err := service.uploadMediaToPlatform(
+		context.Background(),
+		&models.SocialAccount{Platform: "youtube", AccountID: "channel-1"},
+		adapter,
+		"token",
+		models.MediaAttachment{ID: "media-1", FilePath: "media/example.mp4", MimeType: "video/mp4", OriginalFilename: "example.mp4"},
+		"Launch title\nLonger description",
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, "metadata-media-id", got)
+	require.Equal(t, "example.mp4", storage.opened)
+	require.Equal(t, "stored-video", adapter.uploadedBody)
+	require.Equal(t, "video/mp4", adapter.uploadReq.MimeType)
+	require.Equal(t, "example.mp4", adapter.uploadReq.Filename)
+	require.Equal(t, "Launch title", adapter.uploadReq.Title)
+	require.Equal(t, "Launch title\nLonger description", adapter.uploadReq.Description)
 }

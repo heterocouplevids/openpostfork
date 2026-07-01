@@ -37,6 +37,7 @@ const (
 	providerTikTok    = "tiktok"
 	providerThreads   = "threads"
 	providerX         = "x"
+	providerYouTube   = "youtube"
 
 	// JSON field names reused across adapters.
 	bskyRecordTypeField = "$type"

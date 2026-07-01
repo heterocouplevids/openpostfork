@@ -116,7 +116,7 @@ type ListMastodonServersOutput struct {
 }
 
 type GetAuthURLInput struct {
-	Platform    string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok)"`
+	Platform    string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok, youtube)"`
 	WorkspaceID string `query:"workspace_id" required:"true" doc:"Workspace ID to link account to"`
 	ServerName  string `query:"server_name" doc:"Mastodon server name from config (required for mastodon)"`
 	InstanceURL string `query:"instance_url" doc:"Mastodon instance URL to dynamically register"`
@@ -270,9 +270,8 @@ var providerCatalog = []ProviderInfo{
 		Platform:     "youtube",
 		DisplayName:  "YouTube",
 		AuthMode:     "oauth",
-		Status:       providerStatusPlanned,
-		Description:  "Planned adapter for Shorts and video publishing workflows.",
-		Capabilities: []string{"Shorts", "Video", "Scheduling", "Platform variants", "MCP workflows"},
+		Description:  "Google OAuth connection for YouTube video and Shorts uploads.",
+		Capabilities: []string{"Shorts", "Video uploads", "Scheduling", "Platform variants", "MCP workflows"},
 	},
 	{
 		Platform:     "tiktok",

@@ -9,3 +9,4 @@
 | Facebook | `http://localhost:8080/api/v1/accounts/facebook/callback` | `https://your-domain.com/api/v1/accounts/facebook/callback` |
 | Instagram | `http://localhost:8080/api/v1/accounts/instagram/callback` | `https://your-domain.com/api/v1/accounts/instagram/callback` |
 | TikTok | `http://localhost:8080/api/v1/accounts/tiktok/callback` | `https://your-domain.com/api/v1/accounts/tiktok/callback` |
+| YouTube | `http://localhost:8080/api/v1/accounts/youtube/callback` | `https://your-domain.com/api/v1/accounts/youtube/callback` |

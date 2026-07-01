@@ -252,6 +252,7 @@ func providerRedirectURI(cfg *Config, provider string) string {
 		"linkedin":  cfg.LinkedInRedirectURI,
 		"threads":   cfg.ThreadsRedirectURI,
 		"tiktok":    oauthRedirectFromFrontend("", "", cfg.FrontendURL, "/api/v1/accounts/tiktok/callback"),
+		"youtube":   oauthRedirectFromFrontend("", "", cfg.FrontendURL, "/api/v1/accounts/youtube/callback"),
 	}
 	return redirects[provider]
 }

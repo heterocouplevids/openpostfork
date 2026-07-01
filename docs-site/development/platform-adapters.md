@@ -12,6 +12,7 @@ Provider integrations live under `backend/internal/platform/`.
 - `facebook.go`
 - `instagram.go`
 - `tiktok.go`
+- `youtube.go`
 
 ## Account selection
 
@@ -19,7 +20,7 @@ Most providers can save a connected account directly after OAuth profile lookup.
 
 - Facebook uses this flow to select a Page and save the Page token.
 - Instagram Business uses this flow to select the connected Instagram account behind a Facebook Page.
-- YouTube requires selecting a channel.
+- YouTube uses this flow to select a channel and preserve the Google refresh token.
 
 Adapters for those providers should implement `platform.AccountSelectionAdapter` in addition to the base adapter. The OAuth callback stores encrypted pending tokens in `oauth_account_selections`, redirects with `status=selection_required`, and exposes:
 

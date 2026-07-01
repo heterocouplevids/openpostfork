@@ -133,8 +133,8 @@
 			display_name: 'YouTube',
 			auth_mode: 'oauth',
 			configured: false,
-			status: 'planned',
-			description: 'Planned adapter for Shorts and video workflows.'
+			status: 'needs_configuration',
+			description: 'Requires a Google OAuth provider app.'
 		},
 		{
 			platform: 'tiktok',
@@ -626,6 +626,27 @@
 		}
 	}
 
+	async function connectYouTube() {
+		if (!selectedWorkspaceId) {
+			alert('Please create a workspace first');
+			return;
+		}
+
+		try {
+			localStorage.setItem('oauth_workspace_id', selectedWorkspaceId);
+
+			const { data } = await client.GET('/accounts/{platform}/auth-url', {
+				params: {
+					path: { platform: 'youtube' },
+					query: { workspace_id: selectedWorkspaceId }
+				}
+			});
+			if (data?.url) window.location.href = data.url;
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
 	function providerKey(provider: ProviderInfo): string {
 		if (provider.platform === 'mastodon') {
 			return provider.instance_url || provider.name || provider.platform;
@@ -660,6 +681,8 @@
 				return 'Post to Instagram Business';
 			case 'facebook':
 				return 'Post to Facebook Pages';
+			case 'youtube':
+				return 'Upload YouTube videos and Shorts';
 			case 'tiktok':
 				return 'Post short-form video to TikTok';
 			default:
@@ -760,6 +783,9 @@
 				break;
 			case 'facebook':
 				connectFacebook();
+				break;
+			case 'youtube':
+				connectYouTube();
 				break;
 			case 'tiktok':
 				connectTikTok();

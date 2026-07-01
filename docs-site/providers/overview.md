@@ -16,18 +16,9 @@ These providers have adapter code in OpenPost today. The Accounts page discovers
 | Facebook | Meta OAuth             | Structured provider app JSON                    | Configurable | Pages only first slice; public media URL required for media.   |
 | Instagram | Meta OAuth            | Structured provider app JSON                    | Configurable | Business accounts only; public media URL required for media.   |
 | TikTok   | OAuth 2.0              | Structured provider app JSON                    | Configurable | Video-only first slice; public media URL required.             |
+| YouTube  | Google OAuth           | Structured provider app JSON                    | Configurable | One-video private upload first slice.                           |
 
 Start with one provider, confirm the callback works, then expand.
-
-## Planned provider apps
-
-OpenPost now exposes planned providers in the provider discovery API so clients can render a truthful roadmap without enabling broken connect buttons.
-
-| Provider | Planned focus                                  | Status          |
-| -------- | ---------------------------------------------- | --------------- |
-| YouTube  | Shorts and video publishing workflows          | Planned adapter |
-
-Do not add planned providers to `OPENPOST_PROVIDER_APPS` yet. The backend intentionally rejects unsupported provider app entries until each adapter implements the shared `PlatformAdapter` contract.
 
 ## Support matrix
 
@@ -43,6 +34,7 @@ This matrix reflects current OpenPost support, not the full theoretical capabili
 | Facebook | Yes        | Yes         | No                               | Yes             | Partial, one public HTTPS video URL path implemented                  | Yes                        | No        |
 | Instagram | No        | Yes         | No                               | Yes             | Partial, one public HTTPS video URL path implemented as Reels         | Yes                        | No        |
 | TikTok   | No         | No          | No                               | Yes             | Partial, one public HTTPS video URL path implemented                  | Yes                        | No        |
+| YouTube  | No         | No          | No                               | Yes             | Partial, one private video upload path implemented                    | Yes                        | No        |
 
 ## Provider-specific caveats
 
@@ -54,5 +46,6 @@ This matrix reflects current OpenPost support, not the full theoretical capabili
 - **Facebook:** Configure through `OPENPOST_PROVIDER_APPS` with provider `facebook`. The initial adapter connects a selected Page and supports text, one image URL, or one video URL.
 - **Instagram:** Configure through `OPENPOST_PROVIDER_APPS` with provider `instagram`. The initial adapter connects a selected Instagram Business account behind a Facebook Page and supports one image URL or one Reel video URL.
 - **TikTok:** Configure through `OPENPOST_PROVIDER_APPS` with provider `tiktok`. The initial adapter supports one video attachment via a public HTTPS media URL and the direct-post video endpoint.
+- **YouTube:** Configure through `OPENPOST_PROVIDER_APPS` with provider `youtube`. The initial adapter connects a selected channel and uploads one video as private by default.
 
 Provider API policies, scopes, rate limits, and review requirements can change. Re-check provider docs if a previously working flow starts failing.
