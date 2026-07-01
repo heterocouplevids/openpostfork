@@ -41,6 +41,7 @@ let
       export NODE_OPTIONS="--max-old-space-size=1024"
       cd "${config.git.root}/frontend"
       pnpm install --frozen-lockfile
+      pnpm exec playwright install chromium
       # Run tests only if test files exist, otherwise skip silently
       if find src -name "*.test.ts" -o -name "*.spec.ts" 2>/dev/null | grep -q .; then
         pnpm --filter @openpost/web test

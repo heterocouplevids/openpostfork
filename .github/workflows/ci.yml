@@ -311,6 +311,7 @@ jobs:
         shell: devenv shell bash -- -e {0}
         run: |
           pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
           pnpm --filter @openpost/web test
           pnpm --filter @openpost/web build
           pnpm --filter @openpost/site check
