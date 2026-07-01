@@ -22,7 +22,7 @@ https://your-domain.com/api/v1/accounts/instagram/callback
 
 ## Configuration
 
-Configure Instagram through `OPENPOST_PROVIDER_APPS`:
+Configure Instagram through the provider app registry. For bootstrap/self-hosting, use `OPENPOST_PROVIDER_APPS`:
 
 ```json
 [

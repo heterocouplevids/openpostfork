@@ -116,6 +116,37 @@ func BuildAdapterRegistry(apps []AppConfig, opts RegistryOptions) (map[string]Ad
 	return adapters, entries, nil
 }
 
+func MergeAppConfigs(base []AppConfig, overrides ...AppConfig) []AppConfig {
+	merged := make([]AppConfig, 0, len(base)+len(overrides))
+	indexByKey := make(map[string]int, len(base)+len(overrides))
+
+	for _, app := range base {
+		app = NormalizeAppConfig(app)
+		key := AppConfigMergeKey(app)
+		indexByKey[key] = len(merged)
+		merged = append(merged, app)
+	}
+	for _, app := range overrides {
+		app = NormalizeAppConfig(app)
+		key := AppConfigMergeKey(app)
+		if i, ok := indexByKey[key]; ok {
+			merged[i] = app
+			continue
+		}
+		indexByKey[key] = len(merged)
+		merged = append(merged, app)
+	}
+	return merged
+}
+
+func AppConfigMergeKey(app AppConfig) string {
+	app = NormalizeAppConfig(app)
+	if app.Provider == providerMastodon {
+		return app.Provider + ":" + app.InstanceURL
+	}
+	return app.Provider
+}
+
 func NormalizeAppConfig(app AppConfig) AppConfig {
 	app.Provider = strings.ToLower(strings.TrimSpace(app.Provider))
 	app.Name = strings.TrimSpace(app.Name)

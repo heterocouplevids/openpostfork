@@ -49,10 +49,10 @@ changes live in [Developer Docs](/development/).
 
 - [ ] Start with Bluesky or Mastodon for the first end-to-end publish smoke.
 - [ ] Update callback URLs for X, LinkedIn, Threads, Facebook, Instagram, TikTok, and YouTube to the production HTTPS app origin.
-- [ ] Add Facebook through `OPENPOST_PROVIDER_APPS` if Facebook Pages publishing is enabled, and confirm `OPENPOST_MEDIA_URL` serves public HTTPS media for media posts.
-- [ ] Add Instagram through `OPENPOST_PROVIDER_APPS` if Instagram Business publishing is enabled, and confirm `OPENPOST_MEDIA_URL` serves public HTTPS media.
-- [ ] Add TikTok through `OPENPOST_PROVIDER_APPS` if short-form video publishing is enabled, and confirm `OPENPOST_MEDIA_URL` serves public HTTPS media.
-- [ ] Add YouTube through `OPENPOST_PROVIDER_APPS` if video uploads are enabled, and confirm the Google Cloud project has YouTube Data API v3 enabled.
+- [ ] Add Facebook through `OPENPOST_PROVIDER_APPS` or encrypted `provider_apps` rows if Facebook Pages publishing is enabled, and confirm `OPENPOST_MEDIA_URL` serves public HTTPS media for media posts.
+- [ ] Add Instagram through `OPENPOST_PROVIDER_APPS` or encrypted `provider_apps` rows if Instagram Business publishing is enabled, and confirm `OPENPOST_MEDIA_URL` serves public HTTPS media.
+- [ ] Add TikTok through `OPENPOST_PROVIDER_APPS` or encrypted `provider_apps` rows if short-form video publishing is enabled, and confirm `OPENPOST_MEDIA_URL` serves public HTTPS media.
+- [ ] Add YouTube through `OPENPOST_PROVIDER_APPS` or encrypted `provider_apps` rows if video uploads are enabled, and confirm the Google Cloud project has YouTube Data API v3 enabled.
 - [ ] Configure Mastodon servers in `MASTODON_SERVERS` if you need fixed self-hosted Mastodon apps.
 - [ ] Confirm custom Mastodon instance registration works if you rely on dynamic Mastodon connections.
 - [ ] Keep first-slice providers in limited rollout until their OAuth, media, publish, refresh, retry, and quota behavior is verified with live accounts.

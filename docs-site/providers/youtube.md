@@ -20,7 +20,7 @@ https://your-domain.com/api/v1/accounts/youtube/callback
 
 ## Configuration
 
-Configure YouTube through `OPENPOST_PROVIDER_APPS`:
+Configure YouTube through the provider app registry. For bootstrap/self-hosting, use `OPENPOST_PROVIDER_APPS`:
 
 ```json
 [

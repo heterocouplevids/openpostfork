@@ -250,32 +250,7 @@ func providerRedirectURI(cfg *Config, provider string) string {
 }
 
 func mergeProviderApps(base []platform.AppConfig, overrides ...platform.AppConfig) []platform.AppConfig {
-	merged := append([]platform.AppConfig{}, base...)
-	indexByKey := make(map[string]int, len(merged))
-	for i, app := range merged {
-		indexByKey[providerAppMergeKey(app)] = i
-	}
-	for _, app := range overrides {
-		key := providerAppMergeKey(app)
-		if i, ok := indexByKey[key]; ok {
-			merged[i] = app
-			continue
-		}
-		indexByKey[key] = len(merged)
-		merged = append(merged, app)
-	}
-	return merged
-}
-
-func providerAppMergeKey(app platform.AppConfig) string {
-	app = platform.NormalizeAppConfig(app)
-	keys := map[string]string{
-		"mastodon": app.Provider + ":" + app.InstanceURL,
-	}
-	if key, ok := keys[app.Provider]; ok {
-		return key
-	}
-	return app.Provider
+	return platform.MergeAppConfigs(base, overrides...)
 }
 
 func buildCORSOrigins(edition, frontendURL, extraRaw string) []string {

@@ -6,12 +6,12 @@ TikTok support is available as an initial video publishing slice. It uses OAuth 
 
 - TikTok developer app
 - Login Kit and Content Posting API access
-- `OPENPOST_PROVIDER_APPS` entry with provider `tiktok`
+- Provider app registry entry with provider `tiktok`
 - Callback URL: `https://your-domain.com/api/v1/accounts/tiktok/callback`
 - Public `OPENPOST_MEDIA_URL` or S3/R2 public media URL
 - Scopes: `user.info.basic`, `user.info.profile`, `video.publish`, `video.upload`
 
-Example provider app entry:
+Example `OPENPOST_PROVIDER_APPS` entry:
 
 ```json
 [

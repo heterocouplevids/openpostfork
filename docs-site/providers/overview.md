@@ -13,12 +13,14 @@ These providers have adapter code in OpenPost today. The Accounts page discovers
 | Mastodon | OAuth 2.0 per instance | Dynamic registration or `MASTODON_SERVERS` JSON | Configurable | One app per instance, unless dynamic registration is enabled.  |
 | LinkedIn | OAuth 2.0              | Client ID + secret                              | Configurable | Replies may need extra approval.                               |
 | Threads  | Meta OAuth             | Client ID + secret + redirect URI               | Configurable | Public media URL required.                                     |
-| Facebook | Meta OAuth             | Structured provider app JSON                    | Configurable | Pages only first slice; public media URL required for media.   |
-| Instagram | Meta OAuth            | Structured provider app JSON                    | Configurable | Business accounts only; public media URL required for media.   |
-| TikTok   | OAuth 2.0              | Structured provider app JSON                    | Configurable | Video-only first slice; public media URL required.             |
-| YouTube  | Google OAuth           | Structured provider app JSON                    | Configurable | One-video private upload first slice.                           |
+| Facebook | Meta OAuth             | Provider app registry                           | Configurable | Pages only first slice; public media URL required for media.   |
+| Instagram | Meta OAuth            | Provider app registry                           | Configurable | Business accounts only; public media URL required for media.   |
+| TikTok   | OAuth 2.0              | Provider app registry                           | Configurable | Video-only first slice; public media URL required.             |
+| YouTube  | Google OAuth           | Provider app registry                           | Configurable | One-video private upload first slice.                           |
 
 Start with one provider, confirm the callback works, then expand.
+
+Provider app credentials can come from legacy env vars, `OPENPOST_PROVIDER_APPS` JSON, or active encrypted `provider_apps` database rows. Database rows are loaded at startup and override matching env/JSON entries, so operator-managed changes require a restart until admin hot reload exists.
 
 If connection or publishing fails, use [Provider Troubleshooting](/providers/troubleshooting) to collect diagnostics and map common OAuth, permission, media URL, and publishing errors to the right fix.
 
@@ -45,9 +47,9 @@ This matrix reflects current OpenPost support, not the full theoretical capabili
 - **Bluesky:** Uses handle plus app password. No server-side OAuth app is required.
 - **LinkedIn:** Permissions and app review can block some publishing or reply workflows even when the integration code is present.
 - **Threads:** Media must be reachable at a public `OPENPOST_MEDIA_URL`, and Meta fetches those files server-side.
-- **Facebook:** Configure through `OPENPOST_PROVIDER_APPS` with provider `facebook`. The initial adapter connects a selected Page and supports text, one image URL, or one video URL.
-- **Instagram:** Configure through `OPENPOST_PROVIDER_APPS` with provider `instagram`. The initial adapter connects a selected Instagram Business account behind a Facebook Page and supports one image URL or one Reel video URL.
-- **TikTok:** Configure through `OPENPOST_PROVIDER_APPS` with provider `tiktok`. The initial adapter supports one video attachment via a public HTTPS media URL and the direct-post video endpoint.
-- **YouTube:** Configure through `OPENPOST_PROVIDER_APPS` with provider `youtube`. The initial adapter connects a selected channel and uploads one video as private by default.
+- **Facebook:** Configure through the provider app registry with provider `facebook`. The initial adapter connects a selected Page and supports text, one image URL, or one video URL.
+- **Instagram:** Configure through the provider app registry with provider `instagram`. The initial adapter connects a selected Instagram Business account behind a Facebook Page and supports one image URL or one Reel video URL.
+- **TikTok:** Configure through the provider app registry with provider `tiktok`. The initial adapter supports one video attachment via a public HTTPS media URL and the direct-post video endpoint.
+- **YouTube:** Configure through the provider app registry with provider `youtube`. The initial adapter connects a selected channel and uploads one video as private by default.
 
 Provider API policies, scopes, rate limits, and review requirements can change. Re-check provider docs if a previously working flow starts failing.

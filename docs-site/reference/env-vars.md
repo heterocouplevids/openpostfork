@@ -33,7 +33,7 @@ This is the low-level quick reference version of the configuration docs.
 | `OPENPOST_POLAR_STARTER_PRODUCT_ID` | Polar Starter product ID |
 | `OPENPOST_POLAR_CREATOR_PRODUCT_ID` | Polar Creator product ID |
 | `OPENPOST_POLAR_PRO_PRODUCT_ID` | Polar Pro product ID |
-| `OPENPOST_PROVIDER_APPS` | Structured provider app registry JSON |
+| `OPENPOST_PROVIDER_APPS` | Structured provider app registry JSON; active encrypted `provider_apps` DB rows can override matching entries |
 | `X_CLIENT_ID` | X client ID |
 | `X_CLIENT_SECRET` | X client secret |
 | `X_REDIRECT_URI` | X callback override |
@@ -48,6 +48,6 @@ This is the low-level quick reference version of the configuration docs.
 | `THREADS_REDIRECT_URI` | Threads callback override |
 | `META_GRAPH_API_VERSION` | Meta Graph API version for Facebook Pages and Instagram |
 
-Facebook, Instagram, TikTok, and YouTube are configured through `OPENPOST_PROVIDER_APPS` with providers `facebook`, `instagram`, `tiktok`, and `youtube`; no legacy env vars are required.
+Facebook, Instagram, TikTok, and YouTube are configured through the provider app registry with providers `facebook`, `instagram`, `tiktok`, and `youtube`; no legacy env vars are required.
 
 Legacy aliases still work for upgrades: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.

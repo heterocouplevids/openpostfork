@@ -19,7 +19,7 @@ https://your-domain.com/api/v1/accounts/facebook/callback
 
 ## Configuration
 
-Configure Facebook through `OPENPOST_PROVIDER_APPS`:
+Configure Facebook through the provider app registry. For bootstrap/self-hosting, use `OPENPOST_PROVIDER_APPS`:
 
 ```json
 [

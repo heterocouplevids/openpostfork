@@ -60,3 +60,34 @@ func TestBuildAdapterRegistryRejectsUnsupportedOrIncompleteApps(t *testing.T) {
 	_, _, err = BuildAdapterRegistry([]AppConfig{{Provider: "youtube"}}, RegistryOptions{})
 	require.ErrorContains(t, err, "youtube provider app requires client_id")
 }
+
+func TestMergeAppConfigsOverridesByCanonicalProviderKey(t *testing.T) {
+	t.Parallel()
+
+	got := MergeAppConfigs([]AppConfig{
+		{Provider: "bluesky"},
+		{Provider: "x", ClientID: "legacy-x"},
+		{Provider: "mastodon", Name: "Personal", ClientID: "legacy-masto", InstanceURL: "https://masto.pt"},
+	}, AppConfig{
+		Provider: " X ",
+		ClientID: "cloud-x",
+	}, AppConfig{
+		Provider:    "mastodon",
+		Name:        "Community",
+		ClientID:    "cloud-masto",
+		InstanceURL: "https://masto.pt/",
+	}, AppConfig{
+		Provider: "facebook",
+		ClientID: "facebook-client",
+	})
+
+	require.Len(t, got, 4)
+	require.Equal(t, "bluesky", got[0].Provider)
+	require.Equal(t, "x", got[1].Provider)
+	require.Equal(t, "cloud-x", got[1].ClientID)
+	require.Equal(t, "mastodon", got[2].Provider)
+	require.Equal(t, "Community", got[2].Name)
+	require.Equal(t, "cloud-masto", got[2].ClientID)
+	require.Equal(t, "https://masto.pt", got[2].InstanceURL)
+	require.Equal(t, "facebook", got[3].Provider)
+}

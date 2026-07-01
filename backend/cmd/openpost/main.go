@@ -36,6 +36,7 @@ import (
 	"github.com/openpost/backend/internal/services/mediasigner"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/mfa"
+	"github.com/openpost/backend/internal/services/providerapps"
 	"github.com/openpost/backend/internal/services/publisher"
 	"github.com/openpost/backend/internal/services/sessions"
 	"github.com/openpost/backend/internal/services/tokenmanager"
@@ -112,7 +113,15 @@ func main() {
 	}
 
 	platform.RegisterAllMediaValidators()
-	providers, providerEntries, err := platform.BuildAdapterRegistry(cfg.ProviderApps, platform.RegistryOptions{
+	dbProviderApps, err := providerapps.NewService(db, tokenEncryptor).ListActiveAppConfigs(context.Background())
+	if err != nil {
+		log.Fatalf("failed to load provider app registry from database: %v", err)
+	}
+	if len(dbProviderApps) > 0 {
+		log.Printf("Loaded %d provider app config(s) from database", len(dbProviderApps))
+	}
+	providerAppConfigs := platform.MergeAppConfigs(cfg.ProviderApps, dbProviderApps...)
+	providers, providerEntries, err := platform.BuildAdapterRegistry(providerAppConfigs, platform.RegistryOptions{
 		DisableLinkedInThreadReplies: cfg.DisableLinkedInThreadReplies,
 	})
 	if err != nil {

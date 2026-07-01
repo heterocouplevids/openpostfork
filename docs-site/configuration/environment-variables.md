@@ -37,11 +37,17 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 | `OPENPOST_POLAR_PRO_PRODUCT_ID` | Required in cloud mode | empty | Polar product ID for the Pro plan. |
 | `OPENPOST_ENV` | No | empty | Optional deployment label. Secret validation is enforced regardless of environment mode. |
 
+## Provider app registry
+
+OpenPost builds provider adapters at startup from legacy provider env vars, optional `OPENPOST_PROVIDER_APPS` JSON, and active rows in the `provider_apps` database table.
+
+Database rows are intended for hosted/operator-managed installs. They store `client_secret_encrypted` with the same `OPENPOST_ENCRYPTION_KEY` used for account tokens, override matching env/JSON entries, and require a server restart after changes until hot reload/admin management exists. Matching is by provider, except Mastodon uses provider plus `instance_url`.
+
 ## X
 
 | Variable | Required | Default | Description |
 |---|---:|---|---|
-| `OPENPOST_PROVIDER_APPS` | No | empty | Structured JSON provider app registry. Entries override the matching legacy env provider when both are set. |
+| `OPENPOST_PROVIDER_APPS` | No | empty | Structured JSON provider app registry. Entries override matching legacy env providers; active `provider_apps` database rows override matching JSON entries. |
 | `X_CLIENT_ID` | Yes for X | empty | X OAuth client ID. Leave empty to disable X. |
 | `X_CLIENT_SECRET` | Yes for X | empty | X OAuth client secret. |
 | `X_REDIRECT_URI` | No | derived from `OPENPOST_APP_URL` | X OAuth callback URL override. |
@@ -73,7 +79,7 @@ This page summarizes the env vars used by the backend. Some values in `.env.exam
 
 ## Facebook
 
-Facebook Pages publishing is configured through `OPENPOST_PROVIDER_APPS` instead of legacy provider-specific env vars.
+Facebook Pages publishing is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or encrypted `provider_apps` rows for hosted/operator-managed credentials.
 
 Example:
 
@@ -91,7 +97,7 @@ If `redirect_uri` is omitted, OpenPost derives `https://your-domain.com/api/v1/a
 
 ## Instagram
 
-Instagram Business publishing is configured through `OPENPOST_PROVIDER_APPS` instead of legacy provider-specific env vars.
+Instagram Business publishing is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or encrypted `provider_apps` rows for hosted/operator-managed credentials.
 
 Example:
 
@@ -109,7 +115,7 @@ If `redirect_uri` is omitted, OpenPost derives `https://your-domain.com/api/v1/a
 
 ## TikTok
 
-TikTok is configured through `OPENPOST_PROVIDER_APPS` instead of legacy provider-specific env vars.
+TikTok is configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or encrypted `provider_apps` rows for hosted/operator-managed credentials.
 
 Example:
 
@@ -128,7 +134,7 @@ TikTok direct video publishing requires `OPENPOST_MEDIA_URL` or `OPENPOST_S3_PUB
 
 ## YouTube
 
-YouTube video uploads are configured through `OPENPOST_PROVIDER_APPS` instead of legacy provider-specific env vars.
+YouTube video uploads are configured through the provider app registry instead of legacy provider-specific env vars. Use `OPENPOST_PROVIDER_APPS` for bootstrap/self-hosting or encrypted `provider_apps` rows for hosted/operator-managed credentials.
 
 Example:
 
@@ -147,7 +153,7 @@ If `redirect_uri` is omitted, OpenPost derives `https://your-domain.com/api/v1/a
 ## Notes
 
 - The preferred names above are what new deployments should use.
-- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. It currently supports implemented adapters only: `x`, `mastodon`, `linkedin`, `threads`, `facebook`, `instagram`, `tiktok`, and `youtube`; Bluesky is enabled separately through app-password login.
+- `OPENPOST_PROVIDER_APPS` accepts an array of objects with `provider`, `name`, `client_id`, `client_secret`, `redirect_uri`, and `instance_url`. The `provider_apps` table stores the same logical fields, with `client_secret` encrypted into `client_secret_encrypted`. Both currently support implemented adapters only: `x`, `mastodon`, `linkedin`, `threads`, `facebook`, `instagram`, `tiktok`, and `youtube`; Bluesky is enabled separately through app-password login.
 - Backward-compatible aliases still work for existing installs: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.
 - The root `.env.example` is the best copy-paste starting point.
 - Set explicit public URLs in production even when defaults exist.

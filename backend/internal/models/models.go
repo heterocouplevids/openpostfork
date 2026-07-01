@@ -250,6 +250,21 @@ type MastodonInstance struct {
 	UpdatedAt          time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
+type ProviderApp struct {
+	bun.BaseModel `bun:"table:provider_apps"`
+
+	ID              string    `bun:",pk" json:"id"`
+	Provider        string    `bun:",notnull" json:"provider"`
+	Name            string    `bun:",notnull,default:''" json:"name"`
+	ClientID        string    `bun:",notnull,default:''" json:"client_id"`
+	ClientSecretEnc []byte    `bun:"client_secret_encrypted" json:"-"`
+	RedirectURI     string    `bun:",notnull,default:''" json:"redirect_uri"`
+	InstanceURL     string    `bun:",notnull,default:''" json:"instance_url"`
+	IsActive        bool      `bun:",notnull,default:true" json:"is_active"`
+	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
 type SocialAccount struct {
 	bun.BaseModel `bun:"table:social_accounts"`
 
