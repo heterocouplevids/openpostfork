@@ -4,7 +4,9 @@ test('marketing page presents the cloud product and demo slot', async ({ page })
 	await page.goto('/');
 
 	await expect(page).toHaveTitle(/OpenPost Cloud/);
-	await expect(page.getByRole('heading', { name: 'Agentic social media scheduling' })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: 'Agentic social media scheduling' })
+	).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Start free trial' }).first()).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Start free trial' }).first()).toHaveAttribute(
 		'href',
@@ -25,7 +27,9 @@ test('marketing page presents the cloud product and demo slot', async ({ page })
 	await expect(page.getByLabel('OpenPost product demo placeholder')).toBeVisible();
 	await expect(page.getByText('Replace this with the recorded walkthrough.')).toBeVisible();
 	await expect(
-		page.getByRole('heading', { name: 'Managed social infrastructure without enterprise theatre.' })
+		page.getByRole('heading', {
+			name: 'Managed social infrastructure without enterprise theatre.'
+		})
 	).toBeVisible();
 	await expect(page.getByRole('link', { name: 'View GitHub' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Tools' }).first()).toHaveAttribute('href', '/tools');
@@ -38,16 +42,20 @@ test('marketing page presents the cloud product and demo slot', async ({ page })
 test('marketing page has no horizontal overflow', async ({ page }) => {
 	await page.goto('/');
 
-	const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+	const overflow = await page.evaluate(
+		() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+	);
 	expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test('marketing tools page counts, splits, and previews source copy', async ({ page }) => {
+test('marketing tools page counts, splits, previews, and builds UTM links', async ({ page }) => {
 	await page.goto('/tools');
 
 	await expect(page).toHaveTitle(/Free Social Post Tools/);
 	await expect(
-		page.getByRole('heading', { name: 'Check the post before it hits the queue.' })
+		page.getByRole('heading', {
+			name: 'Check the post before it hits the queue.'
+		})
 	).toBeVisible();
 
 	const input = page.getByTestId('post-tool-input');
@@ -56,6 +64,20 @@ test('marketing tools page counts, splits, and previews source copy', async ({ p
 	await expect(page.getByTestId('remaining-X')).toContainText('214 left');
 	await expect(page.getByTestId('thread-parts')).toContainText('1/1');
 	await expect(page.getByText('OpenPost ships a focused publication workflow')).toHaveCount(5);
+
+	await expect(
+		page.getByRole('heading', {
+			name: 'Give every release link a clean trail.'
+		})
+	).toBeVisible();
+	await page.getByTestId('utm-url').fill('https://example.com/launch?existing=1');
+	await page.getByTestId('utm-source').fill('newsletter');
+	await page.getByTestId('utm-medium').fill('email');
+	await page.getByTestId('utm-campaign').fill('summer_release');
+	await page.getByTestId('utm-content').fill('primary_cta');
+	await expect(page.getByTestId('utm-result')).toHaveValue(
+		'https://example.com/launch?existing=1&utm_source=newsletter&utm_medium=email&utm_campaign=summer_release&utm_content=primary_cta'
+	);
 });
 
 test('marketing tips pages are reachable SEO articles', async ({ page }) => {

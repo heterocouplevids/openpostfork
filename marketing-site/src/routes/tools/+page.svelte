@@ -14,10 +14,24 @@
 
 	let postText = $state(samplePost);
 	let threadLimit = $state(280);
+	let utmBaseUrl = $state('https://openpost.social/tools');
+	let utmSource = $state('linkedin');
+	let utmMedium = $state('social');
+	let utmCampaign = $state('launch_week');
+	let utmContent = $state('founder_post');
+	let copyStatus = $state('');
 
 	const characterCount = $derived(Array.from(postText).length);
 	const wordCount = $derived(postText.trim().split(/\s+/).filter(Boolean).length);
 	const threadParts = $derived(splitThread(postText, threadLimit));
+	const generatedCampaignUrl = $derived(
+		buildCampaignUrl(utmBaseUrl, {
+			utm_source: utmSource,
+			utm_medium: utmMedium,
+			utm_campaign: utmCampaign,
+			utm_content: utmContent
+		})
+	);
 
 	function remaining(limit: number) {
 		return limit - characterCount;
@@ -55,18 +69,54 @@
 
 		return chunks;
 	}
+
+	function buildCampaignUrl(baseUrl: string, params: Record<string, string>) {
+		const trimmed = baseUrl.trim();
+		if (!trimmed) return '';
+
+		const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+		try {
+			const url = new URL(normalized);
+			for (const [key, value] of Object.entries(params)) {
+				const cleanValue = value.trim();
+				if (cleanValue) {
+					url.searchParams.set(key, cleanValue);
+				} else {
+					url.searchParams.delete(key);
+				}
+			}
+			return url.toString();
+		} catch {
+			return 'Enter a valid URL to generate a campaign link.';
+		}
+	}
+
+	async function copyCampaignUrl() {
+		if (!generatedCampaignUrl || generatedCampaignUrl.startsWith('Enter a valid URL')) {
+			copyStatus = 'Add a valid URL first.';
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(generatedCampaignUrl);
+			copyStatus = 'Copied';
+		} catch {
+			copyStatus = 'Select and copy the generated URL.';
+		}
+	}
 </script>
 
 <svelte:head>
 	<title>Free Social Post Tools - OpenPost Cloud</title>
 	<meta
 		name="description"
-		content="Free social media tools from OpenPost: count characters, split threads, and preview platform-native posts before scheduling."
+		content="Free social media tools from OpenPost: count characters, split threads, preview platform-native posts, and build UTM links before scheduling."
 	/>
 	<meta property="og:title" content="Free Social Post Tools" />
 	<meta
 		property="og:description"
-		content="Draft once, check platform limits, split threads, and preview how a post will read across networks."
+		content="Draft once, check platform limits, split threads, preview social copy, and generate campaign tracking links."
 	/>
 </svelte:head>
 
@@ -88,8 +138,9 @@
 		<p class="eyebrow">Free publishing tools</p>
 		<h1>Check the post before it hits the queue.</h1>
 		<p>
-			Draft once, see platform limits, split a thread, and preview the same source idea across
-			networks. OpenPost Cloud turns these checks into scheduled publication workflows.
+			Draft once, see platform limits, split a thread, build campaign links, and preview the same
+			source idea across networks. OpenPost Cloud turns these checks into scheduled publication
+			workflows.
 		</p>
 	</section>
 
@@ -155,6 +206,51 @@
 			{:else}
 				<p class="empty">Paste a draft to split it into thread parts.</p>
 			{/if}
+		</div>
+	</section>
+
+	<section class="utm-builder shell" aria-labelledby="utm-heading">
+		<div class="utm-copy">
+			<p class="eyebrow">UTM builder</p>
+			<h2 id="utm-heading">Give every release link a clean trail.</h2>
+			<p>
+				Prepare campaign links next to the copy they belong to, then move the same source idea into
+				OpenPost with platform-specific context intact.
+			</p>
+		</div>
+		<div class="utm-panel" aria-label="Campaign URL builder">
+			<div class="field wide">
+				<label for="utm-url">Destination URL</label>
+				<input id="utm-url" bind:value={utmBaseUrl} data-testid="utm-url" />
+			</div>
+			<div class="utm-grid">
+				<div class="field">
+					<label for="utm-source">Source</label>
+					<input id="utm-source" bind:value={utmSource} data-testid="utm-source" />
+				</div>
+				<div class="field">
+					<label for="utm-medium">Medium</label>
+					<input id="utm-medium" bind:value={utmMedium} data-testid="utm-medium" />
+				</div>
+				<div class="field">
+					<label for="utm-campaign">Campaign</label>
+					<input id="utm-campaign" bind:value={utmCampaign} data-testid="utm-campaign" />
+				</div>
+				<div class="field">
+					<label for="utm-content">Content</label>
+					<input id="utm-content" bind:value={utmContent} data-testid="utm-content" />
+				</div>
+			</div>
+			<div class="utm-output">
+				<label for="utm-result">Campaign URL</label>
+				<div>
+					<input id="utm-result" value={generatedCampaignUrl} readonly data-testid="utm-result" />
+					<button type="button" onclick={copyCampaignUrl}>Copy</button>
+				</div>
+				{#if copyStatus}
+					<p>{copyStatus}</p>
+				{/if}
+			</div>
 		</div>
 	</section>
 
@@ -335,6 +431,7 @@
 
 	.workbench,
 	.thread-tool,
+	.utm-builder,
 	.previews {
 		display: grid;
 		gap: 24px;
@@ -455,6 +552,85 @@
 		align-items: start;
 	}
 
+	.utm-builder {
+		grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.3fr);
+		align-items: start;
+	}
+
+	.utm-copy p:not(.eyebrow) {
+		max-width: 62ch;
+		color: #d2cabe;
+		font-size: 1.04rem;
+		line-height: 1.6;
+	}
+
+	.utm-panel {
+		display: grid;
+		gap: 16px;
+		border: 1px solid rgba(245, 241, 232, 0.14);
+		border-radius: 18px;
+		background: #141210;
+		padding: 18px;
+	}
+
+	.utm-grid {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 12px;
+	}
+
+	.field {
+		min-width: 0;
+	}
+
+	.field.wide {
+		max-width: none;
+	}
+
+	input:not([type='range']) {
+		width: 100%;
+		border: 1px solid rgba(245, 241, 232, 0.16);
+		border-radius: 12px;
+		background: #0b0a09;
+		color: #f5f1e8;
+		font: inherit;
+		padding: 12px 14px;
+	}
+
+	.utm-output {
+		display: grid;
+		gap: 10px;
+		border-top: 1px solid rgba(245, 241, 232, 0.1);
+		padding-top: 16px;
+	}
+
+	.utm-output > div {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 10px;
+	}
+
+	.utm-output input {
+		font-size: 0.92rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.utm-output button {
+		border: 1px solid rgba(245, 241, 232, 0.18);
+		border-radius: 999px;
+		background: #f1eadb;
+		color: #15120f;
+		font: inherit;
+		font-weight: 900;
+		padding: 0 16px;
+	}
+
+	.utm-output p {
+		margin: 0;
+		color: #75d69c;
+		font-weight: 900;
+	}
+
 	input[type='range'] {
 		width: 100%;
 		accent-color: #75d69c;
@@ -548,10 +724,20 @@
 
 		.workbench,
 		.thread-tool,
+		.utm-builder,
 		.section-heading,
 		.preview-grid,
 		.cta .shell {
 			grid-template-columns: 1fr;
+		}
+
+		.utm-grid,
+		.utm-output > div {
+			grid-template-columns: 1fr;
+		}
+
+		.utm-output button {
+			min-height: 44px;
 		}
 
 		.preview-grid {
