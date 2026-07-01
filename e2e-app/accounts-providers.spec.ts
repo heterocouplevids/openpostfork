@@ -106,8 +106,8 @@ test("accounts page shows configured and unavailable providers", async ({
           display_name: "TikTok",
           auth_mode: "oauth",
           configured: false,
-          status: "planned",
-          description: "Planned adapter for short-form video workflows.",
+          status: "needs_configuration",
+          description: "Requires a TikTok provider app.",
           capabilities: ["Short videos", "Scheduling", "MCP workflows"],
         },
       ],
@@ -130,7 +130,7 @@ test("accounts page shows configured and unavailable providers", async ({
       .getByRole("button", { name: "Connect" }),
   ).toBeEnabled();
 
-  for (const platform of ["x", "mastodon", "linkedin", "threads"]) {
+  for (const platform of ["x", "mastodon", "linkedin", "threads", "tiktok"]) {
     await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
       "Needs app config",
     );
@@ -141,7 +141,7 @@ test("accounts page shows configured and unavailable providers", async ({
     ).toBeDisabled();
   }
 
-  for (const platform of ["instagram", "facebook", "youtube", "tiktok"]) {
+  for (const platform of ["instagram", "facebook", "youtube"]) {
     await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
       "Planned",
     );

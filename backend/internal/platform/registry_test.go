@@ -12,6 +12,7 @@ func TestBuildAdapterRegistryBuildsCanonicalAndAliasKeys(t *testing.T) {
 	adapters, entries, err := BuildAdapterRegistry([]AppConfig{
 		{Provider: "bluesky"},
 		{Provider: "x", ClientID: "x-client", ClientSecret: "x-secret", RedirectURI: "https://app.test/api/v1/accounts/x/callback"},
+		{Provider: "tiktok", ClientID: "tiktok-client", ClientSecret: "tiktok-secret", RedirectURI: "https://app.test/api/v1/accounts/tiktok/callback"},
 		{
 			Provider:     "mastodon",
 			Name:         "Personal",
@@ -25,10 +26,11 @@ func TestBuildAdapterRegistryBuildsCanonicalAndAliasKeys(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, adapters, "bluesky")
 	require.Contains(t, adapters, "x")
+	require.Contains(t, adapters, "tiktok")
 	require.Contains(t, adapters, "mastodon:https://masto.pt")
 	require.Contains(t, adapters, "mastodon:Personal")
 	require.Same(t, adapters["mastodon:https://masto.pt"], adapters["mastodon:Personal"])
-	require.Len(t, entries, 4)
+	require.Len(t, entries, 5)
 }
 
 func TestBuildAdapterRegistryRejectsUnsupportedOrIncompleteApps(t *testing.T) {
@@ -39,4 +41,7 @@ func TestBuildAdapterRegistryRejectsUnsupportedOrIncompleteApps(t *testing.T) {
 
 	_, _, err = BuildAdapterRegistry([]AppConfig{{Provider: "threads"}}, RegistryOptions{})
 	require.ErrorContains(t, err, "threads provider app requires client_id")
+
+	_, _, err = BuildAdapterRegistry([]AppConfig{{Provider: "tiktok"}}, RegistryOptions{})
+	require.ErrorContains(t, err, "tiktok provider app requires client_id")
 }

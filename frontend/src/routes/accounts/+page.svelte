@@ -141,8 +141,8 @@
 			display_name: 'TikTok',
 			auth_mode: 'oauth',
 			configured: false,
-			status: 'planned',
-			description: 'Planned adapter for short-form video workflows.'
+			status: 'needs_configuration',
+			description: 'Requires a TikTok provider app.'
 		}
 	];
 
@@ -563,6 +563,27 @@
 		}
 	}
 
+	async function connectTikTok() {
+		if (!selectedWorkspaceId) {
+			alert('Please create a workspace first');
+			return;
+		}
+
+		try {
+			localStorage.setItem('oauth_workspace_id', selectedWorkspaceId);
+
+			const { data } = await client.GET('/accounts/{platform}/auth-url', {
+				params: {
+					path: { platform: 'tiktok' },
+					query: { workspace_id: selectedWorkspaceId }
+				}
+			});
+			if (data?.url) window.location.href = data.url;
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
 	function providerKey(provider: ProviderInfo): string {
 		if (provider.platform === 'mastodon') {
 			return provider.instance_url || provider.name || provider.platform;
@@ -593,6 +614,8 @@
 				return 'Post to Bluesky';
 			case 'linkedin':
 				return 'Post to LinkedIn';
+			case 'tiktok':
+				return 'Post short-form video to TikTok';
 			default:
 				return 'Connect account';
 		}
@@ -685,6 +708,9 @@
 				break;
 			case 'linkedin':
 				connectLinkedIn();
+				break;
+			case 'tiktok':
+				connectTikTok();
 				break;
 		}
 	}

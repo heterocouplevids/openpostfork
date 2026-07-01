@@ -280,8 +280,7 @@ var providerCatalog = []ProviderInfo{
 		Platform:     "tiktok",
 		DisplayName:  "TikTok",
 		AuthMode:     "oauth",
-		Status:       providerStatusPlanned,
-		Description:  "Planned adapter for short-form video publishing workflows.",
+		Description:  "OAuth app connection for TikTok video publishing workflows.",
 		Capabilities: []string{"Short videos", "Scheduling", "Platform variants", "MCP workflows"},
 	},
 }

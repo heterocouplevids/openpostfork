@@ -9,6 +9,7 @@ const (
 	contentTypeForm        = "application/x-www-form-urlencoded"
 	contentTypeOctet       = "application/octet-stream"
 	jsonFieldText          = "text"
+	platformStatusFailed   = "FAILED"
 	oauthResponseType      = "code"
 	oauthGrantAuthCode     = "authorization_code"
 	oauthGrantRefresh      = "refresh_token"
@@ -31,6 +32,7 @@ const (
 	providerBluesky  = "bluesky"
 	providerLinkedIn = "linkedin"
 	providerMastodon = "mastodon"
+	providerTikTok   = "tiktok"
 	providerThreads  = "threads"
 	providerX        = "x"
 

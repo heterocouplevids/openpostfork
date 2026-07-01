@@ -88,6 +88,7 @@ const docsSidebar = [
 			{ text: 'Bluesky', link: '/providers/bluesky' },
 			{ text: 'LinkedIn', link: '/providers/linkedin' },
 			{ text: 'Threads', link: '/providers/threads' },
+			{ text: 'TikTok', link: '/providers/tiktok' },
 		],
 	},
 	{

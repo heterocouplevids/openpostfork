@@ -78,6 +78,7 @@ All notable changes to this project are documented in this file.
 - Added the docs E2E suite to CI and release preflight gates so docs audience separation stays verified automatically.
 - Added the app Playwright E2E suite to CI and release preflight gates for billing, MCP, provider, and publication workflows.
 - Added the backend OAuth account-selection foundation for page/channel providers, including encrypted pending selection storage and completion APIs for future Facebook, Instagram, and YouTube adapters.
+- Added a first TikTok adapter slice with OAuth, provider discovery, one-video direct publishing through public HTTPS media URLs, media validation, app UI connection wiring, and provider docs.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

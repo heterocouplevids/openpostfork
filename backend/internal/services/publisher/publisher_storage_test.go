@@ -92,3 +92,24 @@ func TestUploadMediaToPlatformReadsFromBlobStorage(t *testing.T) {
 	require.Equal(t, "example.png", storage.opened)
 	require.Equal(t, "stored-media", adapter.uploadedBody)
 }
+
+func TestUploadMediaToPlatformUsesPublicURLForTikTok(t *testing.T) {
+	storage := &fakePublisherStorage{body: "stored-media"}
+	adapter := &fakePublisherAdapter{}
+	service := NewService(nil, nil)
+	service.SetStorage(storage)
+	service.SetPublicMediaURL("https://media.openpost.test/media")
+
+	got, err := service.uploadMediaToPlatform(
+		context.Background(),
+		&models.SocialAccount{Platform: "tiktok", AccountID: "acct-1"},
+		adapter,
+		"token",
+		models.MediaAttachment{ID: "media-1", FilePath: "media/example.mp4", MimeType: "video/mp4"},
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, "https://media.openpost.test/media/media-1.mp4", got)
+	require.Empty(t, storage.opened)
+	require.Empty(t, adapter.uploadedBody)
+}

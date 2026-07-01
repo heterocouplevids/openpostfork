@@ -236,7 +236,7 @@ func (t *ThreadsAdapter) waitForContainerReady(ctx context.Context, accessToken,
 				switch statusResp.Status {
 				case "FINISHED", "PUBLISHED":
 					return nil
-				case "ERROR", "EXPIRED", "FAILED":
+				case "ERROR", "EXPIRED", platformStatusFailed:
 					if statusResp.ErrorMessage != "" {
 						return fmt.Errorf("threads container not publishable: %s", statusResp.ErrorMessage)
 					}

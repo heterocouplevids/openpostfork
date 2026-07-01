@@ -13,6 +13,7 @@ These providers have adapter code in OpenPost today. The Accounts page discovers
 | Mastodon | OAuth 2.0 per instance | Dynamic registration or `MASTODON_SERVERS` JSON | Configurable | One app per instance, unless dynamic registration is enabled.  |
 | LinkedIn | OAuth 2.0              | Client ID + secret                              | Configurable | Replies may need extra approval.                               |
 | Threads  | Meta OAuth             | Client ID + secret + redirect URI               | Configurable | Public media URL required.                                     |
+| TikTok   | OAuth 2.0              | Structured provider app JSON                    | Configurable | Video-only first slice; public media URL required.             |
 
 Start with one provider, confirm the callback works, then expand.
 
@@ -25,7 +26,6 @@ OpenPost now exposes planned providers in the provider discovery API so clients 
 | Instagram | Images, Reels, scheduling, platform variants, MCP workflows                          | Planned adapter |
 | Facebook  | Facebook Pages publishing, media posts, scheduling, platform variants, MCP workflows | Planned adapter |
 | YouTube   | Shorts and video publishing workflows                                                | Planned adapter |
-| TikTok    | Short-form video publishing workflows                                                | Planned adapter |
 
 Do not add planned providers to `OPENPOST_PROVIDER_APPS` yet. The backend intentionally rejects unsupported provider app entries until each adapter implements the shared `PlatformAdapter` contract.
 
@@ -40,6 +40,7 @@ This matrix reflects current OpenPost support, not the full theoretical capabili
 | Bluesky  | Yes        | Yes         | Yes                              | Yes             | Partial, one MP4 path implemented and needs real-account verification | Yes                        | No        |
 | LinkedIn | Yes        | Yes         | Partial, implemented as comments | Yes             | Partial, implementation exists and needs re-verification              | Yes                        | No        |
 | Threads  | Yes        | Yes         | Yes                              | Yes             | Partial, public-media deployment dependent                            | Yes                        | No        |
+| TikTok   | No         | No          | No                               | Yes             | Partial, one public HTTPS video URL path implemented                  | Yes                        | No        |
 
 ## Provider-specific caveats
 
@@ -48,5 +49,6 @@ This matrix reflects current OpenPost support, not the full theoretical capabili
 - **Bluesky:** Uses handle plus app password. No server-side OAuth app is required.
 - **LinkedIn:** Permissions and app review can block some publishing or reply workflows even when the integration code is present.
 - **Threads:** Media must be reachable at a public `OPENPOST_MEDIA_URL`, and Meta fetches those files server-side.
+- **TikTok:** Configure through `OPENPOST_PROVIDER_APPS` with provider `tiktok`. The initial adapter supports one video attachment via a public HTTPS media URL and the direct-post video endpoint.
 
 Provider API policies, scopes, rate limits, and review requirements can change. Re-check provider docs if a previously working flow starts failing.

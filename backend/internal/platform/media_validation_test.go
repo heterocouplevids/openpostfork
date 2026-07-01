@@ -40,3 +40,20 @@ func TestValidateMediaLinkedInWarnsForMultipleAttachments(t *testing.T) {
 		t.Fatalf("expected warning severity, got %q", issues[0].Severity)
 	}
 }
+
+func TestValidateMediaTikTokRequiresOneVideo(t *testing.T) {
+	RegisterAllMediaValidators()
+
+	issues := ValidateMedia(providerTikTok, []MediaItem{{ID: "image", MimeType: "image/png"}})
+	if len(issues) != 1 {
+		t.Fatalf("expected one image issue, got %d", len(issues))
+	}
+	if issues[0].Severity != severityError {
+		t.Fatalf("expected error severity, got %q", issues[0].Severity)
+	}
+
+	issues = ValidateMedia(providerTikTok, []MediaItem{{ID: "video", MimeType: "video/mp4"}})
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues for one video, got %#v", issues)
+	}
+}

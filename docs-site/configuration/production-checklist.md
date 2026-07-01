@@ -46,9 +46,10 @@ changes live in [Developer Docs](/development/).
 
 - [ ] Start with Bluesky or Mastodon for the first end-to-end publish smoke.
 - [ ] Update callback URLs for X, LinkedIn, and Threads to the production HTTPS app origin.
+- [ ] Add TikTok through `OPENPOST_PROVIDER_APPS` if short-form video publishing is enabled, and confirm `OPENPOST_MEDIA_URL` serves public HTTPS media.
 - [ ] Configure Mastodon servers in `MASTODON_SERVERS` if you need fixed self-hosted Mastodon apps.
 - [ ] Confirm custom Mastodon instance registration works if you rely on dynamic Mastodon connections.
-- [ ] Keep Instagram, Facebook, YouTube, and TikTok labeled as planned until their adapters pass provider-specific OAuth, media, publish, refresh, retry, and quota tests.
+- [ ] Keep Instagram, Facebook, and YouTube labeled as planned until their adapters pass provider-specific OAuth, media, publish, refresh, retry, and quota tests.
 - [ ] Create one test account connection per enabled provider.
 - [ ] Publish a private or low-risk test post with and without media for every enabled provider.
 

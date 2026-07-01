@@ -47,4 +47,6 @@ This is the low-level quick reference version of the configuration docs.
 | `THREADS_CLIENT_SECRET` | Threads client secret |
 | `THREADS_REDIRECT_URI` | Threads callback override |
 
+TikTok is configured through `OPENPOST_PROVIDER_APPS` with provider `tiktok`; no legacy TikTok env vars are required.
+
 Legacy aliases still work for upgrades: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.

@@ -110,7 +110,8 @@ func TestListProvidersReportsConfiguredProviders(t *testing.T) {
 	require.Equal(t, "youtube", out[7].Platform)
 	require.Equal(t, providerStatusPlanned, out[7].Status)
 	require.Equal(t, "tiktok", out[8].Platform)
-	require.Equal(t, providerStatusPlanned, out[8].Status)
+	require.Equal(t, providerStatusNeedsConfiguration, out[8].Status)
+	require.False(t, out[8].Configured)
 }
 
 func TestListProvidersIncludesUnavailableMastodonPlaceholder(t *testing.T) {

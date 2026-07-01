@@ -9,6 +9,7 @@ Provider integrations live under `backend/internal/platform/`.
 - `bluesky.go`
 - `linkedin.go`
 - `threads.go`
+- `tiktok.go`
 
 ## Account selection
 

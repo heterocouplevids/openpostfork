@@ -17,7 +17,12 @@ The provider discovery API returns current and planned providers so clients can 
 | Instagram | Images, Reels, scheduling, per-platform variants, agent workflows.                          |
 | Facebook  | Facebook Pages publishing, media posts, scheduling, per-platform variants, agent workflows. |
 | YouTube   | Shorts, video publishing, scheduling, agent workflows.                                      |
-| TikTok    | Short-form video publishing, scheduling, agent workflows.                                   |
+
+## Implemented first slices
+
+| Provider | Current product focus                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------- |
+| TikTok   | One-video direct publishing through public HTTPS media URLs, scheduling, per-platform variants, MCP workflows. |
 
 ## Account-selection requirement
 
@@ -27,7 +32,7 @@ Some planned providers cannot be modeled as a single OAuth user profile:
 - Instagram should connect the selected Instagram Business account behind a Facebook Page.
 - YouTube should connect the selected channel.
 
-These adapters must implement the backend account-selection flow before they move from `planned` to connectable. TikTok is expected to be closer to a direct OAuth account, but still needs provider-specific media validation and posting settings before launch.
+These adapters must implement the backend account-selection flow before they move from `planned` to connectable. TikTok uses a direct OAuth account flow and is connectable when configured, but its initial adapter is intentionally video-only.
 
 ## Implementation contract
 

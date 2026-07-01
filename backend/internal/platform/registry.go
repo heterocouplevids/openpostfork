@@ -59,6 +59,12 @@ var appBuilders = map[string]appBuilder{
 		}
 		return NewThreadsAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
 	},
+	providerTikTok: func(app AppConfig, _ RegistryOptions) (Adapter, error) {
+		if strings.TrimSpace(app.ClientID) == "" {
+			return nil, fmt.Errorf("tiktok provider app requires client_id")
+		}
+		return NewTikTokAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
+	},
 }
 
 func BuildAdapterRegistry(apps []AppConfig, opts RegistryOptions) (map[string]Adapter, []RegistryEntry, error) {

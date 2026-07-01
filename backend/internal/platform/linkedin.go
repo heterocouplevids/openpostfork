@@ -424,7 +424,7 @@ func (l *LinkedInAdapter) waitForVideoAvailable(ctx context.Context, accessToken
 		case "AVAILABLE":
 			return nil
 		case "PROCESSING", "WAITING_UPLOAD":
-		case "PROCESSING_FAILED", "FAILED":
+		case "PROCESSING_FAILED", platformStatusFailed:
 			if result.ProcessingFailureReason != "" {
 				return fmt.Errorf("linkedin video processing failed: %s", result.ProcessingFailureReason)
 			}

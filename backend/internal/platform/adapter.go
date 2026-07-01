@@ -37,6 +37,7 @@ func RegisterAllMediaValidators() {
 	MediaValidators[providerBluesky] = validateBlueskyMedia
 	MediaValidators[providerLinkedIn] = validateLinkedInMedia
 	MediaValidators[providerMastodon] = validateMastodonMedia
+	MediaValidators[providerTikTok] = validateTikTokMedia
 	MediaValidators[providerThreads] = validateThreadsMedia
 	MediaValidators[providerX] = validateXMedia
 }
