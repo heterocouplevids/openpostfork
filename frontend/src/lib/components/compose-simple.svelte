@@ -11,6 +11,10 @@
 	import { getApiBase } from '$lib/stores/instance.svelte';
 	import { getAuthenticatedMediaByID } from '$lib/media-url';
 	import { isSupportedMediaFile, uploadMediaFile } from '$lib/media-upload-client';
+	import {
+		mediaCapabilityItemsFromIds,
+		providerMediaWarningMessages
+	} from '$lib/media-capabilities';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Calendar } from '$lib/components/ui/calendar';
@@ -138,6 +142,7 @@
 
 	let mediaAltTexts = $state<Map<string, string>>(new Map());
 	let mediaMimeTypes = $state<Map<string, string>>(new Map());
+	let mediaSizes = $state<Map<string, number>>(new Map());
 	let editingAltMediaId = $state<string | null>(null);
 
 	let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -204,7 +209,12 @@
 			const platform = getPlatformKey(account.platform);
 			for (const post of sourcePosts) {
 				const mediaIds = getVariantMediaIds(account.id, post.key) ?? post.mediaIds;
-				warnings.push(...getProviderMediaWarnings(platform, mediaIds));
+				warnings.push(
+					...providerMediaWarningMessages(
+						platform,
+						mediaCapabilityItemsFromIds(mediaIds, mediaMimeTypes, mediaSizes)
+					)
+				);
 			}
 		}
 
@@ -478,6 +488,10 @@
 		);
 	}
 
+	function isVideoMedia(mediaId: string): boolean {
+		return mediaMimeTypes.get(mediaId)?.startsWith('video/') ?? false;
+	}
+
 	function mergeMediaIds(current: string[], incoming: string[]): string[] {
 		const seen = new Set<string>();
 		const merged: string[] = [];
@@ -489,62 +503,6 @@
 			if (merged.length >= 4) break;
 		}
 		return merged;
-	}
-
-	function isVideoMedia(mediaId: string): boolean {
-		return mediaMimeTypes.get(mediaId)?.startsWith('video/') ?? false;
-	}
-
-	function getProviderMediaWarnings(platform: string, mediaIds: string[]): string[] {
-		const videos = mediaIds.filter((id) => isVideoMedia(id));
-		const images = mediaIds.filter((id) => {
-			const mimeType = mediaMimeTypes.get(id) ?? '';
-			return mimeType.startsWith('image/');
-		});
-		const warnings: string[] = [];
-
-		if ((platform === 'x' || platform === 'bluesky') && videos.length > 0 && mediaIds.length > 1) {
-			warnings.push(
-				`${getPlatformName(platform)} supports one video per post and cannot mix it with images.`
-			);
-		}
-		if (platform === 'linkedin' && mediaIds.length > 1) {
-			warnings.push('LinkedIn publishing currently sends only the first media attachment.');
-		}
-		if (platform === 'threads' && mediaIds.length > 1) {
-			warnings.push('Threads publishing currently sends only the first media attachment.');
-		}
-		if (platform === 'facebook' && mediaIds.length > 1) {
-			warnings.push('Facebook publishing currently supports at most one media attachment.');
-		}
-		if (platform === 'instagram') {
-			if (mediaIds.length !== 1) {
-				warnings.push(
-					'Instagram publishing currently requires exactly one image or video attachment.'
-				);
-			} else if (videos.length === 0 && images.length === 0) {
-				warnings.push('Instagram publishing supports image or video attachments only.');
-			}
-		}
-		if (platform === 'tiktok') {
-			if (mediaIds.length !== 1 || videos.length !== 1) {
-				warnings.push('TikTok publishing requires exactly one video attachment.');
-			}
-		}
-		if (platform === 'youtube') {
-			if (mediaIds.length !== 1 || videos.length !== 1) {
-				warnings.push('YouTube publishing requires exactly one video attachment.');
-			}
-		}
-		if (platform === 'threads') {
-			for (const id of videos) {
-				const mimeType = mediaMimeTypes.get(id) ?? '';
-				if (mimeType !== 'video/mp4' && mimeType !== 'video/quicktime') {
-					warnings.push('Threads supports MP4 or MOV video.');
-				}
-			}
-		}
-		return warnings;
 	}
 
 	function normalizeVariantsMap(
@@ -578,6 +536,7 @@
 			selectedSetId = null;
 			mediaAltTexts = new Map();
 			mediaMimeTypes = new Map();
+			mediaSizes = new Map();
 			const tomorrow = today(getLocalTimeZone()).add({ days: 1 });
 			selectedDate = new CalendarDate(tomorrow.year, tomorrow.month, tomorrow.day);
 			selectedTime = '10:00';
@@ -604,6 +563,13 @@
 		});
 		mediaAltTexts = newAlts;
 		mediaMimeTypes = newMimeTypes;
+		mediaSizes = new Map();
+		if (post.media?.length) {
+			await hydrateMediaMetadata(
+				post.workspace_id,
+				post.media.map((m) => m.media_id).filter(Boolean)
+			);
+		}
 
 		// Read the thread state. Prefer the explicit `thread_draft`
 		// field on the post (new P0.2 representation, set by the
@@ -767,7 +733,7 @@
 
 	async function hydrateMediaMetadata(workspaceId: string, mediaIds: string[]) {
 		const missingIds = Array.from(new Set(mediaIds.filter(Boolean))).filter(
-			(id) => !mediaMimeTypes.has(id)
+			(id) => !mediaMimeTypes.has(id) || !mediaSizes.has(id)
 		);
 		if (!workspaceId || missingIds.length === 0) return;
 
@@ -786,9 +752,13 @@
 			const mediaData = await resp.json();
 			const nextMimeTypes = new Map(mediaMimeTypes);
 			const nextAltTexts = new Map(mediaAltTexts);
+			const nextSizes = new Map(mediaSizes);
 			for (const media of mediaData.media ?? []) {
 				if (media.mime_type) {
 					nextMimeTypes.set(media.id, media.mime_type);
+				}
+				if (typeof media.size === 'number') {
+					nextSizes.set(media.id, media.size);
 				}
 				if (media.alt_text) {
 					nextAltTexts.set(media.id, media.alt_text);
@@ -796,6 +766,7 @@
 			}
 			mediaMimeTypes = nextMimeTypes;
 			mediaAltTexts = nextAltTexts;
+			mediaSizes = nextSizes;
 		} catch (e) {
 			console.error('Failed to load publication media metadata:', e);
 		}
@@ -1210,6 +1181,11 @@
 					nextMimeTypes.set(data.id, data.mime_type);
 					mediaMimeTypes = nextMimeTypes;
 				}
+				if (typeof data.size === 'number') {
+					const nextSizes = new Map(mediaSizes);
+					nextSizes.set(data.id, data.size);
+					mediaSizes = nextSizes;
+				}
 				addMediaToPost(targetPostIndex, data.id);
 				scheduleAutoSave();
 			}
@@ -1280,6 +1256,9 @@
 			const newMimeTypes = new Map(mediaMimeTypes);
 			newMimeTypes.delete(mediaId);
 			mediaMimeTypes = newMimeTypes;
+			const newSizes = new Map(mediaSizes);
+			newSizes.delete(mediaId);
+			mediaSizes = newSizes;
 		}
 		scheduleAutoSave();
 	}
@@ -1414,8 +1393,10 @@
 			}
 			variants = nextVariants;
 
-			// Fetch MIME types for variant-only media IDs not already in mediaMimeTypes
-			const missingIds = [...variantMediaIds].filter((id) => !mediaMimeTypes.has(id));
+			// Fetch metadata for variant-only media IDs not already hydrated.
+			const missingIds = [...variantMediaIds].filter(
+				(id) => !mediaMimeTypes.has(id) || !mediaSizes.has(id)
+			);
 			if (missingIds.length > 0) {
 				await hydrateMediaMetadata(initialPost?.workspace_id ?? '', missingIds);
 			}

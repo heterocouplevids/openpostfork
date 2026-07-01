@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { client, type Workspace } from '$lib/api/client';
 	import { getAuthenticatedMediaURL } from '$lib/media-url';
+	import { videoProviderSupportDetail, videoProviderSupportLabel } from '$lib/media-capabilities';
 	import { isSupportedMediaFile, uploadMediaFiles } from '$lib/media-upload-client';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -647,6 +648,14 @@
 							{/if}
 						</p>
 						<div class="mt-1.5">
+							{#if videoProviderSupportLabel(media.mime_type)}
+								<span
+									class="mr-1 inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+									title={videoProviderSupportDetail(media.mime_type) ?? ''}
+								>
+									{videoProviderSupportLabel(media.mime_type)}
+								</span>
+							{/if}
 							{#if media.usage_count > 0}
 								<span
 									class="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
@@ -751,6 +760,13 @@
 			{#if uploadError}
 				<p class="text-sm text-destructive">{uploadError}</p>
 			{/if}
+
+			<div
+				class="rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300"
+			>
+				Videos are provider-limited. MP4 is the safest format; YouTube and TikTok require one video,
+				while X and Bluesky cannot mix video with images.
+			</div>
 
 			{#if uploadProgress}
 				<p class="text-sm text-muted-foreground">{uploadProgress}</p>

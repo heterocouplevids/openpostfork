@@ -155,6 +155,7 @@ type MediaMetadataItem struct {
 	ID        string `json:"id" doc:"Media ID"`
 	MimeType  string `json:"mime_type" doc:"MIME type"`
 	AltText   string `json:"alt_text" doc:"Alt text"`
+	Size      int64  `json:"size" doc:"File size in bytes"`
 	Width     int    `json:"width" doc:"Image width"`
 	Height    int    `json:"height" doc:"Image height"`
 	URL       string `json:"url" doc:"URL to access the media"`
@@ -1096,6 +1097,7 @@ func (h *MediaHandler) mediaMetadata(c echo.Context) error {
 			ID:       m.ID,
 			MimeType: m.MimeType,
 			AltText:  m.AltText,
+			Size:     m.Size,
 			Width:    m.Width,
 			Height:   m.Height,
 			URL:      "/media/" + m.ID,
