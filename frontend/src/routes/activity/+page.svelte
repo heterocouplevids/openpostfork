@@ -25,7 +25,7 @@
 		id: string;
 		type: string;
 		status: string;
-		payload: string;
+		payload?: string;
 		run_at: string;
 		attempts: number;
 		max_attempts: number;
@@ -33,10 +33,16 @@
 		locked_at?: string;
 	};
 
+	const jobsPageSize = 50;
+
 	let posts = $state<Post[]>([]);
 	let scheduledPosts = $state<Post[]>([]);
 	let drafts = $state<Post[]>([]);
 	let jobs = $state<JobLog[]>([]);
+	let jobsTotal = $state(0);
+	let jobsNextOffset = $state(0);
+	let jobsHasMore = $state(false);
+	let jobsLoadingMore = $state(false);
 	let loading = $state(true);
 	let error = $state('');
 	let activeTab = $state('schedule');
@@ -87,10 +93,38 @@
 		);
 	}
 
-	async function loadJobs() {
-		const { data, error: err } = await (client as any).GET('/jobs');
+	async function loadJobs(offset = 0, append = false) {
+		const {
+			data,
+			error: err,
+			response
+		} = await client.GET('/jobs', {
+			params: { query: { limit: jobsPageSize, offset } }
+		});
 		if (err || !data) throw new Error(m.activity_failed_jobs());
-		jobs = data;
+		jobs = append ? [...jobs, ...data] : data;
+		jobsTotal = readIntHeader(response.headers.get('X-Total-Count'), jobs.length);
+		jobsNextOffset = readIntHeader(response.headers.get('X-Next-Offset'), jobs.length);
+		jobsHasMore = response.headers.get('X-Has-More') === 'true';
+	}
+
+	async function loadMoreJobs() {
+		if (jobsLoadingMore || !jobsHasMore) return;
+		jobsLoadingMore = true;
+		error = '';
+		try {
+			await loadJobs(jobsNextOffset, true);
+		} catch (e) {
+			error = (e as Error).message || m.activity_failed_jobs();
+		} finally {
+			jobsLoadingMore = false;
+		}
+	}
+
+	function readIntHeader(value: string | null, fallback: number): number {
+		if (!value) return fallback;
+		const parsed = Number.parseInt(value, 10);
+		return Number.isFinite(parsed) ? parsed : fallback;
 	}
 
 	function formatRelative(iso: string): string {
@@ -266,7 +300,7 @@
 
 	<!-- Stats -->
 	<div class="mb-8 grid grid-cols-3 gap-3">
-		{#each stats as stat}
+		{#each stats as stat (stat.label)}
 			<div class="rounded-xl border bg-card p-4">
 				<div class="flex items-center gap-3">
 					<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
@@ -335,7 +369,7 @@
 
 								{#if post.destinations && post.destinations.length > 0}
 									<div class="mt-3 flex flex-wrap items-center gap-2">
-										{#each post.destinations as dest}
+										{#each post.destinations as dest (dest.social_account_id)}
 											<div
 												class="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground"
 											>
@@ -420,7 +454,7 @@
 				<div class="space-y-2">
 					{#each jobs as job (job.id)}
 						{@const meta = getJobStatusMeta(job.status)}
-						<div class="rounded-xl border bg-card p-4">
+						<div class="rounded-xl border bg-card p-4" data-testid="job-row">
 							<div class="flex items-start justify-between gap-4">
 								<div class="flex items-center gap-3">
 									<span
@@ -467,6 +501,22 @@
 							{/if}
 						</div>
 					{/each}
+					{#if jobsHasMore}
+						<div class="flex justify-center pt-2">
+							<Button
+								variant="outline"
+								size="sm"
+								onclick={loadMoreJobs}
+								disabled={jobsLoadingMore}
+								data-testid="jobs-load-more"
+							>
+								<RefreshIcon class="mr-1.5 h-3.5 w-3.5 {jobsLoadingMore ? 'animate-spin' : ''}" />
+								{m.activity_load_more_jobs({
+									count: Math.max(jobsTotal - jobs.length, 0)
+								})}
+							</Button>
+						</div>
+					{/if}
 				</div>
 			{/if}
 		</TabsContent>

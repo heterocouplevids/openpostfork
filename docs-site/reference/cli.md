@@ -605,6 +605,7 @@ openpost jobs list [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--limit` | `0` | maximum number of jobs to return |
+| `--offset` | `0` | number of jobs to skip |
 | `--status` | `-` | filter by status: pending, failed, completed |
 
 **Inherited Flags**

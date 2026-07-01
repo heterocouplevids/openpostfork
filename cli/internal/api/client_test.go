@@ -364,14 +364,26 @@ func TestListPosts_WireFormat(t *testing.T) {
 
 // TestListJobs_WireFormat: server returns a raw array of jobs.
 func TestListJobs_WireFormat(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("workspace_id"); got != "ws_1" {
+			t.Fatalf("workspace_id query = %q, want ws_1", got)
+		}
+		if got := r.URL.Query().Get("status"); got != "pending" {
+			t.Fatalf("status query = %q, want pending", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "25" {
+			t.Fatalf("limit query = %q, want 25", got)
+		}
+		if got := r.URL.Query().Get("offset"); got != "50" {
+			t.Fatalf("offset query = %q, want 50", got)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[{"id":"j_1","type":"publish","payload":"{}","status":"queued","run_at":"2026-06-16T09:00:00Z","attempts":0}]`))
 	}))
 	defer srv.Close()
 
 	c := New(srv.URL, "")
-	got, err := c.ListJobs(context.Background(), ListJobsInput{WorkspaceID: "ws_1"})
+	got, err := c.ListJobs(context.Background(), ListJobsInput{WorkspaceID: "ws_1", Status: "pending", Limit: 25, Offset: 50})
 	if err != nil {
 		t.Fatalf("ListJobs returned error: %v", err)
 	}

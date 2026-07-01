@@ -27,12 +27,18 @@ type JobResponse struct {
 
 type ListJobsInput struct {
 	Limit       int    `query:"limit" doc:"Number of jobs to return (default 50, max 200)"`
+	Offset      int    `query:"offset" doc:"Offset for pagination"`
 	Status      string `query:"status" doc:"Filter by status (pending, processing, completed, failed)"`
 	WorkspaceID string `query:"workspace_id" doc:"Filter by workspace ID"`
 }
 
 type ListJobsOutput struct {
-	Body []JobResponse
+	TotalCount int  `header:"X-Total-Count" doc:"Total number of matching jobs"`
+	Limit      int  `header:"X-Limit" doc:"Applied page limit"`
+	Offset     int  `header:"X-Offset" doc:"Applied page offset"`
+	NextOffset int  `header:"X-Next-Offset" doc:"Offset for the next page"`
+	HasMore    bool `header:"X-Has-More" doc:"Whether another page is available"`
+	Body       []JobResponse
 }
 
 type JobHandler struct {
@@ -52,79 +58,126 @@ func (h *JobHandler) RegisterRoutes(api huma.API) {
 		Summary:     "List recent background jobs",
 		Tags:        []string{"Jobs"},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-	}, func(ctx context.Context, input *ListJobsInput) (*ListJobsOutput, error) {
-		userID := middleware.GetUserID(ctx)
-		isAdmin, err := h.isInstanceAdmin(ctx, userID)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to load user")
-		}
+	}, h.listJobs)
+}
 
-		limit := input.Limit
-		if limit <= 0 || limit > 200 {
-			limit = 50
-		}
+func (h *JobHandler) listJobs(ctx context.Context, input *ListJobsInput) (*ListJobsOutput, error) {
+	userID := middleware.GetUserID(ctx)
+	isAdmin, err := h.isInstanceAdmin(ctx, userID)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to load user")
+	}
 
-		allowedWorkspaces, err := h.allowedWorkspaces(ctx, userID, isAdmin, input.WorkspaceID)
-		if err != nil {
-			var humaErr huma.StatusError
-			if errors.As(err, &humaErr) {
-				return nil, humaErr
-			}
-			return nil, huma.Error500InternalServerError("failed to resolve workspace scope")
-		}
+	limit, err := listJobsLimit(input)
+	if err != nil {
+		return nil, err
+	}
 
-		var jobs []models.Job
-		query := h.db.NewSelect().
-			Model(&jobs).
-			ModelTableExpr("jobs AS job").
-			ColumnExpr("job.*").
-			Join("LEFT JOIN posts AS p ON p.id = json_extract(job.payload, '$.post_id')").
-			Join("LEFT JOIN social_accounts AS sa ON sa.id = json_extract(job.payload, '$.account_id')").
-			Order("job.run_at DESC").
-			Limit(limit)
+	allowedWorkspaces, err := h.allowedWorkspaces(ctx, userID, isAdmin, input.WorkspaceID)
+	if err != nil {
+		return nil, listJobsScopeError(err)
+	}
+	if !hasListJobsWorkspaceScope(input, allowedWorkspaces, isAdmin) {
+		return listJobsOutput([]JobResponse{}, 0, limit, input.Offset), nil
+	}
 
-		if input.Status != "" {
-			query = query.Where("job.status = ?", input.Status)
-		}
-		if input.WorkspaceID != "" {
-			query = query.Where("COALESCE(p.workspace_id, sa.workspace_id) = ?", input.WorkspaceID)
-		} else if !isAdmin {
-			workspaceIDs := make([]string, 0, len(allowedWorkspaces))
-			for workspaceID := range allowedWorkspaces {
-				workspaceIDs = append(workspaceIDs, workspaceID)
-			}
-			if len(workspaceIDs) == 0 {
-				return &ListJobsOutput{Body: []JobResponse{}}, nil
-			}
-			query = query.Where("COALESCE(p.workspace_id, sa.workspace_id) IN (?)", bun.List(workspaceIDs))
-		}
+	total, err := h.listJobsQuery((*models.Job)(nil), input, allowedWorkspaces, isAdmin).Count(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to count jobs")
+	}
 
-		if err := query.Scan(ctx); err != nil {
-			return nil, huma.Error500InternalServerError("failed to fetch jobs")
-		}
+	var jobs []models.Job
+	query := h.listJobsQuery(&jobs, input, allowedWorkspaces, isAdmin).
+		ColumnExpr("job.*").
+		Order("job.run_at DESC").
+		Limit(limit).
+		Offset(input.Offset)
+	if err := query.Scan(ctx); err != nil {
+		return nil, huma.Error500InternalServerError("failed to fetch jobs")
+	}
 
-		resp := make([]JobResponse, 0, len(jobs))
-		for _, j := range jobs {
-			item := JobResponse{
-				ID:          j.ID,
-				Type:        j.Type,
-				Status:      j.Status,
-				RunAt:       j.RunAt.Format(time.RFC3339),
-				Attempts:    j.Attempts,
-				MaxAttempts: j.MaxAttempts,
-				LastError:   j.LastError,
-			}
-			if !j.LockedAt.IsZero() {
-				item.LockedAt = j.LockedAt.Format(time.RFC3339)
-			}
-			if isAdmin {
-				item.Payload = j.Payload
-			}
-			resp = append(resp, item)
-		}
+	return listJobsOutput(jobResponses(jobs, isAdmin), total, limit, input.Offset), nil
+}
 
-		return &ListJobsOutput{Body: resp}, nil
-	})
+func listJobsLimit(input *ListJobsInput) (int, error) {
+	if input.Offset < 0 {
+		return 0, huma.Error400BadRequest("offset must be greater than or equal to 0")
+	}
+	if input.Limit <= 0 || input.Limit > 200 {
+		return 50, nil
+	}
+	return input.Limit, nil
+}
+
+func listJobsScopeError(err error) error {
+	var humaErr huma.StatusError
+	if errors.As(err, &humaErr) {
+		return humaErr
+	}
+	return huma.Error500InternalServerError("failed to resolve workspace scope")
+}
+
+func hasListJobsWorkspaceScope(input *ListJobsInput, allowedWorkspaces map[string]bool, isAdmin bool) bool {
+	return input.WorkspaceID != "" || isAdmin || len(allowedWorkspaces) > 0
+}
+
+func jobResponses(jobs []models.Job, includePayload bool) []JobResponse {
+	resp := make([]JobResponse, 0, len(jobs))
+	for _, j := range jobs {
+		item := JobResponse{
+			ID:          j.ID,
+			Type:        j.Type,
+			Status:      j.Status,
+			RunAt:       j.RunAt.Format(time.RFC3339),
+			Attempts:    j.Attempts,
+			MaxAttempts: j.MaxAttempts,
+			LastError:   j.LastError,
+		}
+		if !j.LockedAt.IsZero() {
+			item.LockedAt = j.LockedAt.Format(time.RFC3339)
+		}
+		if includePayload {
+			item.Payload = j.Payload
+		}
+		resp = append(resp, item)
+	}
+	return resp
+}
+
+func (h *JobHandler) listJobsQuery(model interface{}, input *ListJobsInput, allowedWorkspaces map[string]bool, isAdmin bool) *bun.SelectQuery {
+	query := h.db.NewSelect().
+		Model(model).
+		ModelTableExpr("jobs AS job").
+		Join("LEFT JOIN posts AS p ON p.id = json_extract(job.payload, '$.post_id')").
+		Join("LEFT JOIN social_accounts AS sa ON sa.id = json_extract(job.payload, '$.account_id')")
+
+	if input.Status != "" {
+		query = query.Where("job.status = ?", input.Status)
+	}
+	if input.WorkspaceID != "" {
+		return query.Where("COALESCE(p.workspace_id, sa.workspace_id) = ?", input.WorkspaceID)
+	}
+	if isAdmin {
+		return query
+	}
+
+	workspaceIDs := make([]string, 0, len(allowedWorkspaces))
+	for workspaceID := range allowedWorkspaces {
+		workspaceIDs = append(workspaceIDs, workspaceID)
+	}
+	return query.Where("COALESCE(p.workspace_id, sa.workspace_id) IN (?)", bun.List(workspaceIDs))
+}
+
+func listJobsOutput(body []JobResponse, total, limit, offset int) *ListJobsOutput {
+	out := &ListJobsOutput{
+		TotalCount: total,
+		Limit:      limit,
+		Offset:     offset,
+		NextOffset: offset + len(body),
+		HasMore:    offset+len(body) < total,
+		Body:       body,
+	}
+	return out
 }
 
 func (h *JobHandler) isInstanceAdmin(ctx context.Context, userID string) (bool, error) {

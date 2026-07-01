@@ -5192,6 +5192,8 @@ export interface operations {
             query?: {
                 /** @description Number of jobs to return (default 50, max 200) */
                 limit?: number;
+                /** @description Offset for pagination */
+                offset?: number;
                 /** @description Filter by status (pending, processing, completed, failed) */
                 status?: string;
                 /** @description Filter by workspace ID */
@@ -5206,6 +5208,11 @@ export interface operations {
             /** @description OK */
             200: {
                 headers: {
+                    "X-Has-More"?: boolean;
+                    "X-Limit"?: number;
+                    "X-Next-Offset"?: number;
+                    "X-Offset"?: number;
+                    "X-Total-Count"?: number;
                     [name: string]: unknown;
                 };
                 content: {

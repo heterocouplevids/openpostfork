@@ -17,6 +17,7 @@ func newJobsCmd() *cobra.Command {
 func newJobsListCmd() *cobra.Command {
 	var status string
 	var limit int
+	var offset int
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List background jobs",
@@ -37,7 +38,7 @@ func newJobsListCmd() *cobra.Command {
 					return err
 				}
 			}
-			jobs, err := client.ListJobs(cmd.Context(), api.ListJobsInput{Status: status, Limit: limit, WorkspaceID: workspaceID})
+			jobs, err := client.ListJobs(cmd.Context(), api.ListJobsInput{Status: status, Limit: limit, Offset: offset, WorkspaceID: workspaceID})
 			if err != nil {
 				return err
 			}
@@ -55,5 +56,6 @@ func newJobsListCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&status, "status", "", "filter by status: pending, failed, completed")
 	cmd.Flags().IntVar(&limit, "limit", 0, "maximum number of jobs to return")
+	cmd.Flags().IntVar(&offset, "offset", 0, "number of jobs to skip")
 	return cmd
 }

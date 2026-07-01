@@ -829,6 +829,7 @@ type Job struct {
 type ListJobsInput struct {
 	Status      string
 	Limit       int
+	Offset      int
 	WorkspaceID string
 }
 
@@ -839,6 +840,9 @@ func (c *Client) ListJobs(ctx context.Context, in ListJobsInput) ([]Job, error) 
 	}
 	if in.Limit > 0 {
 		v.Set("limit", strconv.Itoa(in.Limit))
+	}
+	if in.Offset > 0 {
+		v.Set("offset", strconv.Itoa(in.Offset))
 	}
 	if in.WorkspaceID != "" {
 		v.Set("workspace_id", in.WorkspaceID)

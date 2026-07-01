@@ -27,8 +27,8 @@ OpenPost is a lightweight, self-hosted social media scheduler. The core product 
 1. **Enhanced thread management**
    Add safer atomic updates to scheduled or failed threads.
 
-2. **Full pagination for list endpoints**
-   Add cursor or offset pagination for posts, jobs, and other large lists.
+2. **Full pagination for remaining list endpoints**
+   Add cursor or offset pagination for posts and other large lists. Background jobs now support offset pagination across the API, Activity page, and CLI.
 
 3. **Analytics and engagement tracking**
    Poll provider APIs for engagement metrics and display them in an analytics dashboard.

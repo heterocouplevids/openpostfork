@@ -115,6 +115,7 @@
 	"activity_empty_drafts_description": "Drafts let you prepare posts before scheduling. Start writing on the home page.",
 	"activity_empty_jobs_title": "No jobs running",
 	"activity_empty_jobs_description": "Background jobs appear here when you schedule or publish posts.",
+	"activity_load_more_jobs": "Load {count} more jobs",
 	"activity_status_published": "Published",
 	"activity_status_failed": "Failed",
 	"activity_status_scheduled": "Scheduled",

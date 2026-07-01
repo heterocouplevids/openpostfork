@@ -98,6 +98,7 @@
 	"activity_empty_drafts_description": "Os rascunhos permitem preparar publicações antes de agendar. Começa a escrever na página inicial.",
 	"activity_empty_jobs_title": "Não há jobs em execução",
 	"activity_empty_jobs_description": "Os jobs em segundo plano aparecem aqui quando agendas ou publicas conteúdo.",
+	"activity_load_more_jobs": "Carregar mais {count} jobs",
 	"activity_status_published": "Publicado",
 	"activity_status_failed": "Falhou",
 	"activity_status_scheduled": "Agendado",
