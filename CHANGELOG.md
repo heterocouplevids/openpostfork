@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.22] - 2026-07-01
+
 ### Added
 - Added organization-backed workspace ownership, team listing APIs, organization-scoped billing routes, and team/agency Polar plan configuration for hosted accounts.
 - Added authenticated profile updates and avatar upload/removal endpoints backed by existing media storage.
