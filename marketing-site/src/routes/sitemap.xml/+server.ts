@@ -6,6 +6,9 @@ const siteUrl = 'https://openpost.social';
 const routes = [
 	{ path: '/', priority: '1.0' },
 	{ path: '/tools', priority: '0.8' },
+	{ path: '/blog', priority: '0.8' },
+	{ path: '/blog/agentic-social-media-scheduling', priority: '0.8' },
+	{ path: '/compare/social-media-schedulers', priority: '0.8' },
 	{ path: '/tips/best-times-to-post', priority: '0.7' },
 	{ path: '/tips/cross-posting-without-looking-spammy', priority: '0.7' }
 ];

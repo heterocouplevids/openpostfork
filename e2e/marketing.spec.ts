@@ -33,6 +33,11 @@ test('marketing page presents the cloud product and demo slot', async ({ page })
 	).toBeVisible();
 	await expect(page.getByRole('link', { name: 'View GitHub' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Tools' }).first()).toHaveAttribute('href', '/tools');
+	await expect(page.getByRole('link', { name: 'Blog' }).first()).toHaveAttribute('href', '/blog');
+	await expect(page.getByRole('link', { name: 'Compare' }).first()).toHaveAttribute(
+		'href',
+		'/compare/social-media-schedulers'
+	);
 	await expect(page.getByRole('link', { name: 'Tips' }).first()).toHaveAttribute(
 		'href',
 		'/tips/best-times-to-post'
@@ -90,6 +95,32 @@ test('marketing tips pages are reachable SEO articles', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: /Cross-posting works/ })).toBeVisible();
 });
 
+test('marketing blog and comparison pages are reachable SEO pages', async ({ page }) => {
+	await page.goto('/blog');
+	await expect(page).toHaveTitle(/OpenPost Blog/);
+	await expect(
+		page.getByRole('heading', { name: 'Publishing systems, not posting hacks.' })
+	).toBeVisible();
+	await expect(
+		page.getByRole('link', { name: /Agentic social media scheduling needs/ })
+	).toHaveAttribute('href', '/blog/agentic-social-media-scheduling');
+
+	await page.goto('/blog/agentic-social-media-scheduling');
+	await expect(page).toHaveTitle(/Agentic Social Media Scheduling/);
+	await expect(
+		page.getByRole('heading', {
+			name: 'Agentic social media scheduling needs a source of truth.'
+		})
+	).toBeVisible();
+
+	await page.goto('/compare/social-media-schedulers');
+	await expect(page).toHaveTitle(/OpenPost vs Traditional Social Media Schedulers/);
+	await expect(
+		page.getByRole('heading', { name: /OpenPost is for teams that schedule releases/ })
+	).toBeVisible();
+	await expect(page.getByText('Remote MCP and CLI workflows')).toBeVisible();
+});
+
 test('marketing SEO routes expose crawlable resources', async ({ request }) => {
 	const robots = await request.get('/robots.txt');
 	expect(robots.ok()).toBeTruthy();
@@ -101,5 +132,8 @@ test('marketing SEO routes expose crawlable resources', async ({ request }) => {
 	const xml = await sitemap.text();
 	expect(xml).toContain('<loc>https://openpost.social/</loc>');
 	expect(xml).toContain('<loc>https://openpost.social/tools</loc>');
+	expect(xml).toContain('<loc>https://openpost.social/blog</loc>');
+	expect(xml).toContain('<loc>https://openpost.social/blog/agentic-social-media-scheduling</loc>');
+	expect(xml).toContain('<loc>https://openpost.social/compare/social-media-schedulers</loc>');
 	expect(xml).toContain('<loc>https://openpost.social/tips/best-times-to-post</loc>');
 });

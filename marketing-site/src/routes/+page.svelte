@@ -143,6 +143,8 @@
 		<a href="#demo">Demo</a>
 		<a href="#pricing">Pricing</a>
 		<a href="/tools">Tools</a>
+		<a href="/blog">Blog</a>
+		<a href="/compare/social-media-schedulers">Compare</a>
 		<a href="/tips/best-times-to-post">Tips</a>
 	</nav>
 	<a class="login" href={appUrl}>Login</a>
@@ -167,8 +169,7 @@
 				<a class="button secondary" href="#demo">Watch demo</a>
 			</div>
 			<p class="microcopy">
-				No credit card during beta. Built for creators, founders, agencies, and open-source
-				teams.
+				No credit card during beta. Built for creators, founders, agencies, and open-source teams.
 			</p>
 		</div>
 
@@ -239,8 +240,8 @@
 				<h2>Everything a serious scheduler needs before analytics bloat.</h2>
 			</div>
 			<p>
-				The cloud product focuses on reliable creation, adaptation, scheduling, media handling,
-				and provider visibility first.
+				The cloud product focuses on reliable creation, adaptation, scheduling, media handling, and
+				provider visibility first.
 			</p>
 		</div>
 		<div class="feature-grid">
@@ -264,7 +265,10 @@
 			<a class="text-link" href={appUrl}>Open the hosted app</a>
 		</div>
 		<div class="shot-stack">
-			<img src="/assets/screenshots/settings-dark.png" alt="OpenPost settings and automation controls" />
+			<img
+				src="/assets/screenshots/settings-dark.png"
+				alt="OpenPost settings and automation controls"
+			/>
 			<img src="/assets/screenshots/accounts-dark.png" alt="OpenPost social accounts dashboard" />
 		</div>
 	</section>
@@ -290,8 +294,8 @@
 				<h2>Managed social infrastructure without enterprise theatre.</h2>
 			</div>
 			<p>
-				Hosted pricing should cover provider approvals, worker reliability, media storage,
-				support, and the edge cases that come with social APIs.
+				Hosted pricing should cover provider approvals, worker reliability, media storage, support,
+				and the edge cases that come with social APIs.
 			</p>
 		</div>
 		<div class="plans">
@@ -320,7 +324,8 @@
 			OpenPost remains self-hostable and inspectable. The official cloud service exists for teams
 			that prefer managed provider apps, backups, updates, media hosting, and support. <a
 				href={githubUrl}>View GitHub</a
-			> or <a href={docsUrl}>read the docs</a>.
+			>
+			or <a href={docsUrl}>read the docs</a>.
 		</p>
 	</section>
 
@@ -354,6 +359,8 @@
 		<a href={appUrl}>App</a>
 		<a href={docsUrl}>Docs</a>
 		<a href="/tools">Tools</a>
+		<a href="/blog">Blog</a>
+		<a href="/compare/social-media-schedulers">Compare</a>
 		<a href="/tips/best-times-to-post">Tips</a>
 		<a href={githubUrl}>GitHub</a>
 	</nav>
@@ -371,11 +378,14 @@
 
 	:global(body) {
 		margin: 0;
-		font-family: Avenir Next, Aptos, ui-sans-serif, sans-serif;
+		font-family:
+			Avenir Next,
+			Aptos,
+			ui-sans-serif,
+			sans-serif;
 		background:
 			radial-gradient(circle at 18% 8%, rgba(101, 188, 255, 0.14), transparent 28rem),
-			radial-gradient(circle at 82% 18%, rgba(244, 110, 54, 0.12), transparent 28rem),
-			#090909;
+			radial-gradient(circle at 82% 18%, rgba(244, 110, 54, 0.12), transparent 28rem), #090909;
 		color: #f5f1e8;
 	}
 
@@ -498,14 +508,22 @@
 	h1 {
 		max-width: 10ch;
 		margin-bottom: 24px;
-		font-family: Charter, Iowan Old Style, Georgia, serif;
+		font-family:
+			Charter,
+			Iowan Old Style,
+			Georgia,
+			serif;
 		font-size: clamp(4.2rem, 7.2vw, 7.8rem);
 		line-height: 0.82;
 		letter-spacing: 0;
 	}
 
 	h2 {
-		font-family: Charter, Iowan Old Style, Georgia, serif;
+		font-family:
+			Charter,
+			Iowan Old Style,
+			Georgia,
+			serif;
 		font-size: clamp(2.6rem, 6vw, 5.7rem);
 		line-height: 0.9;
 		letter-spacing: 0;
@@ -642,7 +660,11 @@
 
 	.proof strong {
 		display: block;
-		font-family: Charter, Iowan Old Style, Georgia, serif;
+		font-family:
+			Charter,
+			Iowan Old Style,
+			Georgia,
+			serif;
 		font-size: 2.4rem;
 	}
 
@@ -867,7 +889,11 @@
 	.plans strong {
 		display: block;
 		margin: 26px 0 14px;
-		font-family: Charter, Iowan Old Style, Georgia, serif;
+		font-family:
+			Charter,
+			Iowan Old Style,
+			Georgia,
+			serif;
 		font-size: 4.2rem;
 	}
 

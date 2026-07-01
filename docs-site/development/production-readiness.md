@@ -84,7 +84,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 - Keep `marketing-site/` public in this repo.
 - Keep `docs-site/` technical and task-oriented.
-- Add pricing, blog, comparison, tips, and tools pages to `openpost.social`.
+- Add pricing, blog, comparison, tips, and tools pages to `openpost.social`. The marketing site now includes crawlable tools, tips, blog, and comparison routes with sitemap coverage.
 - Add SEO utilities such as post preview, thread splitter, character counter, and UTM builder. The marketing tools page now covers all four with Playwright verification for generated UTM links.
 - Keep docs on install, providers, configuration, CLI, operations, and development.
 
