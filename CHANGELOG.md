@@ -2,9 +2,9 @@
 
 All notable changes to this project are documented in this file.
 
-## [1.0.17] - 2026-06-27
-
 ## [Unreleased]
+
+## [1.0.18] - 2026-07-01
 
 ### Added
 - Added `OPENPOST_POLAR_API_BASE_URL` and strict cloud-mode Polar billing config validation for hosted checkout, portal, and webhook readiness.
@@ -132,6 +132,8 @@ All notable changes to this project are documented in this file.
 - Removed duplicate Huma route registration from the Go binary startup path so app E2E runs and production boot no longer panic on repeated operation IDs.
 - Wrapped the docs API reference OpenAPI renderer in client-only rendering so VitePress builds no longer emit a nonfatal SSR TypeError.
 - Fixed release CLI cross-compilation by keeping `GOOS` and `GOARCH` out of `devenv` shell evaluation and applying them only to the Go build commands.
+
+## [1.0.17] - 2026-06-27
 
 ## [1.0.16] - 2026-06-23
 
