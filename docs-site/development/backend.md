@@ -1,6 +1,6 @@
 # Backend
 
-The backend uses Echo for HTTP handling, Huma for OpenAPI generation, SQLite for persistence, and Bun ORM for database access.
+The backend uses Echo for HTTP handling, Huma for OpenAPI generation, and Bun ORM for database access. SQLite is the self-hosted default; Postgres is the cloud deployment path.
 
 ## Layering
 

@@ -21,7 +21,7 @@ Threads requires the backend to hand Meta a publicly reachable media URL. If Ope
 
 ## Backups
 
-Back up the media directory together with the SQLite database. You need both for a complete restore.
+Back up the media directory together with the SQLite database when using local storage. For S3/R2-style storage, back up the bucket or configure provider-side versioning and lifecycle protection.
 
 ## S3-compatible storage
 

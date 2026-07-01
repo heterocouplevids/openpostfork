@@ -3,9 +3,9 @@
 OpenPost configuration falls into a few practical groups:
 
 - Server: port, public frontend URL, extra CORS origins
-- Database: SQLite path and persistence strategy
+- Database: SQLite path by default, or Postgres URL for cloud deployments
 - Secrets: JWT signing and token encryption
-- Media: local filesystem path and public media base URL
+- Media: local filesystem path by default, or S3-compatible storage for cloud deployments
 - Providers: client credentials, redirect URIs, and instance-specific settings
 - Platform-specific behavior: options such as LinkedIn thread reply disabling
 

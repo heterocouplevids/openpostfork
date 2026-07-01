@@ -106,6 +106,7 @@ All notable changes to this project are documented in this file.
 - Moved docs and marketing site deployment from VPS/GitHub Pages to Cloudflare Pages.
 - Moved the JavaScript workspace to pnpm workspaces with Turborepo orchestration across the web app, docs site, and marketing site.
 - Tightened cloud-mode CORS defaults so hosted deployments allow only `OPENPOST_APP_URL` plus explicit extra origins, while self-hosted installs keep local development and Capacitor defaults.
+- Clarified developer and configuration docs so database, jobs, and media storage descriptions distinguish SQLite/local self-host defaults from Postgres/S3 cloud deployments.
 
 ### Fixed
 - Made background-job workspace scoping, publish-job cancellation, MCP scheduling cleanup, stale processing-job recovery, and schedule overview date aggregation use database-portable expressions for Postgres-backed cloud deployments.
