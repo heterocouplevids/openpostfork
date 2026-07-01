@@ -214,12 +214,12 @@ func (h *PostHandler) validateMediaBelongsToWorkspace(ctx context.Context, works
 	return nil
 }
 
-func (h *PostHandler) validateScheduledProviderMedia(ctx context.Context, workspaceID string, accountIDs []string, mediaIDs []string) error {
+func validateScheduledProviderMedia(ctx context.Context, db *bun.DB, workspaceID string, accountIDs []string, mediaIDs []string) error {
 	if len(accountIDs) == 0 {
 		return nil
 	}
 
-	platforms, err := h.platformsForAccounts(ctx, workspaceID, accountIDs)
+	platforms, err := platformsForAccounts(ctx, db, workspaceID, accountIDs)
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,7 @@ func (h *PostHandler) validateScheduledProviderMedia(ctx context.Context, worksp
 		return nil
 	}
 
-	mediaItems, err := h.mediaItemsForIDs(ctx, workspaceID, mediaIDs)
+	mediaItems, err := mediaItemsForIDs(ctx, db, workspaceID, mediaIDs)
 	if err != nil {
 		return err
 	}
@@ -243,14 +243,14 @@ func (h *PostHandler) validateScheduledProviderMedia(ctx context.Context, worksp
 	return nil
 }
 
-func (h *PostHandler) platformsForAccounts(ctx context.Context, workspaceID string, accountIDs []string) ([]string, error) {
+func platformsForAccounts(ctx context.Context, db *bun.DB, workspaceID string, accountIDs []string) ([]string, error) {
 	uniqueIDs := uniqueNonEmptyStrings(accountIDs)
 	if len(uniqueIDs) == 0 {
 		return nil, nil
 	}
 
 	var accounts []models.SocialAccount
-	if err := h.db.NewSelect().
+	if err := db.NewSelect().
 		Model(&accounts).
 		Column("id", "platform").
 		Where("workspace_id = ?", workspaceID).
@@ -281,14 +281,14 @@ func (h *PostHandler) platformsForAccounts(ctx context.Context, workspaceID stri
 	return platforms, nil
 }
 
-func (h *PostHandler) mediaItemsForIDs(ctx context.Context, workspaceID string, mediaIDs []string) ([]platform.MediaItem, error) {
+func mediaItemsForIDs(ctx context.Context, db *bun.DB, workspaceID string, mediaIDs []string) ([]platform.MediaItem, error) {
 	uniqueIDs := uniqueNonEmptyStrings(mediaIDs)
 	if len(uniqueIDs) == 0 {
 		return nil, nil
 	}
 
 	var media []models.MediaAttachment
-	if err := h.db.NewSelect().
+	if err := db.NewSelect().
 		Model(&media).
 		Column("id", "mime_type", "size", "original_filename").
 		Where("workspace_id = ?", workspaceID).
@@ -346,9 +346,9 @@ func uniqueNonEmptyStrings(values []string) []string {
 	return unique
 }
 
-func (h *PostHandler) postDestinationAccountIDs(ctx context.Context, postID string) ([]string, error) {
+func postDestinationAccountIDs(ctx context.Context, db *bun.DB, postID string) ([]string, error) {
 	var destinations []models.PostDestination
-	if err := h.db.NewSelect().
+	if err := db.NewSelect().
 		Model(&destinations).
 		Column("social_account_id").
 		Where("post_id = ?", postID).
@@ -364,9 +364,9 @@ func (h *PostHandler) postDestinationAccountIDs(ctx context.Context, postID stri
 	return accountIDs, nil
 }
 
-func (h *PostHandler) postMediaIDs(ctx context.Context, postID string) ([]string, error) {
+func postMediaIDs(ctx context.Context, db *bun.DB, postID string) ([]string, error) {
 	var media []models.PostMedia
-	if err := h.db.NewSelect().
+	if err := db.NewSelect().
 		Model(&media).
 		Column("media_id", "display_order").
 		Where("post_id = ?", postID).
@@ -488,7 +488,7 @@ func (h *PostHandler) CreatePost(api huma.API) {
 			status = statusScheduled
 		}
 		if status == statusScheduled {
-			if err := h.validateScheduledProviderMedia(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs, input.Body.MediaIDs); err != nil {
+			if err := validateScheduledProviderMedia(ctx, h.db, input.Body.WorkspaceID, input.Body.SocialAccountIDs, input.Body.MediaIDs); err != nil {
 				return nil, err
 			}
 			if err := h.checkScheduledPostQuota(ctx, input.Body.WorkspaceID, 1, *input.Body.ScheduledAt); err != nil {
@@ -1107,7 +1107,7 @@ func (h *PostHandler) CreateThread(api huma.API) {
 		}
 		if status == statusScheduled {
 			for _, threadPost := range input.Body.Posts {
-				if err := h.validateScheduledProviderMedia(ctx, input.Body.WorkspaceID, input.Body.SocialAccountIDs, threadPost.MediaIDs); err != nil {
+				if err := validateScheduledProviderMedia(ctx, h.db, input.Body.WorkspaceID, input.Body.SocialAccountIDs, threadPost.MediaIDs); err != nil {
 					return nil, err
 				}
 			}
@@ -1610,7 +1610,7 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			accountIDs := input.Body.SocialAccountIDs
 			if accountIDs == nil {
 				var err error
-				accountIDs, err = h.postDestinationAccountIDs(ctx, post.ID)
+				accountIDs, err = postDestinationAccountIDs(ctx, h.db, post.ID)
 				if err != nil {
 					return nil, err
 				}
@@ -1618,12 +1618,12 @@ func (h *PostHandler) UpdatePost(api huma.API) {
 			mediaIDs := input.Body.MediaIDs
 			if mediaIDs == nil {
 				var err error
-				mediaIDs, err = h.postMediaIDs(ctx, post.ID)
+				mediaIDs, err = postMediaIDs(ctx, h.db, post.ID)
 				if err != nil {
 					return nil, err
 				}
 			}
-			if err := h.validateScheduledProviderMedia(ctx, post.WorkspaceID, accountIDs, mediaIDs); err != nil {
+			if err := validateScheduledProviderMedia(ctx, h.db, post.WorkspaceID, accountIDs, mediaIDs); err != nil {
 				return nil, err
 			}
 		}

@@ -24,9 +24,9 @@ channels, or profiles on the same provider stay visible. Instagram, Facebook,
 YouTube, and TikTok use provider-shaped cards instead of the generic preview,
 and media warnings surface first-slice limits before publishing.
 
-Drafts can still be saved while incomplete. Scheduling validates destination
-media requirements server-side and returns an error if a provider cannot publish
-the selected attachments.
+Drafts can still be saved while incomplete. Web, API, and MCP scheduling
+validate destination media requirements server-side and return an error if a
+provider cannot publish the selected attachments.
 
 ## Practical advice
 

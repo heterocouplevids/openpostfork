@@ -68,6 +68,7 @@ type MCPHandler struct {
 }
 
 func NewMCPHandler(db *bun.DB, authenticator middleware.Authenticator, entitlement ...entitlements.Service) *MCPHandler {
+	platform.RegisterAllMediaValidators()
 	entitlementService := entitlements.Service(entitlements.NewSelfHostedService())
 	if len(entitlement) > 0 && entitlement[0] != nil {
 		entitlementService = entitlement[0]
@@ -2505,6 +2506,9 @@ func (h *MCPHandler) validateSchedulePostInput(ctx context.Context, userID strin
 	if scheduledAt.IsZero() {
 		return input, nil, nil, time.Time{}, &mcpError{Code: -32602, Message: "scheduled_at is required"}
 	}
+	if rpcErr := validateMCPScheduledProviderMedia(ctx, h.db, input.WorkspaceID, accountIDs, mediaIDs); rpcErr != nil {
+		return input, nil, nil, time.Time{}, rpcErr
+	}
 	if rpcErr := h.checkScheduledPostQuota(ctx, input.WorkspaceID, 1, scheduledAt); rpcErr != nil {
 		return input, nil, nil, time.Time{}, rpcErr
 	}
@@ -2676,11 +2680,29 @@ func (h *MCPHandler) validateScheduleDraftInput(ctx context.Context, userID stri
 	if rpcErr != nil {
 		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
 	}
+	validationMediaIDs := mediaIDs
+	if input.MediaIDs == nil {
+		var err error
+		validationMediaIDs, err = postMediaIDs(ctx, h.db, post.ID)
+		if err != nil {
+			return input, nil, nil, nil, time.Time{}, time.Time{}, &mcpError{Code: -32603, Message: err.Error()}
+		}
+	}
+	if rpcErr := validateMCPScheduledProviderMedia(ctx, h.db, input.WorkspaceID, accountIDs, validationMediaIDs); rpcErr != nil {
+		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
+	}
 	if rpcErr := h.checkScheduledPostQuota(ctx, input.WorkspaceID, 1, scheduledAt); rpcErr != nil {
 		return input, nil, nil, nil, time.Time{}, time.Time{}, rpcErr
 	}
 	post.RandomDelayMinutes = randomDelayMinutes
 	return input, post, accountIDs, mediaIDs, scheduledAt, applyRandomDelay(scheduledAt, randomDelayMinutes), nil
+}
+
+func validateMCPScheduledProviderMedia(ctx context.Context, db *bun.DB, workspaceID string, accountIDs []string, mediaIDs []string) *mcpError {
+	if err := validateScheduledProviderMedia(ctx, db, workspaceID, accountIDs, mediaIDs); err != nil {
+		return &mcpError{Code: -32602, Message: err.Error()}
+	}
+	return nil
 }
 
 func decodeMCPScheduleDraftArguments(args map[string]any) (mcpScheduleDraftInput, time.Time, *mcpError) {

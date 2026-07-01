@@ -1554,6 +1554,53 @@ func TestMCPCallSchedulePostCreatesPublishJob(t *testing.T) {
 	require.Equal(t, "media-schedule", postMedia.MediaID)
 }
 
+func TestMCPCallSchedulePostRejectsProviderMediaErrors(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	_, err := srv.db.NewInsert().Model(&models.SocialAccount{
+		ID:             "youtube-1",
+		WorkspaceID:    "ws-1",
+		Platform:       "youtube",
+		AccountID:      "yt-1",
+		Slug:           "youtube-openpost",
+		AccessTokenEnc: []byte("token"),
+		IsActive:       true,
+		CreatedAt:      time.Date(2026, 6, 30, 16, 0, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	insertMCPTestMedia(t, srv, models.MediaAttachment{
+		ID:               "media-youtube-image",
+		OriginalFilename: "thumbnail.png",
+		MimeType:         "image/png",
+	})
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-schedule-provider-media",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "schedule_post",
+			"arguments": map[string]any{
+				"workspace_id":       "ws-1",
+				"content":            "This should not schedule",
+				"scheduled_at":       "2026-07-01T12:00:00Z",
+				"social_account_ids": []string{"youtube-1"},
+				"media_ids":          []string{"media-youtube-image"},
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	rpcErr := out["error"].(map[string]any)
+	require.Contains(t, rpcErr["message"], "YouTube publishing supports video attachments only")
+	var jobCount int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("jobs").Scan(context.Background(), &jobCount))
+	require.Equal(t, 0, jobCount)
+}
+
 func TestMCPCallGetPostStatusReturnsDestinations(t *testing.T) {
 	t.Parallel()
 
@@ -1886,6 +1933,74 @@ func TestMCPCallScheduleDraftQueuesExistingDraft(t *testing.T) {
 	var postCount int
 	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("posts").Scan(context.Background(), &postCount))
 	require.Equal(t, 1, postCount)
+}
+
+func TestMCPCallScheduleDraftRejectsInheritedProviderMediaErrors(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	_, err := srv.db.NewInsert().Model(&models.SocialAccount{
+		ID:             "youtube-draft",
+		WorkspaceID:    "ws-1",
+		Platform:       "youtube",
+		AccountID:      "yt-draft",
+		Slug:           "youtube-draft",
+		AccessTokenEnc: []byte("token"),
+		IsActive:       true,
+		CreatedAt:      time.Date(2026, 6, 30, 16, 0, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	postID := "post-youtube-draft"
+	_, err = srv.db.NewInsert().Model(&models.Post{
+		ID:          postID,
+		WorkspaceID: "ws-1",
+		CreatedByID: "user-1",
+		Content:     "Draft with incompatible inherited media",
+		Status:      statusDraft,
+		CreatedAt:   time.Date(2026, 6, 30, 16, 0, 0, 0, time.UTC),
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.PostDestination{
+		ID:              "destination-youtube-draft",
+		PostID:          postID,
+		SocialAccountID: "youtube-draft",
+		Status:          postStatusPending,
+	}).Exec(context.Background())
+	require.NoError(t, err)
+	insertMCPTestMedia(t, srv, models.MediaAttachment{
+		ID:               "media-youtube-draft-image",
+		OriginalFilename: "draft-image.png",
+		MimeType:         "image/png",
+	})
+	_, err = srv.db.NewInsert().Model(&models.PostMedia{
+		PostID:       postID,
+		MediaID:      "media-youtube-draft-image",
+		DisplayOrder: 0,
+	}).Exec(context.Background())
+	require.NoError(t, err)
+
+	resp := srv.request(t, "web-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "call-schedule-draft-provider-media",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "schedule_draft",
+			"arguments": map[string]any{
+				"workspace_id": "ws-1",
+				"post_id":      postID,
+				"scheduled_at": "2026-07-04T10:30:00Z",
+			},
+		},
+	})
+
+	require.Equal(t, http.StatusOK, resp.Code)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+	rpcErr := out["error"].(map[string]any)
+	require.Contains(t, rpcErr["message"], "YouTube publishing supports video attachments only")
+	var jobCount int
+	require.NoError(t, srv.db.NewSelect().ColumnExpr("COUNT(*)").TableExpr("jobs").Scan(context.Background(), &jobCount))
+	require.Equal(t, 0, jobCount)
 }
 
 func TestMCPCallScheduleDraftRejectsMissingDestinations(t *testing.T) {
