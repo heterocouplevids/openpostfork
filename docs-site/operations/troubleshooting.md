@@ -20,6 +20,8 @@ How to check: compare the configured callback URL with the provider developer co
 
 How to fix: align the callback, client credentials, and scopes.
 
+Provider-specific checks: see [Provider Troubleshooting](/providers/troubleshooting).
+
 ## OAuth callback mismatch
 
 Symptoms: provider rejects the redirect or returns an invalid redirect error.

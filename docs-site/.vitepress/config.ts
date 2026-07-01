@@ -82,6 +82,7 @@ const docsSidebar = [
 		items: [
 			{ text: 'Overview', link: '/providers/overview' },
 			{ text: 'Supported Platforms & Limits', link: '/providers/platform-limits' },
+			{ text: 'Provider Troubleshooting', link: '/providers/troubleshooting' },
 			{ text: 'Provider Roadmap', link: '/providers/roadmap' },
 			{ text: 'X', link: '/providers/x' },
 			{ text: 'Mastodon', link: '/providers/mastodon' },

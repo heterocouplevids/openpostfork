@@ -27,8 +27,9 @@ Self-hosting docs are separate from user-facing docs. They assume you own the se
 
 - [Providers Overview](/providers/overview) explains provider app setup.
 - [Supported Platforms and Limits](/providers/platform-limits) lists current implementation state.
+- [Provider Troubleshooting](/providers/troubleshooting) maps OAuth, permission, media URL, and publish errors to operator checks.
 - [Provider Roadmap](/providers/roadmap) explains available, unconfigured, and planned providers.
-- [X](/providers/x), [Mastodon](/providers/mastodon), [Bluesky](/providers/bluesky), [LinkedIn](/providers/linkedin), and [Threads](/providers/threads) cover provider-specific requirements.
+- [X](/providers/x), [Mastodon](/providers/mastodon), [Bluesky](/providers/bluesky), [LinkedIn](/providers/linkedin), [Threads](/providers/threads), [Facebook](/providers/facebook), [Instagram](/providers/instagram), [TikTok](/providers/tiktok), and [YouTube](/providers/youtube) cover provider-specific requirements.
 
 ## Operate
 

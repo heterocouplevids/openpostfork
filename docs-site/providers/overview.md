@@ -20,6 +20,8 @@ These providers have adapter code in OpenPost today. The Accounts page discovers
 
 Start with one provider, confirm the callback works, then expand.
 
+If connection or publishing fails, use [Provider Troubleshooting](/providers/troubleshooting) to collect diagnostics and map common OAuth, permission, media URL, and publishing errors to the right fix.
+
 ## Support matrix
 
 This matrix reflects current OpenPost support, not the full theoretical capability of each provider API.

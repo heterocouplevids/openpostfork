@@ -51,6 +51,21 @@ test('self-hosting docs are operator-facing', async ({ page }) => {
 		'href',
 		'/development/'
 	);
+	await expect(main.getByRole('link', { name: 'Provider Troubleshooting' })).toHaveAttribute(
+		'href',
+		'/providers/troubleshooting'
+	);
+});
+
+test('provider troubleshooting docs stay operator-facing', async ({ page }) => {
+	await page.goto('/providers/troubleshooting');
+	const main = page.locator('main');
+
+	await expect(main.locator('h1')).toContainText('Provider Troubleshooting');
+	await expect(main.getByRole('heading', { name: 'First Checks' })).toBeVisible();
+	await expect(main.getByRole('heading', { name: 'X' })).toBeVisible();
+	await expect(main.getByRole('heading', { name: 'YouTube' })).toBeVisible();
+	await expect(main.getByText('redacted last-100-line log tail')).toBeVisible();
 });
 
 test('developer docs are contributor-facing', async ({ page }) => {

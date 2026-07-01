@@ -93,6 +93,7 @@ All notable changes to this project are documented in this file.
 - Added workspace team invitations with copyable accept links, authenticated accept/revoke APIs, Settings team management, and team-member quota enforcement that counts active members plus pending invites.
 - Added shared frontend provider-media capability rules with tested composer warnings, size-aware metadata hydration, and provider-limited video labels in the media library.
 - Added optional deployment/provider context and a redacted last-100-line log tail to `openpost instance diagnostics` support snapshots.
+- Added provider-specific troubleshooting docs and docs E2E coverage for OAuth, permission, media URL, and publishing failure paths.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
