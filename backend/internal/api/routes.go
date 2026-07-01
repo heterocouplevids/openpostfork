@@ -83,7 +83,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	authHandler.FinishPasskeyRegistration(api)
 	authHandler.RemovePasskey(api)
 
-	handlers.NewAPITokenHandler(deps.APITokenService, deps.Authenticator).RegisterRoutes(api)
+	handlers.NewAPITokenHandler(deps.APITokenService, deps.Authenticator, deps.DB).RegisterRoutes(api)
 	handlers.NewCLIAuthHandler(deps.CLIAuthService, deps.Authenticator, deps.PublicURL).RegisterRoutes(api)
 	handlers.NewMCPActivityHandler(deps.DB, deps.Authenticator).RegisterRoutes(api)
 

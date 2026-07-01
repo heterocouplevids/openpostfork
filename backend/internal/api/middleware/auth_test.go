@@ -123,7 +123,12 @@ func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	for _, model := range []interface{}{(*models.User)(nil), (*models.APIToken)(nil)} {
+	for _, model := range []interface{}{
+		(*models.Workspace)(nil),
+		(*models.User)(nil),
+		(*models.WorkspaceMember)(nil),
+		(*models.APIToken)(nil),
+	} {
 		if _, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -135,10 +140,21 @@ func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
 	}).Exec(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.NewInsert().Model(&models.Workspace{ID: "ws-1", Name: "Launch"}).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.NewInsert().Model(&models.WorkspaceMember{
+		WorkspaceID: "ws-1",
+		UserID:      "user-1",
+		Role:        models.WorkspaceRoleAdmin,
+	}).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	tokenService := apitokens.NewService(db)
 	generated, err := tokenService.GenerateTokenWithOptions(ctx, "user-1", "ChatGPT", apitokens.ScopeMCP, apitokens.GenerateOptions{
-		Audience: "https://app.openpost.test/mcp",
+		WorkspaceID: "ws-1",
+		Audience:    "https://app.openpost.test/mcp",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -152,6 +168,9 @@ func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
 	if principal.Scope != apitokens.ScopeMCP {
 		t.Fatalf("expected scope %q, got %q", apitokens.ScopeMCP, principal.Scope)
 	}
+	if principal.WorkspaceID != "ws-1" {
+		t.Fatalf("expected workspace id %q, got %q", "ws-1", principal.WorkspaceID)
+	}
 	if principal.Audience != "https://app.openpost.test/mcp" {
 		t.Fatalf("expected audience %q, got %q", "https://app.openpost.test/mcp", principal.Audience)
 	}
@@ -163,5 +182,57 @@ func TestCompositeServicePreservesAPITokenScope(t *testing.T) {
 	}
 	if principal.TokenPrefix != generated.Model.TokenPrefix {
 		t.Fatalf("expected token prefix %q, got %q", generated.Model.TokenPrefix, principal.TokenPrefix)
+	}
+}
+
+func TestCheckWorkspaceAccessHonorsTokenWorkspaceScope(t *testing.T) {
+	ctx := context.Background()
+	sqldb, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=private", strings.ReplaceAll(t.Name(), "/", "_")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqldb.SetMaxOpenConns(1)
+	db := bun.NewDB(sqldb, sqlitedialect.New())
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	for _, model := range []interface{}{
+		(*models.Workspace)(nil),
+		(*models.User)(nil),
+		(*models.WorkspaceMember)(nil),
+	} {
+		if _, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.NewInsert().Model(&models.User{ID: "user-1", Email: "user@example.com", PasswordHash: "hash"}).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.NewInsert().Model(&[]models.Workspace{
+		{ID: "ws-1", Name: "Launch"},
+		{ID: "ws-2", Name: "Personal"},
+	}).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.NewInsert().Model(&[]models.WorkspaceMember{
+		{WorkspaceID: "ws-1", UserID: "user-1", Role: models.WorkspaceRoleAdmin},
+		{WorkspaceID: "ws-2", UserID: "user-1", Role: models.WorkspaceRoleAdmin},
+	}).Exec(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	scopedCtx := context.WithValue(ctx, WorkspaceIDKey, "ws-1")
+	ok, err := CheckWorkspaceAccess(scopedCtx, db, "ws-1", "user-1")
+	if err != nil || !ok {
+		t.Fatalf("expected scoped workspace access, ok=%v err=%v", ok, err)
+	}
+	ok, err = CheckWorkspaceAccess(scopedCtx, db, "ws-2", "user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("expected workspace scope to reject ws-2")
 	}
 }

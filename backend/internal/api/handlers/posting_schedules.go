@@ -25,6 +25,22 @@ func NewPostingScheduleHandler(db *bun.DB, authenticator middleware.Authenticato
 	return &PostingScheduleHandler{db: db, auth: authenticator}
 }
 
+func (h *PostingScheduleHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden(errWorkspaceAccessDenied)
+	}
+	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError(errValidateWorkspaceAccess)
+	}
+	if memberCount == 0 {
+		return huma.Error403Forbidden(errWorkspaceAccessDenied)
+	}
+	return nil
+}
+
 type PostingScheduleResponse struct {
 	ID             string `json:"id" doc:"Schedule ID"`
 	WorkspaceID    string `json:"workspace_id" doc:"Workspace ID"`
@@ -61,16 +77,8 @@ func (h *PostingScheduleHandler) ListSchedules(api huma.API) {
 	}, func(ctx context.Context, input *ListPostingSchedulesInput) (*ListPostingSchedulesOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
-		// Verify workspace access
-		var memberCount int
-		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-		}
-		if memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
+			return nil, err
 		}
 
 		var workspace models.Workspace
@@ -148,16 +156,8 @@ func (h *PostingScheduleHandler) CreateSchedule(api huma.API) {
 			return nil, huma.Error400BadRequest("day_of_week must be between 0 (Sunday) and 6 (Saturday)")
 		}
 
-		// Verify workspace access
-		var memberCount int
-		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", input.Body.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-		}
-		if memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+			return nil, err
 		}
 
 		var workspace models.Workspace
@@ -248,16 +248,8 @@ func (h *PostingScheduleHandler) UpdateSchedule(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch schedule")
 		}
 
-		// Verify workspace access
-		var memberCount int
-		memberCount, err = h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", schedule.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-		}
-		if memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.checkWorkspaceAccess(ctx, schedule.WorkspaceID, userID); err != nil {
+			return nil, err
 		}
 
 		// Validate and update fields
@@ -331,16 +323,8 @@ func (h *PostingScheduleHandler) DeleteSchedule(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch schedule")
 		}
 
-		// Verify workspace access
-		var memberCount int
-		memberCount, err = h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", schedule.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-		}
-		if memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.checkWorkspaceAccess(ctx, schedule.WorkspaceID, userID); err != nil {
+			return nil, err
 		}
 
 		if _, err := h.db.NewDelete().Model(&schedule).Where("id = ?", input.PathID).Exec(ctx); err != nil {
@@ -536,21 +520,13 @@ func (h *PostingScheduleHandler) SuggestSchedule(api huma.API) {
 			return nil, huma.Error400BadRequest("posts_per_day must be between 1 and 10")
 		}
 
-		// Verify workspace access
-		var memberCount int
-		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", input.Body.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-		}
-		if memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+			return nil, err
 		}
 
 		// Get workspace timezone
 		var workspace models.Workspace
-		err = h.db.NewSelect().Model(&workspace).Where("id = ?", input.Body.WorkspaceID).Scan(ctx)
+		err := h.db.NewSelect().Model(&workspace).Where("id = ?", input.Body.WorkspaceID).Scan(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch workspace")
 		}
@@ -641,21 +617,13 @@ func (h *PostingScheduleHandler) GetNextAvailableSlot(api huma.API) {
 	}, func(ctx context.Context, input *NextAvailableSlotInput) (*NextAvailableSlotOutput, error) {
 		userID := middleware.GetUserID(ctx)
 
-		// Verify workspace access
-		var memberCount int
-		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-		}
-		if memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
+			return nil, err
 		}
 
 		// Get workspace timezone
 		var workspace models.Workspace
-		err = h.db.NewSelect().Model(&workspace).Where("id = ?", input.WorkspaceID).Scan(ctx)
+		err := h.db.NewSelect().Model(&workspace).Where("id = ?", input.WorkspaceID).Scan(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch workspace")
 		}

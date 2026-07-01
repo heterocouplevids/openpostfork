@@ -35,6 +35,10 @@
 					"token_prefix": {
 						"description": "First 8 hex characters of the token secret hash",
 						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Optional workspace ID this token is limited to",
+						"type": "string"
 					}
 				},
 				"required": ["id", "name", "token_prefix", "scope", "created_at"],
@@ -554,6 +558,10 @@
 					"scope": {
 						"description": "Token scope. Supported values: cli:full, mcp:full. Defaults to cli:full.",
 						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Optional workspace ID this token is limited to",
+						"type": "string"
 					}
 				},
 				"required": ["name"],
@@ -664,6 +672,10 @@
 					},
 					"state": {
 						"description": "Opaque client state to echo to the redirect URI",
+						"type": "string"
+					},
+					"workspace_id": {
+						"description": "Optional workspace ID the resulting MCP token is limited to",
 						"type": "string"
 					}
 				},
@@ -4159,6 +4171,16 @@
 						},
 						"description": "Bad Request"
 					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
 					"422": {
 						"content": {
 							"application/problem+json": {
@@ -5908,6 +5930,16 @@
 							}
 						},
 						"description": "Unauthorized"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
 					},
 					"422": {
 						"content": {

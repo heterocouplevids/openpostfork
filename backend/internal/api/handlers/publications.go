@@ -101,6 +101,9 @@ func (h *PublicationHandler) checkWorkspaceAccess(ctx context.Context, workspace
 	if strings.TrimSpace(workspaceID) == "" {
 		return huma.Error400BadRequest(errWorkspaceIDRequired)
 	}
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden(errWorkspaceAccessDenied)
+	}
 	count, err := h.db.NewSelect().
 		Model((*models.WorkspaceMember)(nil)).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).

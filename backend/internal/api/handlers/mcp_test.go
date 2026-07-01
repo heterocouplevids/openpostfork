@@ -614,6 +614,63 @@ func TestMCPCallListWorkspaces(t *testing.T) {
 	require.Equal(t, "admin", workspaces[0].(map[string]any)["role"])
 }
 
+func TestMCPWorkspaceScopedTokenFiltersAndRejectsOtherWorkspaces(t *testing.T) {
+	t.Parallel()
+
+	srv := newMCPTestServer(t)
+	srv.handler.auth = mcpScopeAuthenticator{
+		"scoped-token": {
+			UserID:      "user-1",
+			Email:       "user@example.com",
+			Scope:       "mcp:full",
+			WorkspaceID: "ws-1",
+			ClientID:    "token-scoped",
+			ClientName:  "Scoped MCP",
+		},
+	}
+
+	listResp := srv.request(t, "scoped-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "scoped-list",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "list_workspaces",
+			"arguments": map[string]any{},
+		},
+	})
+	require.Equal(t, http.StatusOK, listResp.Code)
+	var listOut map[string]any
+	require.NoError(t, json.Unmarshal(listResp.Body.Bytes(), &listOut))
+	workspaces := listOut["result"].(map[string]any)["structuredContent"].(map[string]any)["workspaces"].([]any)
+	require.Len(t, workspaces, 1)
+	require.Equal(t, "ws-1", workspaces[0].(map[string]any)["id"])
+
+	createResp := srv.request(t, "scoped-token", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "scoped-create",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_draft",
+			"arguments": map[string]any{
+				"workspace_id": "ws-2",
+				"content":      "This should not cross the token boundary",
+			},
+		},
+	})
+	require.Equal(t, http.StatusOK, createResp.Code)
+	var createOut map[string]any
+	require.NoError(t, json.Unmarshal(createResp.Body.Bytes(), &createOut))
+	require.Equal(t, "workspace outside token scope", createOut["error"].(map[string]any)["message"])
+
+	count, err := srv.db.NewSelect().
+		Model((*models.Post)(nil)).
+		Where("workspace_id = ?", "ws-2").
+		Where("content = ?", "This should not cross the token boundary").
+		Count(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 0, count)
+}
+
 func TestMCPCallListProviderCatalog(t *testing.T) {
 	t.Parallel()
 

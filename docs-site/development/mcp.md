@@ -59,6 +59,11 @@ GET /oauth/authorize
 POST /oauth/token
 ```
 
+The approval page can bind the resulting token to the current workspace. A
+workspace-scoped token can only list that workspace and MCP tools reject any
+request whose `workspace_id` targets another workspace. Manual tokens created in
+Settings support the same optional workspace boundary.
+
 Desktop MCP clients can use the local stdio proxy from the CLI module:
 
 ```sh
@@ -112,7 +117,7 @@ GET /api/v1/mcp/activity?workspace_id=<workspace-id>
 - Publishes OAuth authorization-server metadata for public PKCE clients, including `S256`, `mcp:full`, and client ID metadata document support.
 - Provides a browser approval page at `/oauth/authorize` and a form-encoded `/oauth/token` code exchange that mints `mcp:full` API tokens.
 - Validates client metadata redirect URIs for URL-based client IDs, accepts ChatGPT fallback redirects for predefined clients, and binds OAuth-issued MCP tokens to the `/mcp` resource audience.
-- Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor. Fine-grained per-session scopes are still planned.
+- Advertises and enforces the `mcp:full` OAuth scope in every MCP tool descriptor, with optional single-workspace session boundaries for API-token and OAuth-issued MCP clients.
 - Adds Apps SDK-friendly `_meta["openai/toolInvocation/invoking"]`, `_meta["openai/toolInvocation/invoked"]`, and `outputSchema` metadata to every tool descriptor.
 - Exposes a ChatGPT Apps-compatible scheduler widget resource at `ui://widget/openpost-scheduler-v1.html`.
 - Keeps data tools reusable across MCP clients and attaches widget UI metadata only to `render_scheduler_widget`.

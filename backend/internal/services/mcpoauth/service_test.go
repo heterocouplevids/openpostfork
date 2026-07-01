@@ -27,6 +27,7 @@ func TestCreateAndExchangeCodeWithClientMetadata(t *testing.T) {
 	ctx := context.Background()
 	db := newMCPOAuthTestDB(t)
 	seedMCPOAuthUser(ctx, t, db)
+	seedMCPOAuthWorkspace(ctx, t, db, "ws-1", "user-1")
 	redirectURI := "https://chatgpt.com/connector/oauth/callback/openpost"
 	client := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/client.json", r.URL.Path)
@@ -46,6 +47,7 @@ func TestCreateAndExchangeCodeWithClientMetadata(t *testing.T) {
 	service := NewService(db, apitokens.NewService(db))
 	created, err := service.CreateAuthorizationCode(ctx, AuthorizationRequest{
 		UserID:              "user-1",
+		WorkspaceID:         "ws-1",
 		ResponseType:        "code",
 		ClientID:            client.URL + "/client.json",
 		RedirectURI:         redirectURI,
@@ -69,6 +71,7 @@ func TestCreateAndExchangeCodeWithClientMetadata(t *testing.T) {
 	var storedCode models.MCPOAuthCode
 	require.NoError(t, db.NewSelect().Model(&storedCode).Scan(ctx))
 	require.Equal(t, "ChatGPT OpenPost", storedCode.ClientName)
+	require.Equal(t, "ws-1", storedCode.WorkspaceID)
 	require.NotEqual(t, created.Code, storedCode.CodeHash)
 	require.Len(t, storedCode.CodeHash, 64)
 
@@ -88,6 +91,7 @@ func TestCreateAndExchangeCodeWithClientMetadata(t *testing.T) {
 	principal, err := apitokens.NewService(db).ValidateToken(ctx, exchanged.AccessToken)
 	require.NoError(t, err)
 	require.Equal(t, "https://app.openpost.test/mcp", principal.Audience)
+	require.Equal(t, "ws-1", principal.WorkspaceID)
 	require.Equal(t, "ChatGPT OpenPost", principal.TokenName)
 
 	_, err = service.ExchangeCode(ctx, TokenRequest{
@@ -99,6 +103,26 @@ func TestCreateAndExchangeCodeWithClientMetadata(t *testing.T) {
 		Resource:     "https://app.openpost.test/mcp",
 	})
 	require.ErrorIs(t, err, ErrInvalidGrant)
+}
+
+func TestCreateAuthorizationCodeRejectsInaccessibleWorkspaceScope(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	db := newMCPOAuthTestDB(t)
+	seedMCPOAuthUser(ctx, t, db)
+
+	_, err := NewService(db, apitokens.NewService(db)).CreateAuthorizationCode(ctx, AuthorizationRequest{
+		UserID:              "user-1",
+		WorkspaceID:         "ws-missing",
+		ResponseType:        "code",
+		ClientID:            "chatgpt",
+		RedirectURI:         "https://chatgpt.com/connector/oauth/callback/openpost",
+		CodeChallenge:       pkceChallenge(strings.Repeat("e", 43)),
+		CodeChallengeMethod: CodeChallengeMethodS256,
+		ExpectedResource:    "https://app.openpost.test/mcp",
+	})
+	require.ErrorIs(t, err, ErrWorkspaceNotAllowed)
 }
 
 func TestCreateAuthorizationCodeRejectsRedirectOutsideClientMetadata(t *testing.T) {
@@ -172,7 +196,9 @@ func newMCPOAuthTestDB(t *testing.T) *bun.DB {
 
 	db := bun.NewDB(sqldb, sqlitedialect.New())
 	for _, model := range []interface{}{
+		(*models.Workspace)(nil),
 		(*models.User)(nil),
+		(*models.WorkspaceMember)(nil),
 		(*models.APIToken)(nil),
 		(*models.MCPOAuthCode)(nil),
 	} {
@@ -183,6 +209,21 @@ func newMCPOAuthTestDB(t *testing.T) *bun.DB {
 		require.NoError(t, db.Close())
 	})
 	return db
+}
+
+func seedMCPOAuthWorkspace(ctx context.Context, t *testing.T, db *bun.DB, workspaceID, userID string) {
+	t.Helper()
+	_, err := db.NewInsert().Model(&models.Workspace{
+		ID:   workspaceID,
+		Name: "Workspace",
+	}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.WorkspaceMember{
+		WorkspaceID: workspaceID,
+		UserID:      userID,
+		Role:        models.WorkspaceRoleAdmin,
+	}).Exec(ctx)
+	require.NoError(t, err)
 }
 
 func seedMCPOAuthUser(ctx context.Context, t *testing.T, db *bun.DB) {

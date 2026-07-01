@@ -1148,6 +1148,8 @@ export interface components {
             scope: string;
             /** @description First 8 hex characters of the token secret hash */
             token_prefix: string;
+            /** @description Optional workspace ID this token is limited to */
+            workspace_id?: string;
         };
         AccountResponse: {
             /**
@@ -1408,6 +1410,8 @@ export interface components {
             name: string;
             /** @description Token scope. Supported values: cli:full, mcp:full. Defaults to cli:full. */
             scope?: string;
+            /** @description Optional workspace ID this token is limited to */
+            workspace_id?: string;
         };
         CreateAPITokenOutputBody: {
             /**
@@ -1467,6 +1471,8 @@ export interface components {
             scope?: string;
             /** @description Opaque client state to echo to the redirect URI */
             state?: string;
+            /** @description Optional workspace ID the resulting MCP token is limited to */
+            workspace_id?: string;
         };
         CreateMCPOAuthAuthorizationOutputBody: {
             /**
@@ -3495,6 +3501,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -4968,6 +4983,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

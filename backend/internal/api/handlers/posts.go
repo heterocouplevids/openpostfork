@@ -1979,6 +1979,9 @@ func (h *PostHandler) DeletePost(api huma.API) {
 }
 
 func (h *PostHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden("workspace not accessible")
+	}
 	var members []models.WorkspaceMember
 	err := h.db.NewSelect().
 		Model(&members).

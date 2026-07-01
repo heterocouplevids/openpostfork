@@ -5,21 +5,24 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/apitokens"
+	"github.com/uptrace/bun"
 )
 
 type APITokenHandler struct {
 	tokens *apitokens.Service
 	auth   middleware.Authenticator
+	db     *bun.DB
 }
 
-func NewAPITokenHandler(tokens *apitokens.Service, authenticator middleware.Authenticator) *APITokenHandler {
-	return &APITokenHandler{tokens: tokens, auth: authenticator}
+func NewAPITokenHandler(tokens *apitokens.Service, authenticator middleware.Authenticator, db *bun.DB) *APITokenHandler {
+	return &APITokenHandler{tokens: tokens, auth: authenticator, db: db}
 }
 
 type APITokenResponse struct {
@@ -27,6 +30,7 @@ type APITokenResponse struct {
 	Name        string  `json:"name" doc:"User-visible token name"`
 	TokenPrefix string  `json:"token_prefix" doc:"First 8 hex characters of the token secret hash"`
 	Scope       string  `json:"scope" doc:"Token scope"`
+	WorkspaceID string  `json:"workspace_id,omitempty" doc:"Optional workspace ID this token is limited to"`
 	ExpiresAt   *string `json:"expires_at,omitempty" doc:"Token expiry time"`
 	LastUsedAt  *string `json:"last_used_at,omitempty" doc:"Last successful use time"`
 	RevokedAt   *string `json:"revoked_at,omitempty" doc:"Revocation time"`
@@ -39,9 +43,10 @@ type ListAPITokensOutput struct {
 
 type CreateAPITokenInput struct {
 	Body struct {
-		Name      string     `json:"name" doc:"User-visible token name"`
-		Scope     string     `json:"scope,omitempty" doc:"Token scope. Supported values: cli:full, mcp:full. Defaults to cli:full."`
-		ExpiresAt *time.Time `json:"expires_at,omitempty" doc:"Explicit expiry. Null means never expires."`
+		Name        string     `json:"name" doc:"User-visible token name"`
+		Scope       string     `json:"scope,omitempty" doc:"Token scope. Supported values: cli:full, mcp:full. Defaults to cli:full."`
+		WorkspaceID string     `json:"workspace_id,omitempty" doc:"Optional workspace ID this token is limited to"`
+		ExpiresAt   *time.Time `json:"expires_at,omitempty" doc:"Explicit expiry. Null means never expires."`
 	}
 }
 
@@ -86,14 +91,35 @@ func (h *APITokenHandler) RegisterRoutes(api huma.API) {
 		Tags:          []string{tagAuth},
 		DefaultStatus: http.StatusCreated,
 		Middlewares:   huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-		Errors:        []int{400},
+		Errors:        []int{400, 403},
 	}, func(ctx context.Context, input *CreateAPITokenInput) (*CreateAPITokenOutput, error) {
-		generated, err := h.tokens.GenerateToken(
+		userID := middleware.GetUserID(ctx)
+		workspaceID := strings.TrimSpace(input.Body.WorkspaceID)
+		if workspaceID == "" {
+			workspaceID = middleware.GetWorkspaceID(ctx)
+		}
+		if workspaceID != "" {
+			if h.db == nil {
+				return nil, huma.Error500InternalServerError("failed to check workspace access")
+			}
+			ok, err := middleware.CheckWorkspaceAccess(ctx, h.db, workspaceID, userID)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("failed to check workspace access")
+			}
+			if !ok {
+				return nil, huma.Error403Forbidden("workspace not accessible")
+			}
+		}
+
+		generated, err := h.tokens.GenerateTokenWithOptions(
 			ctx,
-			middleware.GetUserID(ctx),
+			userID,
 			input.Body.Name,
 			input.Body.Scope,
-			input.Body.ExpiresAt,
+			apitokens.GenerateOptions{
+				ExpiresAt:   input.Body.ExpiresAt,
+				WorkspaceID: workspaceID,
+			},
 		)
 		if err != nil {
 			if errors.Is(err, apitokens.ErrInvalidScope) {
@@ -144,6 +170,7 @@ func apiTokenResponse(token models.APIToken) APITokenResponse {
 		Name:        token.Name,
 		TokenPrefix: token.TokenPrefix,
 		Scope:       token.Scope,
+		WorkspaceID: token.WorkspaceID,
 		ExpiresAt:   optionalTime(token.ExpiresAt),
 		LastUsedAt:  optionalTime(token.LastUsedAt),
 		RevokedAt:   optionalTime(token.RevokedAt),

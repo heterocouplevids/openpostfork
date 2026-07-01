@@ -162,6 +162,7 @@
 	let apiTokenBusy = $state(false);
 	let apiTokenName = $state('OpenPost MCP');
 	let apiTokenScope = $state('mcp:full');
+	let apiTokenWorkspaceScope = $state('current');
 	let createdAPIToken = $state('');
 	let billingBusyPlan = $state('');
 	let billingPortalBusy = $state(false);
@@ -175,6 +176,7 @@
 		name: string;
 		token_prefix: string;
 		scope: string;
+		workspace_id?: string;
 		expires_at?: string | null;
 		last_used_at?: string | null;
 		revoked_at?: string | null;
@@ -223,6 +225,22 @@
 	];
 	const selectedAPITokenScope = $derived(
 		apiTokenScopeOptions.find((option) => option.value === apiTokenScope) ?? apiTokenScopeOptions[0]
+	);
+	const apiTokenWorkspaceOptions = $derived([
+		{
+			value: 'current',
+			label: 'Current workspace',
+			description: workspaceCtx.currentWorkspace?.name ?? 'Selected workspace only.'
+		},
+		{
+			value: 'all',
+			label: 'All workspaces',
+			description: 'Every workspace you can access.'
+		}
+	]);
+	const selectedAPITokenWorkspaceScope = $derived(
+		apiTokenWorkspaceOptions.find((option) => option.value === apiTokenWorkspaceScope) ??
+			apiTokenWorkspaceOptions[0]
 	);
 	const billingPlans = [
 		{
@@ -334,9 +352,15 @@
 		securityError = '';
 		createdAPIToken = '';
 		const fallbackName = apiTokenScope === 'mcp:full' ? 'OpenPost MCP' : 'OpenPost CLI';
+		const workspaceID =
+			apiTokenWorkspaceScope === 'current' ? (workspaceCtx.currentWorkspace?.id ?? '') : '';
 		try {
 			const { data, error: err } = await (client as any).POST('/api-tokens', {
-				body: { name: apiTokenName.trim() || fallbackName, scope: apiTokenScope }
+				body: {
+					name: apiTokenName.trim() || fallbackName,
+					scope: apiTokenScope,
+					...(workspaceID ? { workspace_id: workspaceID } : {})
+				}
 			});
 			if (err || !data) throw new Error(err?.detail || 'Failed to create API token');
 			createdAPIToken = data.token;
@@ -1287,7 +1311,7 @@
 				other automation. Revoke any token here without changing your password.
 			</p>
 
-			<div class="mb-4 grid gap-3 lg:grid-cols-[1fr_280px_auto]">
+			<div class="mb-4 grid gap-3 lg:grid-cols-[1fr_240px_240px_auto]">
 				<div class="space-y-2">
 					<Label for="api-token-name">New token name</Label>
 					<Input
@@ -1318,8 +1342,34 @@
 						</Select.Content>
 					</Select.Root>
 				</div>
+				<div class="space-y-2">
+					<Label for="api-token-workspace">Access boundary</Label>
+					<Select.Root
+						type="single"
+						value={apiTokenWorkspaceScope}
+						onValueChange={(value) => value && (apiTokenWorkspaceScope = value)}
+					>
+						<Select.Trigger id="api-token-workspace" class="w-full">
+							{selectedAPITokenWorkspaceScope.label}
+						</Select.Trigger>
+						<Select.Content>
+							{#each apiTokenWorkspaceOptions as option (option.value)}
+								<Select.Item value={option.value}>
+									<div class="flex flex-col gap-0.5 text-left">
+										<span>{option.label}</span>
+										<span class="text-xs text-muted-foreground">{option.description}</span>
+									</div>
+								</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</div>
 				<div class="flex items-end">
-					<Button onclick={createAPIToken} disabled={apiTokenBusy}>
+					<Button
+						onclick={createAPIToken}
+						disabled={apiTokenBusy ||
+							(apiTokenWorkspaceScope === 'current' && !workspaceCtx.currentWorkspace)}
+					>
 						{#if apiTokenBusy}
 							<LoaderIcon class="mr-2 h-4 w-4 animate-spin" />
 						{/if}
@@ -1357,6 +1407,11 @@
 								<p class="text-xs text-muted-foreground">
 									Prefix <span class="font-mono">{token.token_prefix}</span> · {token.scope} · Created
 									{new Date(token.created_at).toLocaleString()}
+									{#if token.workspace_id}
+										· Workspace <span class="font-mono">{token.workspace_id}</span>
+									{:else}
+										· All workspaces
+									{/if}
 									{#if token.last_used_at}
 										· Last used {new Date(token.last_used_at).toLocaleString()}
 									{/if}

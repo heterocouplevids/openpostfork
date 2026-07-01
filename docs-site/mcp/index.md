@@ -22,6 +22,8 @@ https://your-openpost-host.example/mcp
 
 OAuth-aware clients can use OpenPost's browser account-linking flow. Clients that need a manual token can use a dedicated `mcp:full` token from **Settings -> CLI Devices & API Tokens**.
 
+When approving OAuth or creating a manual token, prefer the current-workspace boundary unless the client truly needs every workspace you can access.
+
 ### Desktop MCP clients
 
 Install and authenticate the OpenPost CLI, then run the local stdio proxy:
@@ -62,7 +64,7 @@ The proxy reads the selected CLI profile and forwards MCP frames to the remote `
 5. Review the proposed schedule and destination list.
 6. Let the assistant schedule only after the final content and accounts are correct.
 
-MCP tools validate workspace membership and account ownership before reading or changing data. Scheduling and media uploads use the same quota and usage accounting as the web app and CLI.
+MCP tools validate workspace membership, optional token workspace boundaries, and account ownership before reading or changing data. Scheduling and media uploads use the same quota and usage accounting as the web app and CLI.
 
 ## Activity and revocation
 

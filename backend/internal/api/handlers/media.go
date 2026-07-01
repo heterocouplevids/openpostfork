@@ -280,15 +280,8 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			return nil, huma.Error400BadRequest(errWorkspaceIDRequired)
 		}
 
-		var memberCount int
-		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-		}
-		if memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.ensureMediaWorkspaceAccess(ctx, userID, input.WorkspaceID); err != nil {
+			return nil, err
 		}
 
 		limit := input.Limit
@@ -309,7 +302,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 		}
 
 		var total int
-		total, err = query.Count(ctx)
+		total, err := query.Count(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to count media")
 		}
@@ -391,12 +384,8 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch media")
 		}
 
-		var memberCount int
-		memberCount, err = h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil || memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.ensureMediaWorkspaceAccess(ctx, userID, media.WorkspaceID); err != nil {
+			return nil, err
 		}
 
 		posts, err := h.postsUsingMedia(ctx, media.WorkspaceID, input.PathID)
@@ -448,12 +437,8 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch media")
 		}
 
-		var memberCount int
-		memberCount, err = h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil || memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.ensureMediaWorkspaceAccess(ctx, userID, media.WorkspaceID); err != nil {
+			return nil, err
 		}
 
 		usage, err := h.mediaUsageSummary(ctx, media.WorkspaceID, input.PathID)
@@ -512,11 +497,7 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 				continue
 			}
 
-			var memberCount int
-			memberCount, err = h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-				Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
-				Count(ctx)
-			if err != nil || memberCount == 0 {
+			if err := h.ensureMediaWorkspaceAccess(ctx, userID, media.WorkspaceID); err != nil {
 				failedIDs = append(failedIDs, mediaID)
 				continue
 			}
@@ -573,12 +554,8 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch media")
 		}
 
-		var memberCount int
-		memberCount, err = h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil || memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.ensureMediaWorkspaceAccess(ctx, userID, media.WorkspaceID); err != nil {
+			return nil, err
 		}
 
 		media.IsFavorite = !media.IsFavorite
@@ -612,12 +589,8 @@ func (h *MediaHandler) RegisterRoutes(api huma.API) {
 			return nil, huma.Error500InternalServerError("failed to fetch media")
 		}
 
-		var memberCount int
-		memberCount, err = h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-			Where("workspace_id = ? AND user_id = ?", media.WorkspaceID, userID).
-			Count(ctx)
-		if err != nil || memberCount == 0 {
-			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		if err := h.ensureMediaWorkspaceAccess(ctx, userID, media.WorkspaceID); err != nil {
+			return nil, err
 		}
 
 		media.AltText = input.Body.AltText
@@ -749,6 +722,9 @@ type mediaUsageSummary struct {
 }
 
 func (h *MediaHandler) ensureMediaWorkspaceAccess(ctx context.Context, userID, workspaceID string) error {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden(errWorkspaceAccessDenied)
+	}
 	var memberCount int
 	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
@@ -1101,14 +1077,9 @@ func (h *MediaHandler) mediaMetadata(c echo.Context) error {
 		}
 	}
 
-	var memberCount int
-	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
-		Count(c.Request().Context())
-	if err != nil {
+	if ok, err := h.userCanAccessWorkspace(c.Request().Context(), workspaceID, userID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: "failed to validate workspace access"})
-	}
-	if memberCount == 0 {
+	} else if !ok {
 		return c.JSON(http.StatusForbidden, map[string]string{fieldError: errWorkspaceAccessDenied})
 	}
 
@@ -1183,14 +1154,9 @@ func (h *MediaHandler) uploadMedia(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: errWorkspaceIDRequired})
 	}
 
-	var memberCount int
-	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
-		Count(c.Request().Context())
-	if err != nil {
+	if ok, err := h.userCanAccessWorkspace(c.Request().Context(), workspaceID, userID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: errValidateWorkspaceAccess})
-	}
-	if memberCount == 0 {
+	} else if !ok {
 		return c.JSON(http.StatusForbidden, map[string]string{fieldError: errWorkspaceAccessDenied})
 	}
 
@@ -1215,14 +1181,9 @@ func (h *MediaHandler) batchUploadMedia(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: errWorkspaceIDRequired})
 	}
 
-	var memberCount int
-	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
-		Count(c.Request().Context())
-	if err != nil {
+	if ok, err := h.userCanAccessWorkspace(c.Request().Context(), workspaceID, userID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: errValidateWorkspaceAccess})
-	}
-	if memberCount == 0 {
+	} else if !ok {
 		return c.JSON(http.StatusForbidden, map[string]string{fieldError: errWorkspaceAccessDenied})
 	}
 
@@ -1621,6 +1582,9 @@ func (h *MediaHandler) authorizeMediaAccess(c echo.Context, media *models.MediaA
 }
 
 func (h *MediaHandler) userCanAccessWorkspace(ctx context.Context, workspaceID, userID string) (bool, error) {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return false, nil
+	}
 	memberCount, err := h.db.NewSelect().
 		Model((*models.WorkspaceMember)(nil)).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).

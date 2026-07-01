@@ -92,6 +92,7 @@ type APIToken struct {
 	TokenHash   string    `bun:",unique,notnull" json:"-"`
 	TokenPrefix string    `bun:",notnull" json:"token_prefix"`
 	Scope       string    `bun:",notnull,default:'cli:full'" json:"scope"`
+	WorkspaceID string    `json:"workspace_id"`
 	Audience    string    `json:"audience"`
 	ExpiresAt   time.Time `bun:",nullzero" json:"expires_at"`
 	LastUsedAt  time.Time `bun:",nullzero" json:"last_used_at"`
@@ -109,6 +110,7 @@ type MCPOAuthCode struct {
 	ClientName          string    `json:"client_name"`
 	RedirectURI         string    `bun:",notnull" json:"redirect_uri"`
 	Scope               string    `bun:",notnull,default:'mcp:full'" json:"scope"`
+	WorkspaceID         string    `json:"workspace_id"`
 	Resource            string    `json:"resource"`
 	CodeChallenge       string    `bun:",notnull" json:"code_challenge"`
 	CodeChallengeMethod string    `bun:",notnull" json:"code_challenge_method"`

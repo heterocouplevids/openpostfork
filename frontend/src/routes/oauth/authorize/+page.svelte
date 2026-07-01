@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import * as Select from '$lib/components/ui/select';
 	import {
 		Card,
 		CardContent,
@@ -12,6 +13,7 @@
 	} from '$lib/components/ui/card';
 	import { client } from '$lib/api/client';
 	import { auth } from '$lib/stores/auth';
+	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import BotIcon from 'lucide-svelte/icons/bot';
 	import ShieldCheckIcon from 'lucide-svelte/icons/shield-check';
 	import XIcon from 'lucide-svelte/icons/x';
@@ -19,6 +21,7 @@
 	let authState = $derived($auth);
 	let error = $state('');
 	let submitting = $state(false);
+	let oauthWorkspaceScope = $state('current');
 
 	let params = $derived({
 		response_type: $page.url.searchParams.get('response_type') ?? '',
@@ -41,6 +44,22 @@
 	let clientLabel = $derived(clientDisplayName(params.client_id));
 	let redirectHost = $derived(hostname(params.redirect_uri));
 	let requestError = $derived(validateRequest());
+	const oauthWorkspaceOptions = $derived([
+		{
+			value: 'current',
+			label: 'Current workspace',
+			description: workspaceCtx.currentWorkspace?.name ?? 'Selected workspace only.'
+		},
+		{
+			value: 'all',
+			label: 'All workspaces',
+			description: 'Every workspace you can access.'
+		}
+	]);
+	const selectedOAuthWorkspaceScope = $derived(
+		oauthWorkspaceOptions.find((option) => option.value === oauthWorkspaceScope) ??
+			oauthWorkspaceOptions[0]
+	);
 
 	function currentPath() {
 		return `${$page.url.pathname}${$page.url.search}`;
@@ -86,10 +105,14 @@
 
 		submitting = true;
 		error = '';
+		const workspaceID =
+			approved && oauthWorkspaceScope === 'current'
+				? (workspaceCtx.currentWorkspace?.id ?? '')
+				: '';
 
 		try {
 			const { data, error: apiError } = await (client as any).POST('/mcp/oauth/authorize', {
-				body: { ...params, approved }
+				body: { ...params, approved, ...(workspaceID ? { workspace_id: workspaceID } : {}) }
 			});
 			if (apiError || !data?.redirect_url) {
 				throw new Error(apiError?.detail ?? 'Failed to finish OAuth authorization');
@@ -154,11 +177,34 @@
 					</div>
 				</div>
 
+				<div class="space-y-2">
+					<p class="text-sm font-medium">Access boundary</p>
+					<Select.Root
+						type="single"
+						value={oauthWorkspaceScope}
+						onValueChange={(value) => value && (oauthWorkspaceScope = value)}
+					>
+						<Select.Trigger class="w-full">{selectedOAuthWorkspaceScope.label}</Select.Trigger>
+						<Select.Content>
+							{#each oauthWorkspaceOptions as option (option.value)}
+								<Select.Item value={option.value}>
+									<div class="flex flex-col gap-0.5 text-left">
+										<span>{option.label}</span>
+										<span class="text-xs text-muted-foreground">{option.description}</span>
+									</div>
+								</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</div>
+
 				<div class="flex flex-col gap-2 sm:flex-row">
 					<Button
 						class="w-full gap-2"
 						onclick={() => submit(true)}
-						disabled={submitting || !!requestError}
+						disabled={submitting ||
+							!!requestError ||
+							(oauthWorkspaceScope === 'current' && !workspaceCtx.currentWorkspace)}
 					>
 						<ShieldCheckIcon class="h-4 w-4" />
 						Authorize

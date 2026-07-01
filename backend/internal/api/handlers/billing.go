@@ -258,6 +258,9 @@ func (h *BillingHandler) ensureReady() error {
 }
 
 func (h *BillingHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden("workspace not accessible")
+	}
 	count, err := h.db.NewSelect().
 		Model((*models.WorkspaceMember)(nil)).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).

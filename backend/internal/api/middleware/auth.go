@@ -34,6 +34,7 @@ type Principal struct {
 	UserID      string
 	Email       string
 	Scope       string
+	WorkspaceID string
 	Audience    string
 	ClientID    string
 	ClientName  string
@@ -89,6 +90,7 @@ func (s *CompositeService) AuthenticateBearer(ctx context.Context, token string)
 		UserID:      apiPrincipal.UserID,
 		Email:       apiPrincipal.Email,
 		Scope:       apiPrincipal.Scope,
+		WorkspaceID: apiPrincipal.WorkspaceID,
 		Audience:    apiPrincipal.Audience,
 		ClientID:    apiPrincipal.TokenID,
 		ClientName:  apiPrincipal.TokenName,
@@ -116,10 +118,12 @@ func AuthMiddleware(api huma.API, authenticator Authenticator) func(ctx huma.Con
 			return
 		}
 
-		next(huma.WithValue(
-			huma.WithValue(ctx, UserIDKey, principal.UserID),
-			EmailKey, principal.Email,
-		))
+		ctx = huma.WithValue(ctx, UserIDKey, principal.UserID)
+		ctx = huma.WithValue(ctx, EmailKey, principal.Email)
+		if principal.WorkspaceID != "" {
+			ctx = huma.WithValue(ctx, WorkspaceIDKey, principal.WorkspaceID)
+		}
+		next(ctx)
 	}
 }
 
@@ -169,6 +173,9 @@ func WorkspaceAccessMiddleware(api huma.API, _ *bun.DB) func(ctx huma.Context, n
 
 // CheckWorkspaceAccess is a helper function to verify workspace access.
 func CheckWorkspaceAccess(ctx context.Context, db *bun.DB, workspaceID, userID string) (bool, error) {
+	if !WorkspaceScopeAllows(ctx, workspaceID) {
+		return false, nil
+	}
 	var memberCount int
 	memberCount, err := db.NewSelect().Model((*models.WorkspaceMember)(nil)).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
@@ -177,6 +184,14 @@ func CheckWorkspaceAccess(ctx context.Context, db *bun.DB, workspaceID, userID s
 		return false, err
 	}
 	return memberCount > 0, nil
+}
+
+func WorkspaceScopeAllows(ctx context.Context, workspaceID string) bool {
+	scopedWorkspaceID := strings.TrimSpace(GetWorkspaceID(ctx))
+	if scopedWorkspaceID == "" {
+		return true
+	}
+	return scopedWorkspaceID == strings.TrimSpace(workspaceID)
 }
 
 func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {
@@ -230,6 +245,13 @@ func BearerMiddleware(authenticator Authenticator) echo.MiddlewareFunc {
 
 			c.Set(string(UserIDKey), principal.UserID)
 			c.Set(string(EmailKey), principal.Email)
+			requestCtx := context.WithValue(c.Request().Context(), UserIDKey, principal.UserID)
+			requestCtx = context.WithValue(requestCtx, EmailKey, principal.Email)
+			if principal.WorkspaceID != "" {
+				c.Set(string(WorkspaceIDKey), principal.WorkspaceID)
+				requestCtx = context.WithValue(requestCtx, WorkspaceIDKey, principal.WorkspaceID)
+			}
+			c.SetRequest(c.Request().WithContext(requestCtx))
 
 			return next(c)
 		}

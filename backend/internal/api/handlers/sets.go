@@ -70,6 +70,9 @@ type setAccountRow struct {
 }
 
 func (h *SetHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden("workspace not accessible")
+	}
 	var members []models.WorkspaceMember
 	err := h.db.NewSelect().
 		Model(&members).

@@ -84,6 +84,8 @@ func (h *MCPActivityHandler) RegisterRoutes(api huma.API) {
 			Limit(limit)
 		if input.WorkspaceID != "" {
 			query.Where("workspace_id = ?", input.WorkspaceID)
+		} else if workspaceID := middleware.GetWorkspaceID(ctx); workspaceID != "" {
+			query.Where("workspace_id = ?", workspaceID)
 		}
 		if err := query.Scan(ctx); err != nil {
 			return nil, huma.Error500InternalServerError("failed to list mcp activity")
@@ -94,6 +96,9 @@ func (h *MCPActivityHandler) RegisterRoutes(api huma.API) {
 }
 
 func (h *MCPActivityHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden("workspace not accessible")
+	}
 	count, err := h.db.NewSelect().
 		Model((*models.WorkspaceMember)(nil)).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).

@@ -38,6 +38,7 @@ var (
 	ErrUnsupportedPKCE     = errors.New("unsupported pkce method")
 	ErrUnsupportedScope    = errors.New("unsupported oauth scope")
 	ErrUnsupportedResource = errors.New("unsupported oauth resource")
+	ErrWorkspaceNotAllowed = errors.New("workspace not accessible")
 )
 
 type Service struct {
@@ -49,6 +50,7 @@ type Service struct {
 
 type AuthorizationRequest struct {
 	UserID              string
+	WorkspaceID         string
 	ResponseType        string
 	ClientID            string
 	RedirectURI         string
@@ -118,6 +120,10 @@ func (s *Service) CreateAuthorizationCode(ctx context.Context, input Authorizati
 	if strings.TrimSpace(input.UserID) == "" {
 		return nil, ErrInvalidRequest
 	}
+	workspaceID, err := s.normalizeWorkspaceScope(ctx, input.UserID, input.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
 	scope, err := normalizeScope(input.Scope)
 	if err != nil {
 		return nil, err
@@ -150,6 +156,7 @@ func (s *Service) CreateAuthorizationCode(ctx context.Context, input Authorizati
 		ClientName:          clientName,
 		RedirectURI:         redirectURI.String(),
 		Scope:               scope,
+		WorkspaceID:         workspaceID,
 		Resource:            resource,
 		CodeChallenge:       strings.TrimSpace(input.CodeChallenge),
 		CodeChallengeMethod: CodeChallengeMethodS256,
@@ -217,8 +224,9 @@ func (s *Service) ExchangeCode(ctx context.Context, input TokenRequest) (*TokenR
 
 	expiresAt := now.Add(apitokens.DefaultExpiration)
 	generated, err := s.tokens.GenerateTokenWithOptions(ctx, code.UserID, tokenName(*code), code.Scope, apitokens.GenerateOptions{
-		ExpiresAt: &expiresAt,
-		Audience:  code.Resource,
+		ExpiresAt:   &expiresAt,
+		WorkspaceID: code.WorkspaceID,
+		Audience:    code.Resource,
 	})
 	if err != nil {
 		return nil, err
@@ -280,6 +288,24 @@ func (s *Service) consumeCode(ctx context.Context, codeID string, consumedAt tim
 		return ErrInvalidGrant
 	}
 	return nil
+}
+
+func (s *Service) normalizeWorkspaceScope(ctx context.Context, userID, workspaceID string) (string, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return "", nil
+	}
+	count, err := s.db.NewSelect().
+		Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, strings.TrimSpace(userID)).
+		Count(ctx)
+	if err != nil {
+		return "", err
+	}
+	if count == 0 {
+		return "", ErrWorkspaceNotAllowed
+	}
+	return workspaceID, nil
 }
 
 func (s *Service) resolveClient(ctx context.Context, clientID, redirectURI, scope string) (string, error) {

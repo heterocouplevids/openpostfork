@@ -29,6 +29,7 @@ func NewMCPOAuthHandler(service *mcpoauth.Service, authenticator middleware.Auth
 type CreateMCPOAuthAuthorizationInput struct {
 	Body struct {
 		Approved            bool   `json:"approved" doc:"Whether the user approved the MCP OAuth request"`
+		WorkspaceID         string `json:"workspace_id,omitempty" doc:"Optional workspace ID the resulting MCP token is limited to"`
 		ResponseType        string `json:"response_type" doc:"OAuth response type. Must be code."`
 		ClientID            string `json:"client_id" doc:"OAuth client ID or client metadata URL"`
 		RedirectURI         string `json:"redirect_uri" doc:"OAuth redirect URI"`
@@ -64,10 +65,11 @@ func (h *MCPOAuthHandler) RegisterAPIRoutes(api huma.API) {
 		Summary:     "Create or deny an MCP OAuth authorization response",
 		Tags:        []string{tagAuth},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authenticator), middleware.RequestMetadataMiddleware()},
-		Errors:      []int{400, 401},
+		Errors:      []int{400, 401, 403},
 	}, func(ctx context.Context, input *CreateMCPOAuthAuthorizationInput) (*CreateMCPOAuthAuthorizationOutput, error) {
 		request := mcpoauth.AuthorizationRequest{
 			UserID:              middleware.GetUserID(ctx),
+			WorkspaceID:         input.Body.WorkspaceID,
 			ResponseType:        input.Body.ResponseType,
 			ClientID:            input.Body.ClientID,
 			RedirectURI:         input.Body.RedirectURI,
@@ -154,7 +156,13 @@ func (h *MCPOAuthHandler) resourceURLFromContext(_ context.Context) string {
 }
 
 func mcpOAuthHumaError(err error) error {
-	_, _, description := mcpOAuthError(err)
+	status, _, description := mcpOAuthError(err)
+	if status == http.StatusForbidden {
+		return huma.Error403Forbidden(description)
+	}
+	if status == http.StatusInternalServerError {
+		return huma.Error500InternalServerError(description)
+	}
 	return huma.Error400BadRequest(description)
 }
 
@@ -172,6 +180,8 @@ func mcpOAuthError(err error) (int, string, string) {
 		return http.StatusBadRequest, "invalid_scope", "Only mcp:full is supported"
 	case errors.Is(err, mcpoauth.ErrUnsupportedResource):
 		return http.StatusBadRequest, "invalid_target", "Unsupported MCP resource"
+	case errors.Is(err, mcpoauth.ErrWorkspaceNotAllowed):
+		return http.StatusForbidden, "access_denied", "Workspace not accessible"
 	case errors.Is(err, mcpoauth.ErrInvalidRequest):
 		return http.StatusBadRequest, "invalid_request", "Invalid OAuth request"
 	default:

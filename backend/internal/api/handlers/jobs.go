@@ -139,7 +139,11 @@ func (h *JobHandler) isInstanceAdmin(ctx context.Context, userID string) (bool, 
 }
 
 func (h *JobHandler) allowedWorkspaces(ctx context.Context, userID string, isAdmin bool, requestedWorkspaceID string) (map[string]bool, error) {
+	scopedWorkspaceID := middleware.GetWorkspaceID(ctx)
 	if requestedWorkspaceID != "" {
+		if scopedWorkspaceID != "" && scopedWorkspaceID != requestedWorkspaceID {
+			return nil, huma.Error403Forbidden("workspace not accessible")
+		}
 		if isAdmin {
 			return map[string]bool{requestedWorkspaceID: true}, nil
 		}
@@ -155,6 +159,10 @@ func (h *JobHandler) allowedWorkspaces(ctx context.Context, userID string, isAdm
 			return nil, huma.Error403Forbidden("workspace not accessible")
 		}
 		return map[string]bool{requestedWorkspaceID: true}, nil
+	}
+
+	if scopedWorkspaceID != "" {
+		return map[string]bool{scopedWorkspaceID: true}, nil
 	}
 
 	if isAdmin {

@@ -47,6 +47,7 @@ func (a mcpOAuthTestAuthenticator) AuthenticateBearer(ctx context.Context, token
 		UserID:      principal.UserID,
 		Email:       principal.Email,
 		Scope:       principal.Scope,
+		WorkspaceID: principal.WorkspaceID,
 		Audience:    principal.Audience,
 		ClientID:    principal.TokenID,
 		ClientName:  principal.TokenName,
@@ -58,7 +59,9 @@ func newMCPOAuthTestServer(t *testing.T) *mcpOAuthTestServer {
 	t.Helper()
 
 	db := createHandlerTestDB(t,
+		(*models.Workspace)(nil),
 		(*models.User)(nil),
+		(*models.WorkspaceMember)(nil),
 		(*models.APIToken)(nil),
 		(*models.MCPOAuthCode)(nil),
 		(*models.MCPToolCall)(nil),
@@ -69,6 +72,18 @@ func newMCPOAuthTestServer(t *testing.T) *mcpOAuthTestServer {
 		Email:        "user@example.com",
 		PasswordHash: "hash",
 		CreatedAt:    time.Now().UTC(),
+	}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.Workspace{
+		ID:        "ws-1",
+		Name:      "Launch",
+		CreatedAt: time.Now().UTC(),
+	}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.WorkspaceMember{
+		WorkspaceID: "ws-1",
+		UserID:      "user-1",
+		Role:        models.WorkspaceRoleAdmin,
 	}).Exec(ctx)
 	require.NoError(t, err)
 
@@ -106,6 +121,7 @@ func TestMCPOAuthAuthorizationCodeFlowIssuesUsableMCPToken(t *testing.T) {
 	verifier := strings.Repeat("e", 43)
 	authorizeResp := srv.request(t, http.MethodPost, "/api/v1/mcp/oauth/authorize", map[string]any{
 		"approved":              true,
+		"workspace_id":          "ws-1",
 		"response_type":         "code",
 		"client_id":             client.URL,
 		"redirect_uri":          redirectURI,
@@ -157,6 +173,7 @@ func TestMCPOAuthAuthorizationCodeFlowIssuesUsableMCPToken(t *testing.T) {
 	var stored models.APIToken
 	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("token_prefix = ?", tokenPrefix(t, token.AccessToken)).Scan(context.Background()))
 	require.Equal(t, "https://app.openpost.test/mcp", stored.Audience)
+	require.Equal(t, "ws-1", stored.WorkspaceID)
 	require.Equal(t, "ChatGPT OpenPost", stored.Name)
 }
 

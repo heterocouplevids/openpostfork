@@ -142,6 +142,22 @@ func (h *PromptHandler) seedBuiltInPrompts(ctx context.Context) error {
 	return nil
 }
 
+func (h *PromptHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden(errWorkspaceAccessDenied)
+	}
+	memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
+		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
+		Count(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError(errValidateWorkspaceAccess)
+	}
+	if memberCount == 0 {
+		return huma.Error403Forbidden(errWorkspaceAccessDenied)
+	}
+	return nil
+}
+
 type PromptResponse struct {
 	ID          string `json:"id" doc:"Prompt ID"`
 	WorkspaceID string `json:"workspace_id,omitempty" doc:"Workspace ID (if custom)"`
@@ -182,19 +198,13 @@ func (h *PromptHandler) ListPrompts(api huma.API) {
 
 		// Get built-in prompts plus user/workspace custom prompts
 		if input.WorkspaceID != "" {
-			// Verify workspace access
-			var memberCount int
-			memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-				Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
-				Count(ctx)
-			if err != nil {
-				return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-			}
-			if memberCount == 0 {
-				return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+			if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
+				return nil, err
 			}
 
 			query = query.Where("is_built_in = ? OR workspace_id = ?", true, input.WorkspaceID)
+		} else if workspaceID := middleware.GetWorkspaceID(ctx); workspaceID != "" {
+			query = query.Where("is_built_in = ? OR workspace_id = ?", true, workspaceID)
 		} else {
 			// Get built-in prompts plus user's custom prompts
 			query = query.Where("is_built_in = ? OR user_id = ?", true, userID)
@@ -253,16 +263,11 @@ func (h *PromptHandler) CreatePrompt(api huma.API) {
 
 		// Verify workspace access if provided
 		if input.Body.WorkspaceID != "" {
-			var memberCount int
-			memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-				Where("workspace_id = ? AND user_id = ?", input.Body.WorkspaceID, userID).
-				Count(ctx)
-			if err != nil {
-				return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
+			if err := h.checkWorkspaceAccess(ctx, input.Body.WorkspaceID, userID); err != nil {
+				return nil, err
 			}
-			if memberCount == 0 {
-				return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
-			}
+		} else if middleware.GetWorkspaceID(ctx) != "" {
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
 		}
 
 		prompt := &models.Prompt{
@@ -329,6 +334,14 @@ func (h *PromptHandler) DeletePrompt(api huma.API) {
 		if prompt.IsBuiltIn {
 			return nil, huma.Error400BadRequest("cannot delete built-in prompts")
 		}
+		if prompt.WorkspaceID == "" && middleware.GetWorkspaceID(ctx) != "" {
+			return nil, huma.Error403Forbidden("you do not have permission to delete this prompt")
+		}
+		if prompt.WorkspaceID != "" {
+			if err := h.checkWorkspaceAccess(ctx, prompt.WorkspaceID, userID); err != nil {
+				return nil, err
+			}
+		}
 
 		// Verify ownership
 		if prompt.UserID != userID {
@@ -389,19 +402,13 @@ func (h *PromptHandler) GetRandomPrompt(api huma.API) {
 
 		// Get built-in prompts plus user/workspace custom prompts
 		if input.WorkspaceID != "" {
-			// Verify workspace access
-			var memberCount int
-			memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
-				Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
-				Count(ctx)
-			if err != nil {
-				return nil, huma.Error500InternalServerError(errValidateWorkspaceAccess)
-			}
-			if memberCount == 0 {
-				return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+			if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
+				return nil, err
 			}
 
 			query = query.Where("is_built_in = ? OR workspace_id = ?", true, input.WorkspaceID)
+		} else if workspaceID := middleware.GetWorkspaceID(ctx); workspaceID != "" {
+			query = query.Where("is_built_in = ? OR workspace_id = ?", true, workspaceID)
 		} else {
 			query = query.Where("is_built_in = ? OR user_id = ?", true, userID)
 		}

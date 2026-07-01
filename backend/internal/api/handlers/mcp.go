@@ -259,6 +259,23 @@ func mcpScopeAllowed(scope string) bool {
 	}
 }
 
+type mcpWorkspaceScopeContextKey struct{}
+
+func contextWithMCPWorkspaceScope(ctx context.Context, workspaceID string) context.Context {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, mcpWorkspaceScopeContextKey{}, workspaceID)
+}
+
+func mcpWorkspaceScopeFromContext(ctx context.Context) string {
+	if workspaceID, ok := ctx.Value(mcpWorkspaceScopeContextKey{}).(string); ok {
+		return strings.TrimSpace(workspaceID)
+	}
+	return ""
+}
+
 func mcpRequestHasID(body []byte) bool {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -279,6 +296,7 @@ func (h *MCPHandler) acceptNotification(req mcpRequest) *mcpError {
 }
 
 func (h *MCPHandler) dispatch(ctx context.Context, principal *middleware.Principal, req mcpRequest) (any, *mcpError) {
+	ctx = contextWithMCPWorkspaceScope(ctx, principal.WorkspaceID)
 	switch req.Method {
 	case "initialize":
 		return map[string]any{
@@ -1591,8 +1609,12 @@ func workspaceIDFromMCPArguments(args map[string]any) string {
 }
 
 func (h *MCPHandler) ensureWorkspaceAccess(ctx context.Context, userID, workspaceID string) *mcpError {
+	workspaceID = strings.TrimSpace(workspaceID)
 	if strings.TrimSpace(workspaceID) == "" {
 		return &mcpError{Code: -32602, Message: "workspace_id is required"}
+	}
+	if scopedWorkspaceID := mcpWorkspaceScopeFromContext(ctx); scopedWorkspaceID != "" && scopedWorkspaceID != workspaceID {
+		return &mcpError{Code: -32602, Message: "workspace outside token scope"}
 	}
 	count, err := h.db.NewSelect().
 		Model((*models.WorkspaceMember)(nil)).
@@ -1619,14 +1641,16 @@ func (h *MCPHandler) listWorkspaces(ctx context.Context, userID string) (any, *m
 		models.Workspace `bun:",extend"`
 		Role             string `bun:"role"`
 	}
-	err := h.db.NewSelect().
+	query := h.db.NewSelect().
 		Model(&rows).
 		ColumnExpr("workspace.*").
 		ColumnExpr("wm.role").
 		Join("JOIN workspace_members AS wm ON wm.workspace_id = workspace.id").
-		Where("wm.user_id = ?", userID).
-		OrderExpr("workspace.created_at ASC").
-		Scan(ctx)
+		Where("wm.user_id = ?", userID)
+	if workspaceID := mcpWorkspaceScopeFromContext(ctx); workspaceID != "" {
+		query = query.Where("workspace.id = ?", workspaceID)
+	}
+	err := query.OrderExpr("workspace.created_at ASC").Scan(ctx)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, &mcpError{Code: -32603, Message: "failed to list workspaces"}
 	}

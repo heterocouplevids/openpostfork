@@ -63,6 +63,9 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 		Middlewares:   huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *CreateWorkspaceInput) (*CreateWorkspaceOutput, error) {
 		userID := middleware.GetUserID(ctx)
+		if middleware.GetWorkspaceID(ctx) != "" {
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		}
 		if err := h.checkCreateWorkspaceEntitlement(ctx, userID); err != nil {
 			return nil, err
 		}
@@ -141,11 +144,14 @@ func (h *WorkspaceHandler) ListWorkspaces(api huma.API) {
 		userID := middleware.GetUserID(ctx)
 
 		var workspaces []models.Workspace
-		err := h.db.NewSelect().
+		query := h.db.NewSelect().
 			Model(&workspaces).
 			Join("JOIN workspace_members AS wm ON wm.workspace_id = workspace.id").
-			Where("wm.user_id = ?", userID).
-			Scan(ctx)
+			Where("wm.user_id = ?", userID)
+		if workspaceID := middleware.GetWorkspaceID(ctx); workspaceID != "" {
+			query = query.Where("workspace.id = ?", workspaceID)
+		}
+		err := query.Scan(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to fetch workspaces")
 		}
@@ -225,6 +231,9 @@ func (h *WorkspaceHandler) GetWorkspaceSettings(api huma.API) {
 		Errors:      []int{403, 404},
 	}, func(ctx context.Context, input *GetWorkspaceSettingsInput) (*GetWorkspaceSettingsOutput, error) {
 		userID := middleware.GetUserID(ctx)
+		if !middleware.WorkspaceScopeAllows(ctx, input.PathID) {
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		}
 
 		var memberCount int
 		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).
@@ -280,6 +289,9 @@ func (h *WorkspaceHandler) UpdateWorkspaceSettings(api huma.API) {
 		Errors:      []int{400, 403, 404},
 	}, func(ctx context.Context, input *UpdateWorkspaceSettingsInput) (*UpdateWorkspaceSettingsOutput, error) {
 		userID := middleware.GetUserID(ctx)
+		if !middleware.WorkspaceScopeAllows(ctx, input.PathID) {
+			return nil, huma.Error403Forbidden(errWorkspaceAccessDenied)
+		}
 
 		var memberCount int
 		memberCount, err := h.db.NewSelect().Model((*models.WorkspaceMember)(nil)).

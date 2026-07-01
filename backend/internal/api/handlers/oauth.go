@@ -1097,6 +1097,9 @@ func parseAccountSelectionOptions(raw string) ([]platform.AccountSelectionOption
 }
 
 func (h *OAuthHandler) checkWorkspaceAccess(ctx context.Context, workspaceID, userID string) error {
+	if !middleware.WorkspaceScopeAllows(ctx, workspaceID) {
+		return huma.Error403Forbidden("workspace not accessible")
+	}
 	memberCount, err := h.db.NewSelect().
 		Model((*models.WorkspaceMember)(nil)).
 		Where("workspace_id = ? AND user_id = ?", workspaceID, userID).
@@ -1120,20 +1123,12 @@ func (h *OAuthHandler) ListAccounts(api huma.API) {
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
 	}, func(ctx context.Context, input *ListAccountsInput) (*ListAccountsOutput, error) {
 		userID := middleware.GetUserID(ctx)
-		var members []models.WorkspaceMember
-		err := h.db.NewSelect().
-			Model(&members).
-			Where("workspace_id = ? AND user_id = ?", input.WorkspaceID, userID).
-			Scan(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to check workspace access")
-		}
-		if len(members) == 0 {
-			return nil, huma.Error403Forbidden("workspace not accessible")
+		if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
+			return nil, err
 		}
 
 		var accounts []models.SocialAccount
-		err = h.db.NewSelect().
+		err := h.db.NewSelect().
 			Model(&accounts).
 			Where("workspace_id = ?", input.WorkspaceID).
 			Where("is_active = ?", true).
@@ -1273,16 +1268,8 @@ func (h *OAuthHandler) getAccessibleAccount(ctx context.Context, accountID, user
 		return account, huma.Error500InternalServerError("failed to fetch account")
 	}
 
-	var members []models.WorkspaceMember
-	err = h.db.NewSelect().
-		Model(&members).
-		Where("workspace_id = ? AND user_id = ?", account.WorkspaceID, userID).
-		Scan(ctx)
-	if err != nil {
-		return account, huma.Error500InternalServerError("failed to check workspace access")
-	}
-	if len(members) == 0 {
-		return account, huma.Error403Forbidden("workspace not accessible")
+	if err := h.checkWorkspaceAccess(ctx, account.WorkspaceID, userID); err != nil {
+		return account, err
 	}
 	return account, nil
 }
