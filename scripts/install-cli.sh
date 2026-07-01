@@ -3,6 +3,8 @@ set -eu
 
 REPO="rodrgds/openpost"
 BIN_NAME="openpost"
+MCP_BIN_NAME="openpost-mcp"
+INSTALL_MCP="${OPENPOST_INSTALL_MCP:-0}"
 
 fail() {
   printf 'openpost CLI install failed: %s\n' "$1" >&2
@@ -11,6 +13,29 @@ fail() {
 
 need() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
+}
+
+usage() {
+  cat <<'EOF'
+Install the OpenPost CLI from the latest GitHub release.
+
+Usage:
+  install-cli.sh [--with-mcp]
+
+Options:
+  --with-mcp     Also install the openpost-mcp stdio proxy for desktop MCP clients.
+  -h, --help     Show this help.
+
+Environment:
+  OPENPOST_INSTALL_MCP=1  Also install openpost-mcp.
+EOF
+}
+
+truthy() {
+  case "$1" in
+    1 | true | TRUE | yes | YES | y | Y | on | ON) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 detect_os() {
@@ -55,13 +80,28 @@ install_file() {
   fail "cannot write $dst and sudo is not available"
 }
 
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --with-mcp | --install-mcp)
+      INSTALL_MCP=1
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown option: $1"
+      ;;
+  esac
+  shift
+done
+
 need curl
 need uname
 need mktemp
 
 OS=$(detect_os)
 ARCH=$(detect_arch)
-URL="https://github.com/${REPO}/releases/latest/download/openpost-cli-${OS}-${ARCH}"
 
 if [ "$(id -u)" -eq 0 ]; then
   INSTALL_DIR="/usr/local/bin"
@@ -70,19 +110,36 @@ else
   [ -n "$INSTALL_DIR" ] || fail "HOME is not set"
 fi
 
-TMP_FILE=$(mktemp "${TMPDIR:-/tmp}/openpost-cli.XXXXXX")
-trap 'rm -f "$TMP_FILE"' EXIT HUP INT TERM
+TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/openpost-install.XXXXXX")
+trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
 
-printf 'Downloading %s\n' "$URL"
-if ! curl -fsSL "$URL" -o "$TMP_FILE"; then
-  fail "download failed for ${URL}"
-fi
+download_and_install() {
+  asset=$1
+  destination=$2
+  url="https://github.com/${REPO}/releases/latest/download/${asset}"
+  tmp_file="${TMP_DIR}/${asset}"
+
+  printf 'Downloading %s\n' "$url"
+  if ! curl -fsSL "$url" -o "$tmp_file"; then
+    fail "download failed for ${url}"
+  fi
+
+  install_file "$tmp_file" "$destination"
+}
 
 if [ "$(id -u)" -ne 0 ] && ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
   INSTALL_DIR="/usr/local/bin"
 fi
 
-install_file "$TMP_FILE" "${INSTALL_DIR}/${BIN_NAME}"
+download_and_install "openpost-cli-${OS}-${ARCH}" "${INSTALL_DIR}/${BIN_NAME}"
 
 printf 'Installed OpenPost CLI to %s\n' "${INSTALL_DIR}/${BIN_NAME}"
 printf 'Now run: openpost auth login <instance>\n'
+
+if truthy "$INSTALL_MCP"; then
+  download_and_install "openpost-mcp-${OS}-${ARCH}" "${INSTALL_DIR}/${MCP_BIN_NAME}"
+  printf 'Installed OpenPost MCP proxy to %s\n' "${INSTALL_DIR}/${MCP_BIN_NAME}"
+  printf 'After logging in with openpost, run: openpost-mcp --profile <profile>\n'
+else
+  printf 'To also install the MCP proxy, rerun the installer with --with-mcp.\n'
+fi

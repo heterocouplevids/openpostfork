@@ -10,6 +10,13 @@ openpost auth login https://openpost.example.com
 openpost workspace list
 ```
 
+Install the desktop MCP stdio proxy at the same time when you want to connect Claude, Cursor, Codex, or another local MCP client:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rodrgds/openpost/main/scripts/install-cli.sh | sh -s -- --with-mcp
+openpost-mcp --profile local
+```
+
 Verify the installed binary:
 
 ```sh
@@ -18,7 +25,7 @@ openpost --version
 
 ## Install with curl
 
-The installer detects Linux or macOS on `amd64` and `arm64`, downloads the matching `openpost-cli-*` binary from the latest GitHub release, and installs it as `openpost`.
+The installer detects Linux or macOS on `amd64` and `arm64`, downloads the matching `openpost-cli-*` binary from the latest GitHub release, and installs it as `openpost`. Pass `--with-mcp` or set `OPENPOST_INSTALL_MCP=1` to also install the matching `openpost-mcp-*` asset as `openpost-mcp`.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/rodrgds/openpost/main/scripts/install-cli.sh | sh

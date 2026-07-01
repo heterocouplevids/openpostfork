@@ -26,9 +26,11 @@ When approving OAuth or creating a manual token, prefer the current-workspace bo
 
 ### Desktop MCP clients
 
-Install and authenticate the OpenPost CLI, then run the local stdio proxy:
+Install and authenticate the OpenPost CLI with the MCP proxy, then run the local stdio proxy:
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/rodrgds/openpost/main/scripts/install-cli.sh | sh -s -- --with-mcp
+openpost auth login https://your-openpost-host.example
 openpost-mcp --profile local
 ```
 
