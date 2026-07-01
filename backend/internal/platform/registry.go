@@ -53,6 +53,12 @@ var appBuilders = map[string]appBuilder{
 		}
 		return NewFacebookAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
 	},
+	providerInstagram: func(app AppConfig, _ RegistryOptions) (Adapter, error) {
+		if strings.TrimSpace(app.ClientID) == "" {
+			return nil, fmt.Errorf("instagram provider app requires client_id")
+		}
+		return NewInstagramAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
+	},
 	providerLinkedIn: func(app AppConfig, opts RegistryOptions) (Adapter, error) {
 		if strings.TrimSpace(app.ClientID) == "" {
 			return nil, fmt.Errorf("linkedin provider app requires client_id")

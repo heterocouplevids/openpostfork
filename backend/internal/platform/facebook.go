@@ -55,41 +55,47 @@ func (f *FacebookAdapter) GenerateAuthURL(state string) (string, map[string]stri
 }
 
 func (f *FacebookAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
+	return exchangeMetaAuthCode(ctx, f.graphURL, f.clientID, f.clientSecret, f.redirectURI, "facebook", code)
+}
+
+func exchangeMetaAuthCode(ctx context.Context, graphURL func(string) string, clientID, clientSecret, redirectURI, providerName, code string) (*TokenResult, error) {
 	params := url.Values{}
-	params.Set(oauthParamClientID, f.clientID)
-	params.Set(oauthParamClientSecret, f.clientSecret)
-	params.Set(oauthParamRedirectURI, f.redirectURI)
+	params.Set(oauthParamClientID, clientID)
+	params.Set(oauthParamClientSecret, clientSecret)
+	params.Set(oauthParamRedirectURI, redirectURI)
 	params.Set(oauthParamCode, code)
 
-	respBody, err := DoRequest(ctx, http.MethodGet, f.graphURL("oauth/access_token")+"?"+params.Encode(), nil, nil)
+	label := providerName + " token exchange"
+	respBody, err := DoRequest(ctx, http.MethodGet, graphURL("oauth/access_token")+"?"+params.Encode(), nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("facebook token exchange: %w", err)
+		return nil, fmt.Errorf("%s: %w", label, err)
 	}
 
-	tokenResp, err := decodeFacebookToken("facebook token exchange", respBody)
+	tokenResp, err := decodeFacebookToken(label, respBody)
 	if err != nil {
 		return nil, err
 	}
 
-	longLived, err := f.exchangeLongLivedToken(ctx, tokenResp.AccessToken)
+	longLived, err := exchangeMetaLongLivedToken(ctx, graphURL, clientID, clientSecret, providerName, tokenResp.AccessToken)
 	if err != nil {
 		return tokenResp, nil
 	}
 	return longLived, nil
 }
 
-func (f *FacebookAdapter) exchangeLongLivedToken(ctx context.Context, accessToken string) (*TokenResult, error) {
+func exchangeMetaLongLivedToken(ctx context.Context, graphURL func(string) string, clientID, clientSecret, providerName, accessToken string) (*TokenResult, error) {
 	params := url.Values{}
 	params.Set(grantType, "fb_exchange_token")
-	params.Set(oauthParamClientID, f.clientID)
-	params.Set(oauthParamClientSecret, f.clientSecret)
+	params.Set(oauthParamClientID, clientID)
+	params.Set(oauthParamClientSecret, clientSecret)
 	params.Set("fb_exchange_token", accessToken)
 
-	respBody, err := DoRequest(ctx, http.MethodGet, f.graphURL("oauth/access_token")+"?"+params.Encode(), nil, nil)
+	label := providerName + " long-lived token exchange"
+	respBody, err := DoRequest(ctx, http.MethodGet, graphURL("oauth/access_token")+"?"+params.Encode(), nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("facebook long-lived token exchange: %w", err)
+		return nil, fmt.Errorf("%s: %w", label, err)
 	}
-	return decodeFacebookToken("facebook long-lived token exchange", respBody)
+	return decodeFacebookToken(label, respBody)
 }
 
 func decodeFacebookToken(label string, respBody []byte) (*TokenResult, error) {

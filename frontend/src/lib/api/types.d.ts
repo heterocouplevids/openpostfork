@@ -3390,7 +3390,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Social platform (x, mastodon, bluesky, linkedin, threads, facebook, tiktok) */
+                /** @description Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok) */
                 platform: string;
             };
             cookie?: never;

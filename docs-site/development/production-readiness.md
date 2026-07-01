@@ -49,7 +49,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Replace fixed Mastodon env-only config with dynamic instance registration for cloud.
 - Add SSRF protection for federated/custom-host provider flows.
 - Add production OAuth app checklists for X, LinkedIn, Threads, Facebook, Instagram, YouTube, TikTok, Mastodon, and Bluesky.
-- Delay platform launch promises until provider-specific publish, refresh, media, and retry behavior is verified end to end. TikTok and Facebook now have first-slice adapters, but both still need live-account verification before being treated as fully proven production providers.
+- Delay platform launch promises until provider-specific publish, refresh, media, and retry behavior is verified end to end. TikTok, Facebook, and Instagram now have first-slice adapters, but all three still need live-account verification before being treated as fully proven production providers.
 
 ### 4. Media Pipeline
 

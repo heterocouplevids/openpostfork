@@ -77,3 +77,22 @@ func TestValidateMediaFacebookRejectsMultipleAttachments(t *testing.T) {
 		t.Fatalf("expected no issues for one attachment, got %#v", issues)
 	}
 }
+
+func TestValidateMediaInstagramRequiresOneImageOrVideo(t *testing.T) {
+	RegisterAllMediaValidators()
+
+	issues := ValidateMedia(providerInstagram, nil)
+	if len(issues) != 1 {
+		t.Fatalf("expected one missing-media issue, got %d", len(issues))
+	}
+
+	issues = ValidateMedia(providerInstagram, []MediaItem{{ID: "file", MimeType: "application/pdf"}})
+	if len(issues) != 1 {
+		t.Fatalf("expected one unsupported-media issue, got %d", len(issues))
+	}
+
+	issues = ValidateMedia(providerInstagram, []MediaItem{{ID: "image", MimeType: "image/png"}})
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues for one image, got %#v", issues)
+	}
+}

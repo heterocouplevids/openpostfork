@@ -29,13 +29,14 @@ const (
 	// MediaValidationIssue.Provider values. These must match the
 	// canonical provider keys (see AGENTS.md "Provider Key Convention")
 	// and the entries in RegisterAllMediaValidators().
-	providerBluesky  = "bluesky"
-	providerFacebook = "facebook"
-	providerLinkedIn = "linkedin"
-	providerMastodon = "mastodon"
-	providerTikTok   = "tiktok"
-	providerThreads  = "threads"
-	providerX        = "x"
+	providerBluesky   = "bluesky"
+	providerFacebook  = "facebook"
+	providerInstagram = "instagram"
+	providerLinkedIn  = "linkedin"
+	providerMastodon  = "mastodon"
+	providerTikTok    = "tiktok"
+	providerThreads   = "threads"
+	providerX         = "x"
 
 	// JSON field names reused across adapters.
 	bskyRecordTypeField = "$type"

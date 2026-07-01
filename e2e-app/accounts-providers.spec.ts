@@ -79,8 +79,8 @@ test("accounts page shows configured and unavailable providers", async ({
           display_name: "Instagram",
           auth_mode: "oauth",
           configured: false,
-          status: "planned",
-          description: "Planned Meta adapter for Instagram publishing views.",
+          status: "needs_configuration",
+          description: "Requires a Meta provider app.",
           capabilities: ["Images", "Reels", "Scheduling", "MCP workflows"],
         },
         {
@@ -135,6 +135,7 @@ test("accounts page shows configured and unavailable providers", async ({
     "mastodon",
     "linkedin",
     "threads",
+    "instagram",
     "facebook",
     "tiktok",
   ]) {
@@ -148,7 +149,7 @@ test("accounts page shows configured and unavailable providers", async ({
     ).toBeDisabled();
   }
 
-  for (const platform of ["instagram", "youtube"]) {
+  for (const platform of ["youtube"]) {
     await expect(page.getByTestId(`provider-card-${platform}`)).toContainText(
       "Planned",
     );

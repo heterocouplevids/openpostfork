@@ -49,7 +49,7 @@ All notable changes to this project are documented in this file.
 - Added Apps SDK-friendly MCP tool invocation metadata and output schemas so ChatGPT-style clients can render progress states and validate structured tool results.
 - Added direct browser-to-S3 media upload sessions with pending media reservations, presigned PUT targets, completion finalization, dedupe, and quota accounting.
 - Wired web media uploads through direct S3 upload sessions with automatic multipart fallback for local/self-hosted storage.
-- Added provider launch-status metadata to account-provider discovery, including planned Instagram, Facebook, YouTube, and TikTok entries for web, CLI, MCP, and ChatGPT App clients.
+- Added provider launch-status metadata to account-provider discovery, including Instagram, Facebook, YouTube, and TikTok entries for web, CLI, MCP, and ChatGPT App clients.
 - Added MCP `list_provider_catalog` so assistant clients can inspect available, unconfigured, and planned social providers before choosing destinations.
 - Added MCP `list_media` plus source `media_ids` support on draft and scheduling tools so assistant clients can reuse existing workspace media or attach uploaded assets to posts.
 - Added MCP `ping` and Streamable HTTP notification handling, with `openpost-mcp` suppressing empty stdio frames for accepted notifications.
@@ -64,7 +64,7 @@ All notable changes to this project are documented in this file.
 - Added user-facing MCP docs and reorganized the docs navigation around user docs, self-hosting docs, and developer docs.
 - Added a backend OpenAPI generator command so docs builds regenerate the checked-in Huma spec from the same route registrar used by the server.
 - Added hosted pricing handoff from landing-page plan CTAs through registration, onboarding, and the app billing checkout flow.
-- Added platform-specific preview cards for planned Instagram, Facebook, YouTube, and TikTok compose views.
+- Added platform-specific preview cards for Instagram, Facebook, YouTube, and TikTok compose views.
 - Added a compact settings section navigator with stable anchors for billing, security, tokens, schedules, and workspace defaults.
 - Added dedicated docs overview pages that separate user-facing web/CLI/MCP docs, self-hosting operations docs, and developer implementation docs.
 - Added marketing SEO pages for free social post tools and publishing tips, including interactive character counting, thread splitting, and platform previews.
@@ -77,9 +77,10 @@ All notable changes to this project are documented in this file.
 - Added Playwright docs E2E coverage that verifies the user-facing, self-hosting, and developer docs entry points stay distinct and reachable.
 - Added the docs E2E suite to CI and release preflight gates so docs audience separation stays verified automatically.
 - Added the app Playwright E2E suite to CI and release preflight gates for billing, MCP, provider, and publication workflows.
-- Added the backend OAuth account-selection foundation for page/channel providers, including encrypted pending selection storage and completion APIs for future Facebook, Instagram, and YouTube adapters.
+- Added the backend OAuth account-selection foundation for page/channel providers, including encrypted pending selection storage and completion APIs used by Facebook and Instagram plus future YouTube adapters.
 - Added a first TikTok adapter slice with OAuth, provider discovery, one-video direct publishing through public HTTPS media URLs, media validation, app UI connection wiring, and provider docs.
 - Added a first Facebook Pages adapter slice with Meta OAuth, Page account selection, Page-token saving, text/single-media publishing through public HTTPS media URLs, provider discovery, and docs.
+- Added a first Instagram Business adapter slice with Meta OAuth, account selection, image/Reel publishing through public HTTPS media URLs, provider discovery, app UI wiring, and docs.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

@@ -117,8 +117,8 @@
 			display_name: 'Instagram',
 			auth_mode: 'oauth',
 			configured: false,
-			status: 'planned',
-			description: 'Planned Meta adapter for Instagram publishing views.'
+			status: 'needs_configuration',
+			description: 'Requires a Meta provider app.'
 		},
 		{
 			platform: 'facebook',
@@ -605,6 +605,27 @@
 		}
 	}
 
+	async function connectInstagram() {
+		if (!selectedWorkspaceId) {
+			alert('Please create a workspace first');
+			return;
+		}
+
+		try {
+			localStorage.setItem('oauth_workspace_id', selectedWorkspaceId);
+
+			const { data } = await client.GET('/accounts/{platform}/auth-url', {
+				params: {
+					path: { platform: 'instagram' },
+					query: { workspace_id: selectedWorkspaceId }
+				}
+			});
+			if (data?.url) window.location.href = data.url;
+		} catch (e) {
+			error = (e as Error).message;
+		}
+	}
+
 	function providerKey(provider: ProviderInfo): string {
 		if (provider.platform === 'mastodon') {
 			return provider.instance_url || provider.name || provider.platform;
@@ -635,6 +656,8 @@
 				return 'Post to Bluesky';
 			case 'linkedin':
 				return 'Post to LinkedIn';
+			case 'instagram':
+				return 'Post to Instagram Business';
 			case 'facebook':
 				return 'Post to Facebook Pages';
 			case 'tiktok':
@@ -731,6 +754,9 @@
 				break;
 			case 'linkedin':
 				connectLinkedIn();
+				break;
+			case 'instagram':
+				connectInstagram();
 				break;
 			case 'facebook':
 				connectFacebook();

@@ -46,8 +46,8 @@ This is the low-level quick reference version of the configuration docs.
 | `THREADS_CLIENT_ID` | Threads client ID |
 | `THREADS_CLIENT_SECRET` | Threads client secret |
 | `THREADS_REDIRECT_URI` | Threads callback override |
-| `META_GRAPH_API_VERSION` | Meta Graph API version for Facebook Pages |
+| `META_GRAPH_API_VERSION` | Meta Graph API version for Facebook Pages and Instagram |
 
-Facebook and TikTok are configured through `OPENPOST_PROVIDER_APPS` with providers `facebook` and `tiktok`; no legacy env vars are required.
+Facebook, Instagram, and TikTok are configured through `OPENPOST_PROVIDER_APPS` with providers `facebook`, `instagram`, and `tiktok`; no legacy env vars are required.
 
 Legacy aliases still work for upgrades: `OPENPOST_DB_PATH`, `OPENPOST_FRONTEND_URL`, `OPENPOST_CORS_EXTRA_ORIGINS`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`, `TWITTER_REDIRECT_URI`, and `OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES`.
