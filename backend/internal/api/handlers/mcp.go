@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -17,6 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/netguard"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/apitokens"
 	"github.com/openpost/backend/internal/services/entitlements"
@@ -3254,12 +3254,15 @@ func (h *MCPHandler) remoteMediaHTTPClient() *http.Client {
 	if h.mediaURLHTTP != nil {
 		return h.mediaURLHTTP
 	}
-	return &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			return h.defaultValidateMediaURL(req.Context(), req.URL)
-		},
+	client := netguard.NewHTTPClient(30*time.Second, mediaURLPolicy())
+	client.CheckRedirect = func(req *http.Request, _ []*http.Request) error {
+		validator := h.mediaURLValidator
+		if validator == nil {
+			validator = h.defaultValidateMediaURL
+		}
+		return validator(req.Context(), req.URL)
 	}
+	return client
 }
 
 func (h *MCPHandler) validateMediaURL(ctx context.Context, remote *url.URL) *mcpError {
@@ -3274,26 +3277,15 @@ func (h *MCPHandler) validateMediaURL(ctx context.Context, remote *url.URL) *mcp
 }
 
 func (h *MCPHandler) defaultValidateMediaURL(ctx context.Context, remote *url.URL) error {
-	if remote == nil || remote.Hostname() == "" {
-		return fmt.Errorf("url must be absolute")
+	return netguard.ValidateURL(ctx, remote, mediaURLPolicy())
+}
+
+func mediaURLPolicy() netguard.URLPolicy {
+	return netguard.URLPolicy{
+		Label:            "url",
+		AllowedSchemes:   []string{"http", "https"},
+		AllowCustomPorts: true,
 	}
-	if remote.Scheme != "http" && remote.Scheme != "https" {
-		return fmt.Errorf("url scheme must be http or https")
-	}
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, remote.Hostname())
-	if err != nil {
-		return fmt.Errorf("failed to resolve url host")
-	}
-	if len(ips) == 0 {
-		return fmt.Errorf("url host did not resolve")
-	}
-	for _, addr := range ips {
-		ip := addr.IP
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
-			return fmt.Errorf("url host resolves to a private or local address")
-		}
-	}
-	return nil
 }
 
 func (h *MCPHandler) accessibleMCPPost(ctx context.Context, userID string, args map[string]any) (*models.Post, *mcpError) {

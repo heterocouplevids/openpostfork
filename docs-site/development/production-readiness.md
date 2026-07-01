@@ -47,7 +47,7 @@ This is the implementation map for turning OpenPost into a production-ready self
 
 - Add a provider app registry for cloud and self-hosted credentials. Startup now builds adapters from a normalized registry populated by legacy env vars plus optional `OPENPOST_PROVIDER_APPS` JSON.
 - Replace fixed Mastodon env-only config with dynamic instance registration for cloud.
-- Add SSRF protection for federated/custom-host provider flows.
+- Keep user-supplied remote URLs guarded against SSRF. Dynamic Mastodon registration and MCP URL media ingestion now reject private/local targets, validate redirects, use guarded dial-time resolution, and ignore environment proxy settings for these fetches.
 - Add production OAuth app checklists for X, LinkedIn, Threads, Facebook, Instagram, YouTube, TikTok, Mastodon, and Bluesky.
 - Delay platform launch promises until provider-specific publish, refresh, media, and retry behavior is verified end to end. TikTok, Facebook, Instagram, and YouTube now have first-slice adapters, but all four still need live-account verification before being treated as fully proven production providers.
 

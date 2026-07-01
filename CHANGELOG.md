@@ -97,6 +97,7 @@ All notable changes to this project are documented in this file.
 ### Fixed
 - Rejected MCP `schedule_post` and `schedule_draft` requests with provider/media combinations that cannot publish, including inherited draft media.
 - Rejected scheduled posts and threads with provider/media combinations that cannot publish, while still allowing incomplete drafts to autosave.
+- Hardened user-supplied remote URL fetches for dynamic Mastodon registration and MCP media uploads with shared private-address validation and guarded dial-time checks.
 - Normalized embedded database migrations for Postgres so cloud deployments do not execute SQLite-only `BLOB`, `DATETIME`, or boolean predicates.
 - Made the frontend instance connection check use the database-backed readiness probe instead of accepting liveness-only health responses.
 - Return service-unavailable billing API errors for missing Polar server configuration instead of classifying operator setup problems as bad client requests.

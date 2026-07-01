@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/netguard"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/uptrace/bun"
@@ -204,39 +204,24 @@ func (s *Service) validateURL(ctx context.Context, instanceURL *url.URL) error {
 }
 
 func defaultValidateURL(ctx context.Context, instanceURL *url.URL) error {
-	if instanceURL == nil || instanceURL.Hostname() == "" {
-		return fmt.Errorf("instance_url must be absolute")
-	}
-	if instanceURL.Scheme != "https" {
-		return fmt.Errorf("instance_url must use https")
-	}
-	if instanceURL.Port() != "" && instanceURL.Port() != "443" {
-		return fmt.Errorf("instance_url cannot include a custom port")
-	}
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, instanceURL.Hostname())
-	if err != nil {
-		return fmt.Errorf("failed to resolve instance_url host")
-	}
-	if len(ips) == 0 {
-		return fmt.Errorf("instance_url host did not resolve")
-	}
-	for _, addr := range ips {
-		ip := addr.IP
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
-			return fmt.Errorf("instance_url host resolves to a private or local address")
-		}
-	}
-	return nil
+	return netguard.ValidateURL(ctx, instanceURL, mastodonURLPolicy())
 }
 
 func (s *Service) client() *http.Client {
 	if s.httpClient != nil {
 		return s.httpClient
 	}
-	return &http.Client{
-		Timeout: 20 * time.Second,
-		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			return s.validateURL(req.Context(), req.URL)
-		},
+	client := netguard.NewHTTPClient(20*time.Second, mastodonURLPolicy())
+	client.CheckRedirect = func(req *http.Request, _ []*http.Request) error {
+		return s.validateURL(req.Context(), req.URL)
+	}
+	return client
+}
+
+func mastodonURLPolicy() netguard.URLPolicy {
+	return netguard.URLPolicy{
+		Label:            "instance_url",
+		AllowedSchemes:   []string{"https"},
+		AllowCustomPorts: false,
 	}
 }
