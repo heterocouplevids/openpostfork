@@ -108,10 +108,16 @@ type ListPostsInput struct {
 	Date        string `query:"date" doc:"Filter by date (YYYY-MM-DD)"`
 	Status      string `query:"status" doc:"Filter by status (draft, scheduled, published, failed)"`
 	Limit       int    `query:"limit" doc:"Limit number of results (default 50, max 200)"`
+	Offset      int    `query:"offset" doc:"Offset for pagination"`
 }
 
 type ListPostsOutput struct {
-	Body []PostResponse
+	TotalCount int  `header:"X-Total-Count" doc:"Total number of matching posts"`
+	Limit      int  `header:"X-Limit" doc:"Applied page limit"`
+	Offset     int  `header:"X-Offset" doc:"Applied page offset"`
+	NextOffset int  `header:"X-Next-Offset" doc:"Offset for the next page"`
+	HasMore    bool `header:"X-Has-More" doc:"Whether another page is available"`
+	Body       []PostResponse
 }
 
 type ScheduleDayPlatform struct {
@@ -605,7 +611,6 @@ func (h *PostHandler) CreatePost(api huma.API) {
 	})
 }
 
-//nolint:gocyclo
 func (h *PostHandler) ListPosts(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-posts",
@@ -614,139 +619,215 @@ func (h *PostHandler) ListPosts(api huma.API) {
 		Summary:     "List posts for a workspace",
 		Tags:        []string{tagPosts},
 		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
-	}, func(ctx context.Context, input *ListPostsInput) (*ListPostsOutput, error) {
-		var posts []models.Post
+	}, h.listPosts)
+}
 
-		var workspaceIDs []string
-		if input.WorkspaceID != "" {
-			userID := middleware.GetUserID(ctx)
-			if err := h.checkWorkspaceAccess(ctx, input.WorkspaceID, userID); err != nil {
-				return nil, err
-			}
-			workspaceIDs = []string{input.WorkspaceID}
-		} else {
-			var workspaceMembers []models.WorkspaceMember
-			userID := middleware.GetUserID(ctx)
-			err := h.db.NewSelect().
-				Model(&workspaceMembers).
-				Where("user_id = ?", userID).
-				Scan(ctx)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return nil, huma.Error500InternalServerError("failed to fetch workspaces")
-			}
-			for _, wm := range workspaceMembers {
-				workspaceIDs = append(workspaceIDs, wm.WorkspaceID)
-			}
-		}
+func (h *PostHandler) listPosts(ctx context.Context, input *ListPostsInput) (*ListPostsOutput, error) {
+	limit, err := listPostsLimit(input)
+	if err != nil {
+		return nil, err
+	}
 
-		if len(workspaceIDs) == 0 {
-			return &ListPostsOutput{Body: []PostResponse{}}, nil
-		}
+	workspaceIDs, err := h.listPostWorkspaceIDs(ctx, input.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if len(workspaceIDs) == 0 {
+		return listPostsOutput([]PostResponse{}, 0, limit, input.Offset), nil
+	}
 
-		query := h.db.NewSelect().
-			Model(&posts).
-			Where("workspace_id IN (?)", bun.List(workspaceIDs))
+	totalQuery, err := h.listPostsQuery((*models.Post)(nil), input, workspaceIDs)
+	if err != nil {
+		return nil, err
+	}
+	total, err := totalQuery.Count(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to count posts")
+	}
 
-		if input.Status != "" {
-			query = query.Where("status = ?", input.Status)
-		}
+	var posts []models.Post
+	query, err := h.listPostsQuery(&posts, input, workspaceIDs)
+	if err != nil {
+		return nil, err
+	}
+	if err := applyListPostsOrder(query).Limit(limit).Offset(input.Offset).Scan(ctx); err != nil {
+		return nil, huma.Error500InternalServerError("failed to list posts")
+	}
 
-		if input.Date != "" {
-			parsed, err := time.Parse("2006-01-02", input.Date)
-			if err != nil {
-				return nil, huma.Error400BadRequest("date must be in YYYY-MM-DD format")
-			}
-			dayStart := parsed.UTC()
-			dayEnd := dayStart.AddDate(0, 0, 1)
-			query = query.Where("scheduled_at >= ? AND scheduled_at < ?", dayStart, dayEnd)
-		}
+	result, err := h.postResponsesForList(ctx, posts)
+	if err != nil {
+		return nil, err
+	}
+	return listPostsOutput(result, total, limit, input.Offset), nil
+}
 
-		limit := input.Limit
-		if limit <= 0 || limit > 200 {
-			limit = 50
-		}
+func listPostsLimit(input *ListPostsInput) (int, error) {
+	if input.Offset < 0 {
+		return 0, huma.Error400BadRequest("offset must be greater than or equal to 0")
+	}
+	if input.Limit <= 0 || input.Limit > 200 {
+		return 50, nil
+	}
+	return input.Limit, nil
+}
 
-		err := applyListPostsOrder(query).Limit(limit).Scan(ctx)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to list posts")
+func (h *PostHandler) listPostWorkspaceIDs(ctx context.Context, requestedWorkspaceID string) ([]string, error) {
+	userID := middleware.GetUserID(ctx)
+	if requestedWorkspaceID != "" {
+		if err := h.checkWorkspaceAccess(ctx, requestedWorkspaceID, userID); err != nil {
+			return nil, err
 		}
+		return []string{requestedWorkspaceID}, nil
+	}
 
-		postIDs := make([]string, len(posts))
-		for i, p := range posts {
-			postIDs[i] = p.ID
-		}
+	var workspaceMembers []models.WorkspaceMember
+	err := h.db.NewSelect().
+		Model(&workspaceMembers).
+		Where("user_id = ?", userID).
+		Scan(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, huma.Error500InternalServerError("failed to fetch workspaces")
+	}
 
-		var destinations []struct {
-			PostID          string `bun:"post_id"`
-			SocialAccountID string `bun:"social_account_id"`
-			Platform        string `bun:"platform"`
-			Status          string `bun:"status"`
-			ErrorMessage    string `bun:"error_message"`
-		}
-		if len(postIDs) > 0 {
-			err = h.db.NewSelect().
-				TableExpr("post_destinations AS pd").
-				ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status, pd.error_message").
-				Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
-				Where("pd.post_id IN (?)", bun.List(postIDs)).
-				Scan(ctx, &destinations)
-			if err != nil {
-				return nil, huma.Error500InternalServerError("failed to fetch destinations")
-			}
-		}
+	workspaceIDs := make([]string, 0, len(workspaceMembers))
+	for _, wm := range workspaceMembers {
+		workspaceIDs = append(workspaceIDs, wm.WorkspaceID)
+	}
+	return workspaceIDs, nil
+}
 
-		destByPost := make(map[string][]PostDestinationResponse)
-		for _, d := range destinations {
-			destByPost[d.PostID] = append(destByPost[d.PostID], PostDestinationResponse{
-				SocialAccountID: d.SocialAccountID,
-				Platform:        d.Platform,
-				Status:          d.Status,
-				ErrorMessage:    d.ErrorMessage,
-			})
-		}
+func (h *PostHandler) listPostsQuery(model interface{}, input *ListPostsInput, workspaceIDs []string) (*bun.SelectQuery, error) {
+	query := h.db.NewSelect().
+		Model(model).
+		Where("workspace_id IN (?)", bun.List(workspaceIDs))
 
-		var postMediaRows []struct {
-			PostID  string `bun:"post_id"`
-			MediaID string `bun:"media_id"`
-		}
-		if len(postIDs) > 0 {
-			err = h.db.NewSelect().
-				TableExpr("post_media AS pm").
-				ColumnExpr("pm.post_id, pm.media_id").
-				Where("pm.post_id IN (?)", bun.List(postIDs)).
-				Order("pm.display_order ASC").
-				Scan(ctx, &postMediaRows)
-			if err != nil {
-				return nil, huma.Error500InternalServerError("failed to fetch media")
-			}
-		}
+	if input.Status != "" {
+		query = query.Where("status = ?", input.Status)
+	}
+	if input.Date == "" {
+		return query, nil
+	}
 
-		mediaByPost := make(map[string][]string)
-		for _, m := range postMediaRows {
-			mediaByPost[m.PostID] = append(mediaByPost[m.PostID], m.MediaID)
-		}
+	parsed, err := time.Parse("2006-01-02", input.Date)
+	if err != nil {
+		return nil, huma.Error400BadRequest("date must be in YYYY-MM-DD format")
+	}
+	dayStart := parsed.UTC()
+	dayEnd := dayStart.AddDate(0, 0, 1)
+	return query.Where("scheduled_at >= ? AND scheduled_at < ?", dayStart, dayEnd), nil
+}
 
-		result := make([]PostResponse, len(posts))
-		for i, p := range posts {
-			result[i] = PostResponse{
-				ID:                 p.ID,
-				WorkspaceID:        p.WorkspaceID,
-				CreatedByID:        p.CreatedByID,
-				PublicationID:      p.PublicationID,
-				Content:            p.Content,
-				Status:             p.Status,
-				ScheduledAt:        p.ScheduledAt.Format(time.RFC3339),
-				RandomDelayMinutes: p.RandomDelayMinutes,
-				CreatedAt:          p.CreatedAt.Format(time.RFC3339),
-				Destinations:       destByPost[p.ID],
-				MediaIDs:           mediaByPost[p.ID],
-			}
-			if !p.ActualRunAt.IsZero() {
-				result[i].ActualRunAt = p.ActualRunAt.Format(time.RFC3339)
-			}
-		}
-		return &ListPostsOutput{Body: result}, nil
-	})
+func (h *PostHandler) postResponsesForList(ctx context.Context, posts []models.Post) ([]PostResponse, error) {
+	postIDs := make([]string, len(posts))
+	for i, p := range posts {
+		postIDs[i] = p.ID
+	}
+
+	destByPost, err := h.listPostDestinations(ctx, postIDs)
+	if err != nil {
+		return nil, err
+	}
+	mediaByPost, err := h.listPostMediaIDs(ctx, postIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]PostResponse, len(posts))
+	for i, p := range posts {
+		result[i] = postResponseForList(p, destByPost[p.ID], mediaByPost[p.ID])
+	}
+	return result, nil
+}
+
+func (h *PostHandler) listPostDestinations(ctx context.Context, postIDs []string) (map[string][]PostDestinationResponse, error) {
+	destByPost := make(map[string][]PostDestinationResponse)
+	if len(postIDs) == 0 {
+		return destByPost, nil
+	}
+
+	var destinations []struct {
+		PostID          string `bun:"post_id"`
+		SocialAccountID string `bun:"social_account_id"`
+		Platform        string `bun:"platform"`
+		Status          string `bun:"status"`
+		ErrorMessage    string `bun:"error_message"`
+	}
+	err := h.db.NewSelect().
+		TableExpr("post_destinations AS pd").
+		ColumnExpr("pd.post_id, pd.social_account_id, sa.platform, pd.status, pd.error_message").
+		Join("JOIN social_accounts AS sa ON sa.id = pd.social_account_id").
+		Where("pd.post_id IN (?)", bun.List(postIDs)).
+		Scan(ctx, &destinations)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to fetch destinations")
+	}
+
+	for _, d := range destinations {
+		destByPost[d.PostID] = append(destByPost[d.PostID], PostDestinationResponse{
+			SocialAccountID: d.SocialAccountID,
+			Platform:        d.Platform,
+			Status:          d.Status,
+			ErrorMessage:    d.ErrorMessage,
+		})
+	}
+	return destByPost, nil
+}
+
+func (h *PostHandler) listPostMediaIDs(ctx context.Context, postIDs []string) (map[string][]string, error) {
+	mediaByPost := make(map[string][]string)
+	if len(postIDs) == 0 {
+		return mediaByPost, nil
+	}
+
+	var postMediaRows []struct {
+		PostID  string `bun:"post_id"`
+		MediaID string `bun:"media_id"`
+	}
+	err := h.db.NewSelect().
+		TableExpr("post_media AS pm").
+		ColumnExpr("pm.post_id, pm.media_id").
+		Where("pm.post_id IN (?)", bun.List(postIDs)).
+		Order("pm.display_order ASC").
+		Scan(ctx, &postMediaRows)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("failed to fetch media")
+	}
+
+	for _, m := range postMediaRows {
+		mediaByPost[m.PostID] = append(mediaByPost[m.PostID], m.MediaID)
+	}
+	return mediaByPost, nil
+}
+
+func postResponseForList(p models.Post, destinations []PostDestinationResponse, mediaIDs []string) PostResponse {
+	resp := PostResponse{
+		ID:                 p.ID,
+		WorkspaceID:        p.WorkspaceID,
+		CreatedByID:        p.CreatedByID,
+		PublicationID:      p.PublicationID,
+		Content:            p.Content,
+		Status:             p.Status,
+		ScheduledAt:        p.ScheduledAt.Format(time.RFC3339),
+		RandomDelayMinutes: p.RandomDelayMinutes,
+		CreatedAt:          p.CreatedAt.Format(time.RFC3339),
+		Destinations:       destinations,
+		MediaIDs:           mediaIDs,
+	}
+	if !p.ActualRunAt.IsZero() {
+		resp.ActualRunAt = p.ActualRunAt.Format(time.RFC3339)
+	}
+	return resp
+}
+
+func listPostsOutput(body []PostResponse, total, limit, offset int) *ListPostsOutput {
+	return &ListPostsOutput{
+		TotalCount: total,
+		Limit:      limit,
+		Offset:     offset,
+		NextOffset: offset + len(body),
+		HasMore:    offset+len(body) < total,
+		Body:       body,
+	}
 }
 
 func applyListPostsOrder(query *bun.SelectQuery) *bun.SelectQuery {

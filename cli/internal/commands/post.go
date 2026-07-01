@@ -28,6 +28,7 @@ type postFlags struct {
 	threadDraft string
 	randomDelay int
 	limit       int
+	offset      int
 	status      string
 }
 
@@ -105,7 +106,7 @@ func newPostListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			posts, err := client.ListPosts(cmd.Context(), api.ListPostsInput{WorkspaceID: workspaceID, Status: flags.status, Limit: flags.limit})
+			posts, err := client.ListPosts(cmd.Context(), api.ListPostsInput{WorkspaceID: workspaceID, Status: flags.status, Limit: flags.limit, Offset: flags.offset})
 			if err != nil {
 				return err
 			}
@@ -130,6 +131,7 @@ func newPostListCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&flags.status, "status", "", "filter by status: draft, scheduled, published, failed")
 	cmd.Flags().IntVar(&flags.limit, "limit", 0, "maximum number of posts to return")
+	cmd.Flags().IntVar(&flags.offset, "offset", 0, "number of posts to skip")
 	return cmd
 }
 

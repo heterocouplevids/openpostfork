@@ -818,6 +818,7 @@ openpost post list [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--limit` | `0` | maximum number of posts to return |
+| `--offset` | `0` | number of posts to skip |
 | `--status` | `-` | filter by status: draft, scheduled, published, failed |
 
 **Inherited Flags**

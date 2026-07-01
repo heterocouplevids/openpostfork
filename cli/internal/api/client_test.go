@@ -343,14 +343,29 @@ func TestPublicationEndpoints_WireFormat(t *testing.T) {
 
 // TestListPosts_WireFormat: server returns a raw array of posts.
 func TestListPosts_WireFormat(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("workspace_id"); got != "ws_1" {
+			t.Fatalf("workspace_id query = %q, want ws_1", got)
+		}
+		if got := r.URL.Query().Get("status"); got != "scheduled" {
+			t.Fatalf("status query = %q, want scheduled", got)
+		}
+		if got := r.URL.Query().Get("date"); got != "2026-06-16" {
+			t.Fatalf("date query = %q, want 2026-06-16", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "25" {
+			t.Fatalf("limit query = %q, want 25", got)
+		}
+		if got := r.URL.Query().Get("offset"); got != "50" {
+			t.Fatalf("offset query = %q, want 50", got)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`[{"id":"p_1","workspace_id":"ws_1","created_by":"u_1","content":"Hello","status":"scheduled","scheduled_at":"2026-06-16T09:00:00Z","created_at":"2026-06-15T10:00:00Z","random_delay_minutes":0}]`))
 	}))
 	defer srv.Close()
 
 	c := New(srv.URL, "")
-	got, err := c.ListPosts(context.Background(), ListPostsInput{WorkspaceID: "ws_1"})
+	got, err := c.ListPosts(context.Background(), ListPostsInput{WorkspaceID: "ws_1", Status: "scheduled", Date: "2026-06-16", Limit: 25, Offset: 50})
 	if err != nil {
 		t.Fatalf("ListPosts returned error: %v", err)
 	}

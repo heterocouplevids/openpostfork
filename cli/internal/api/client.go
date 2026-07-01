@@ -632,6 +632,7 @@ type ListPostsInput struct {
 	Status      string
 	Date        string
 	Limit       int
+	Offset      int
 }
 
 func (c *Client) ListPosts(ctx context.Context, in ListPostsInput) ([]Post, error) {
@@ -647,6 +648,9 @@ func (c *Client) ListPosts(ctx context.Context, in ListPostsInput) ([]Post, erro
 	}
 	if in.Limit > 0 {
 		v.Set("limit", strconv.Itoa(in.Limit))
+	}
+	if in.Offset > 0 {
+		v.Set("offset", strconv.Itoa(in.Offset))
 	}
 	path := "/api/v1/posts"
 	if encoded := v.Encode(); encoded != "" {

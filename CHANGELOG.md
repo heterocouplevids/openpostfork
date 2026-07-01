@@ -96,6 +96,7 @@ All notable changes to this project are documented in this file.
 - Added optional deployment/provider context and a redacted last-100-line log tail to `openpost instance diagnostics` support snapshots.
 - Added provider-specific troubleshooting docs and docs E2E coverage for OAuth, permission, media URL, and publishing failure paths.
 - Added offset pagination metadata for background jobs, including Activity load-more UI, CLI `jobs list --offset`, backend regression tests, and Playwright coverage.
+- Added offset pagination metadata for post lists, including CLI `post list --offset` and backend regression coverage.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).

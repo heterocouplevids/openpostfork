@@ -7514,6 +7514,17 @@
 							"format": "int64",
 							"type": "integer"
 						}
+					},
+					{
+						"description": "Offset for pagination",
+						"explode": false,
+						"in": "query",
+						"name": "offset",
+						"schema": {
+							"description": "Offset for pagination",
+							"format": "int64",
+							"type": "integer"
+						}
 					}
 				],
 				"responses": {
@@ -7528,7 +7539,43 @@
 								}
 							}
 						},
-						"description": "OK"
+						"description": "OK",
+						"headers": {
+							"X-Has-More": {
+								"schema": {
+									"description": "Whether another page is available",
+									"type": "boolean"
+								}
+							},
+							"X-Limit": {
+								"schema": {
+									"description": "Applied page limit",
+									"format": "int64",
+									"type": "integer"
+								}
+							},
+							"X-Next-Offset": {
+								"schema": {
+									"description": "Offset for the next page",
+									"format": "int64",
+									"type": "integer"
+								}
+							},
+							"X-Offset": {
+								"schema": {
+									"description": "Applied page offset",
+									"format": "int64",
+									"type": "integer"
+								}
+							},
+							"X-Total-Count": {
+								"schema": {
+									"description": "Total number of matching posts",
+									"format": "int64",
+									"type": "integer"
+								}
+							}
+						}
 					},
 					"default": {
 						"content": {
