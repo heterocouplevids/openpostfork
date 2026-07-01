@@ -1091,6 +1091,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspace-invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept a workspace invitation */
+        post: operations["accept-workspace-invitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces": {
         parameters: {
             query?: never;
@@ -1104,6 +1121,40 @@ export interface paths {
         /** Create a new workspace */
         post: operations["create-workspace"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a workspace invitation */
+        post: operations["create-workspace-invitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{id}/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a pending workspace invitation */
+        delete: operations["revoke-workspace-invitation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1125,6 +1176,23 @@ export interface paths {
         head?: never;
         /** Update workspace settings */
         patch: operations["update-workspace-settings"];
+        trace?: never;
+    };
+    "/workspaces/{id}/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List workspace members and pending invitations */
+        get: operations["list-workspace-team"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -1150,6 +1218,27 @@ export interface components {
             token_prefix: string;
             /** @description Optional workspace ID this token is limited to */
             workspace_id?: string;
+        };
+        AcceptWorkspaceInvitationInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AcceptWorkspaceInvitationInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Raw invitation token */
+            token: string;
+        };
+        AcceptWorkspaceInvitationOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AcceptWorkspaceInvitationOutputBody.json
+             */
+            readonly $schema?: string;
+            accepted: boolean;
+            role: string;
+            workspace_id: string;
         };
         AccountResponse: {
             /**
@@ -1690,6 +1779,24 @@ export interface components {
             readonly $schema?: string;
             /** @description Workspace name */
             name: string;
+        };
+        CreateWorkspaceInvitationInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateWorkspaceInvitationInputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: email
+             * @description Email address to invite
+             */
+            email: string;
+            /**
+             * @description Workspace role to grant
+             * @enum {string}
+             */
+            role: "admin" | "editor" | "viewer";
         };
         CreateWorkspaceOutputBody: {
             /**
@@ -2483,6 +2590,15 @@ export interface components {
             readonly $schema?: string;
             revoked: boolean;
         };
+        RevokeWorkspaceInvitationOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/RevokeWorkspaceInvitationOutputBody.json
+             */
+            readonly $schema?: string;
+            revoked: boolean;
+        };
         ScheduleDay: {
             /**
              * Format: int64
@@ -2921,6 +3037,46 @@ export interface components {
             /** @description Pending MFA challenge token */
             mfa_token: string;
         };
+        WorkspaceInvitationResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/WorkspaceInvitationResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Browser URL that accepts the invitation */
+            accept_url?: string;
+            /** @description When the invitation was accepted */
+            accepted_at?: string;
+            /** @description Accepting user ID */
+            accepted_by_user_id?: string;
+            /** @description Invitation creation time */
+            created_at: string;
+            /** @description Invited email */
+            email: string;
+            /** @description Invitation expiry time */
+            expires_at: string;
+            /** @description Invitation ID */
+            id: string;
+            /** @description Inviting user ID */
+            invited_by_user_id: string;
+            /** @description When the invitation was revoked */
+            revoked_at?: string;
+            /** @description Workspace role to grant */
+            role: string;
+            /** @description Raw invite token returned once on creation */
+            token?: string;
+            /** @description Workspace ID */
+            workspace_id: string;
+        };
+        WorkspaceMemberResponse: {
+            /** @description User email */
+            email: string;
+            /** @description Workspace role */
+            role: string;
+            /** @description User ID */
+            user_id: string;
+        };
         WorkspaceResp: {
             /** @description Creation time (ISO 8601) */
             created_at: string;
@@ -2928,6 +3084,18 @@ export interface components {
             id: string;
             /** @description Workspace name */
             name: string;
+        };
+        WorkspaceTeamOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/WorkspaceTeamOutputBody.json
+             */
+            readonly $schema?: string;
+            /** Format: int64 */
+            current_seats: number;
+            invitations: components["schemas"]["WorkspaceInvitationResponse"][] | null;
+            members: components["schemas"]["WorkspaceMemberResponse"][] | null;
         };
     };
     responses: never;
@@ -7399,6 +7567,84 @@ export interface operations {
             };
         };
     };
+    "accept-workspace-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptWorkspaceInvitationInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptWorkspaceInvitationOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-workspaces": {
         parameters: {
             query?: never;
@@ -7452,6 +7698,157 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-workspace-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkspaceInvitationInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceInvitationResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "revoke-workspace-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                id: string;
+                /** @description Invitation ID */
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeWorkspaceInvitationOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7552,6 +7949,65 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-workspace-team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTeamOutputBody"];
                 };
             };
             /** @description Forbidden */

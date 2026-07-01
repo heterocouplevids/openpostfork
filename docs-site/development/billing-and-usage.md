@@ -15,6 +15,7 @@ OpenPost Cloud billing is built around local entitlement snapshots and durable u
 - Cloud mode reads `billing_subscriptions.entitlement_snapshot` for workspace-scoped quota checks.
 - Workspace creation checks `LimitWorkspaces` before inserting a new workspace. In cloud mode, users get a one-workspace bootstrap allowance before checkout; after a subscription is active, workspace creation uses the highest active workspace limit from that user's existing subscribed workspaces.
 - Provider connection flows check `social_accounts` before inserting a new active social account.
+- Workspace invitation creation checks `team_members` before issuing a link. The check counts active members plus non-expired pending invitations so a plan cannot over-reserve seats.
 - Media uploads check `media_bytes_uploaded_monthly` and `media_bytes_stored`; successful new uploads increment monthly uploaded-byte usage.
 - Scheduled single posts and threads check `scheduled_posts_monthly` before inserting posts or jobs; successful scheduled creates increment monthly scheduled-post usage.
 - The publishing worker checks `published_posts_monthly` and `provider_write_calls_monthly` before publishing, then records successful published posts and provider publish write calls into monthly usage counters.
@@ -34,7 +35,7 @@ Initial metrics match the production-readiness plan:
 
 ## Next enforcement points
 
-- Team invitations: `team_members`
+- Approval workflows, shared calendars, or other future team-only features should use the same entitlement service instead of checking plan IDs directly.
 
 ## Polar configuration
 

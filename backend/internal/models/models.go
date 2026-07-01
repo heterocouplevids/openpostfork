@@ -147,6 +147,22 @@ type WorkspaceMember struct {
 	Role        string `bun:",notnull" json:"role"` // 'admin', 'editor', 'viewer'
 }
 
+type WorkspaceInvitation struct {
+	bun.BaseModel `bun:"table:workspace_invitations"`
+
+	ID               string    `bun:",pk" json:"id"`
+	WorkspaceID      string    `bun:",notnull" json:"workspace_id"`
+	Email            string    `bun:",notnull" json:"email"`
+	Role             string    `bun:",notnull,default:'editor'" json:"role"`
+	InvitedByUserID  string    `bun:",notnull" json:"invited_by_user_id"`
+	AcceptedByUserID string    `bun:",nullzero" json:"accepted_by_user_id"`
+	TokenHash        string    `bun:",unique,notnull" json:"-"`
+	ExpiresAt        time.Time `bun:",notnull" json:"expires_at"`
+	AcceptedAt       time.Time `bun:",nullzero" json:"accepted_at"`
+	RevokedAt        time.Time `bun:",nullzero" json:"revoked_at"`
+	CreatedAt        time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 type UsageCounter struct {
 	bun.BaseModel `bun:"table:usage_counters"`
 

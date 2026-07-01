@@ -42,6 +42,7 @@ changes live in [Developer Docs](/development/).
 - [ ] Set `OPENPOST_POLAR_API_BASE_URL=https://sandbox-api.polar.sh/v1` only for sandbox testing; production defaults to `https://api.polar.sh/v1`.
 - [ ] Send a signed Polar webhook test event and confirm it is stored once.
 - [ ] Confirm a new hosted user can create the bootstrap workspace and is blocked from extra workspaces before checkout.
+- [ ] Confirm team invitations are blocked once active members plus pending invites reach the plan limit.
 
 ## Providers
 
@@ -62,6 +63,7 @@ changes live in [Developer Docs](/development/).
 - [ ] Create the first admin account.
 - [ ] Decide whether to set `OPENPOST_DISABLE_REGISTRATIONS=true`.
 - [ ] Create a workspace.
+- [ ] Invite a second user, accept the link, and confirm both members appear in Settings > Team.
 - [ ] Connect at least one social account.
 - [ ] Upload a small image and confirm it appears in the media library.
 - [ ] Create a publication, draft, and scheduled post from the web app.

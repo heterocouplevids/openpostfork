@@ -104,6 +104,75 @@ test("settings creates MCP-scoped API tokens", async ({ page, request }) => {
   await expect(page.getByText(/mcp:full/)).toBeVisible();
 });
 
+test("settings creates and accepts workspace invitations", async ({
+  browser,
+  baseURL,
+  page,
+  request,
+}) => {
+  const unique = Date.now().toString(36);
+  const adminEmail = `team-admin-${unique}@example.com`;
+  const inviteEmail = `team-member-${unique}@example.com`;
+
+  const adminAuth = await registerUser(request, adminEmail);
+  await createWorkspace(request, adminAuth.token, "Team E2E");
+
+  await page.addInitScript((token) => {
+    window.localStorage.setItem("token", token);
+  }, adminAuth.token);
+  await page.goto("/settings");
+
+  await expect(
+    page
+      .getByTestId("settings-section-nav")
+      .getByRole("link", { name: "Team" }),
+  ).toHaveAttribute("href", "#team");
+  await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
+
+  await page.getByTestId("team-invite-email").fill(inviteEmail);
+  await page.getByRole("button", { name: "Send Invite" }).click();
+
+  await expect(page.getByTestId("team-invite-link")).toContainText(
+    "/invite?token=op_inv_",
+  );
+  await expect(page.getByTestId("team-invitations-list")).toContainText(
+    inviteEmail,
+  );
+
+  const inviteLinkText = (await page
+    .getByTestId("team-invite-link")
+    .textContent())!;
+  const inviteURL = inviteLinkText.match(
+    /https?:\/\/\S+\/invite\?token=\S+/,
+  )?.[0];
+  expect(inviteURL).toBeTruthy();
+
+  const invitedAuth = await registerUser(request, inviteEmail);
+  const invitedContext = await browser.newContext({ baseURL });
+  const invitedPage = await invitedContext.newPage();
+  await invitedPage.addInitScript((token) => {
+    window.localStorage.setItem("token", token);
+  }, invitedAuth.token);
+
+  const parsedInviteURL = new URL(inviteURL!);
+  await invitedPage.goto(
+    `${parsedInviteURL.pathname}${parsedInviteURL.search}`,
+  );
+
+  await expect(
+    invitedPage.getByRole("heading", { name: "Invitation accepted" }),
+  ).toBeVisible();
+  await expect(invitedPage.getByText("editor access")).toBeVisible();
+
+  await invitedPage.getByRole("button", { name: "Open Settings" }).click();
+  await expect(invitedPage).toHaveURL(/\/settings#team$/);
+  await expect(invitedPage.getByRole("heading", { name: "Team" })).toBeVisible();
+  await expect(invitedPage.getByTestId("team-members-list")).toContainText(
+    inviteEmail,
+  );
+  await invitedContext.close();
+});
+
 test("plan selection from signup starts checkout after onboarding", async ({
   page,
 }) => {

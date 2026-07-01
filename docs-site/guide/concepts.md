@@ -6,6 +6,9 @@ Understanding OpenPost's model makes the OAuth and scheduling docs easier to fol
 
 A workspace groups accounts, media, prompts, and scheduling settings. Most content in OpenPost is workspace-scoped.
 
+Workspace members belong to a workspace with a role. Pending invitations reserve
+team seats until they are accepted, revoked, or expire.
+
 ## Social account
 
 A connected provider account, such as one X account or one Mastodon profile.

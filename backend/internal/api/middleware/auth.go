@@ -134,6 +134,13 @@ func GetUserID(ctx context.Context) string {
 	return ""
 }
 
+func GetUserEmail(ctx context.Context) string {
+	if v, ok := ctx.Value(EmailKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
 func GetWorkspaceID(ctx context.Context) string {
 	if v, ok := ctx.Value(WorkspaceIDKey).(string); ok {
 		return v

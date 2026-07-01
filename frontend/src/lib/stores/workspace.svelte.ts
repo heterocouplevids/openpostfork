@@ -28,7 +28,7 @@ class WorkspaceContext {
 	});
 	loading = $state(false);
 
-	async initialize() {
+	async initialize(preferredWorkspaceID?: string) {
 		if (!browser) return;
 
 		const stored = localStorage.getItem(STORAGE_KEY);
@@ -40,15 +40,21 @@ class WorkspaceContext {
 			}
 		}
 
-		await this.loadWorkspaces();
+		await this.loadWorkspaces(preferredWorkspaceID);
 	}
 
-	async loadWorkspaces() {
+	async loadWorkspaces(preferredWorkspaceID?: string) {
 		try {
 			const { data } = await client.GET('/workspaces', {});
 			this.workspaces = data ?? [];
 
-			if (this.workspaces.length > 0 && !this.currentWorkspace) {
+			const preferredWorkspace = preferredWorkspaceID
+				? this.workspaces.find((workspace) => workspace.id === preferredWorkspaceID)
+				: null;
+
+			if (preferredWorkspace) {
+				await this.setWorkspace(preferredWorkspace);
+			} else if (this.workspaces.length > 0 && !this.currentWorkspace) {
 				await this.setWorkspace(this.workspaces[0]);
 			} else if (this.currentWorkspace) {
 				const exists = this.workspaces.find((w) => w.id === this.currentWorkspace?.id);

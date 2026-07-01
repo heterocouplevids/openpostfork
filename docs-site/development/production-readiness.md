@@ -27,8 +27,8 @@ This is the implementation map for turning OpenPost into a production-ready self
 - Add `OPENPOST_EDITION=selfhost|cloud`.
 - Add `OPENPOST_DATABASE_DRIVER=sqlite|postgres` and Postgres-backed Bun ORM initialization.
 - Add `OPENPOST_STORAGE_DRIVER=local|s3` with S3-compatible storage.
-- Add usage counters and entitlement checks at API boundaries. The first foundation is in place with monthly `usage_counters`, workspace-creation entitlement checks, and scheduled-post usage accounting.
-- Add quota enforcement for team invites. Social account connection quota enforcement is in place in the shared account saver, media upload quota enforcement is in place for monthly uploaded bytes and stored bytes, scheduled-post quota enforcement is in place for single posts and threads, and publishing-worker quota enforcement is in place for published posts and provider write calls.
+- Add usage counters and entitlement checks at API boundaries. The foundation is in place with monthly `usage_counters`, workspace-creation entitlement checks, team invitation seat checks, and scheduled-post usage accounting.
+- Enforce quota boundaries for workspace, team, provider, media, scheduling, and publishing paths. Social account connection quota enforcement is in place in the shared account saver, team invitations reserve active plus pending seats, media upload quota enforcement is in place for monthly uploaded bytes and stored bytes, scheduled-post quota enforcement is in place for single posts and threads, and publishing-worker quota enforcement is in place for published posts and provider write calls.
 - Add monthly usage counters for scheduled posts, published posts, uploaded bytes, stored bytes, and provider write calls. The publishing worker records published-post and provider-write usage.
 
 ### 2. Billing And Plans
@@ -102,6 +102,6 @@ This is the implementation map for turning OpenPost into a production-ready self
 3. Add backend config primitives for edition, database driver, and storage driver.
 4. Add storage-driver tests before implementing S3/R2.
 5. Add entitlement interfaces and self-host defaults. Done for the service contract and workspace creation boundary.
-6. Add usage tables and API boundary checks. Monthly usage counters, social-account quota enforcement, media quota enforcement, scheduled-post quota enforcement, and publishing-worker usage/quota enforcement are in place; team invite enforcement is next once invitations exist.
+6. Add usage tables and API boundary checks. Monthly usage counters, workspace quota enforcement, team invitation seat enforcement, social-account quota enforcement, media quota enforcement, scheduled-post quota enforcement, and publishing-worker usage/quota enforcement are in place.
 7. Add Playwright coverage around the core app flows.
 8. Start MCP with authenticated remote metadata and safe read/create/schedule tools. Remote auth, protected-resource metadata, authorization-server metadata, PKCE account linking, tool security descriptors, Apps SDK output metadata, prompt templates, workspace listing, account listing, guarded URL media upload, draft creation, scheduled posting, status reads, scheduled-post cancellation, next-slot suggestions, settings-visible tool-call activity, and dedicated `mcp:full` API-token creation are in place.

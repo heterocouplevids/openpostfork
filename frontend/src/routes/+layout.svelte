@@ -30,6 +30,7 @@
 		'/connect',
 		'/demo',
 		'/demo/paraglide',
+		'/invite',
 		'/cli/authorize',
 		'/oauth/authorize',
 		'/accounts/mastodon/callback',
@@ -39,6 +40,7 @@
 	const standaloneRoutes = [
 		'/onboarding',
 		'/connect',
+		'/invite',
 		'/cli/authorize',
 		'/oauth/authorize',
 		'/accounts/mastodon/callback',
@@ -48,6 +50,10 @@
 	let needsOnboarding = $state(false);
 	let onboardingChecked = $state(false);
 	let lastOnboardingCheckedPath = $state('');
+	let onboardingCheckInFlightForPath = $state('');
+	let onboardingFreshForPath = $derived(
+		onboardingChecked && lastOnboardingCheckedPath === currentPath
+	);
 
 	onMount(() => {
 		instance.initialize();
@@ -72,10 +78,10 @@
 		}
 
 		if (authState.isAuthenticated) {
-			if (!onboardingChecked) return;
+			if (!onboardingFreshForPath) return;
 
 			if (needsOnboarding) {
-				if (!isOnboardingPage) {
+				if (!isOnboardingPage && currentPath !== '/invite') {
 					goto(onboardingPathForPlan($page.url.searchParams.get('plan')));
 				}
 			} else if (currentPath === '/login' || currentPath === '/register') {
@@ -84,14 +90,16 @@
 		}
 	});
 
-	async function checkOnboarding() {
+	async function checkOnboarding(path: string) {
 		if (!authState.isAuthenticated || authState.isLoading) return;
+		onboardingCheckInFlightForPath = path;
+		let nextNeedsOnboarding = false;
 		try {
 			const { data, error } = await client.GET('/workspaces');
 			if (!error && data && data.length === 0) {
-				needsOnboarding = true;
+				nextNeedsOnboarding = true;
 			} else {
-				needsOnboarding = !!error;
+				nextNeedsOnboarding = !!error;
 				// Initialize workspace context after successful workspace load
 				if (!error && data) {
 					await workspaceCtx.initialize();
@@ -99,8 +107,14 @@
 			}
 		} catch {
 			// Fail safe: if we cannot verify workspace state, keep user in onboarding flow.
-			needsOnboarding = true;
+			nextNeedsOnboarding = true;
+		} finally {
+			if (onboardingCheckInFlightForPath === path) {
+				onboardingCheckInFlightForPath = '';
+			}
 		}
+		if (path !== currentPath) return;
+		needsOnboarding = nextNeedsOnboarding;
 		onboardingChecked = true;
 	}
 
@@ -108,12 +122,17 @@
 		if (authState.isLoading || !authState.isAuthenticated) {
 			onboardingChecked = false;
 			lastOnboardingCheckedPath = '';
+			onboardingCheckInFlightForPath = '';
 			return;
 		}
 
-		if (currentPath !== lastOnboardingCheckedPath || !onboardingChecked) {
+		if (currentPath !== lastOnboardingCheckedPath) {
+			onboardingChecked = false;
 			lastOnboardingCheckedPath = currentPath;
-			checkOnboarding();
+		}
+
+		if (!onboardingChecked && onboardingCheckInFlightForPath !== currentPath) {
+			checkOnboarding(currentPath);
 		}
 	});
 </script>
@@ -123,7 +142,7 @@
 </svelte:head>
 
 <ModeWatcher />
-{#if instance.isLoading || authState.isLoading || (authState.isAuthenticated && !onboardingChecked)}
+{#if instance.isLoading || authState.isLoading || (authState.isAuthenticated && !onboardingFreshForPath)}
 	<div class="flex min-h-screen flex-col items-center justify-center gap-3">
 		<Skeleton class="h-12 w-12 rounded-lg" />
 		<Skeleton class="h-3 w-32 rounded" />

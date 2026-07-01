@@ -90,6 +90,7 @@ All notable changes to this project are documented in this file.
 - Added a first YouTube adapter slice with Google OAuth, channel selection, refresh-token support, private one-video uploads, media validation, provider discovery, app UI wiring, and docs.
 - Added destination-scoped provider media-state tracking so publish retries reuse already uploaded provider media without caching expiring public media URLs.
 - Added optional workspace-scoped API and MCP OAuth tokens so ChatGPT/App clients, MCP clients, and automation can be limited to a single workspace.
+- Added workspace team invitations with copyable accept links, authenticated accept/revoke APIs, Settings team management, and team-member quota enforcement that counts active members plus pending invites.
 
 ### Changed
 - Migrated from openpost.rgo.pt to app.openpost.social (app), docs.openpost.social (docs), and openpost.social (landing page).
