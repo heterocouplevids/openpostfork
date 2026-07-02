@@ -1,39 +1,51 @@
-name: Build OpenPost EXE
-on: workflow_dispatch # Gives you a manual click-to-run button
+name: Build and Release Standalone App
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Allows you to manually trigger the build from GitHub Actions tab
 
 jobs:
-  compile:
-    runs-on: windows-latest
+  build:
+    runs-on: windows-latest # Required based on your "Build Standalone Windows EXE" block
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '>=1.22'
+          go-version: '1.22' # Adjust to match your project's Go runtime version
+
+      - name: Install pnpm Package Manager
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9 # Ensures pnpm command is available globally
+
+      - name: Set up Node.js (v22)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22 # Explicitly fixes the EBADENGINE error matching your Capacitor configuration
+          cache: 'pnpm'
 
       - name: Build Svelte Frontend
         run: |
           cd frontend
-          npm install
-          npm run build
-          cd ..
+          npm install --legacy-peer-deps
+          npm run build --if-present
 
       - name: Embed UI & Build Standalone Windows EXE
         run: |
-          cd backend
+          # Replace these lines with your specific Go build/bundling commands if necessary
           go generate ./...
-          go build -o ../openpost.exe main.go
-          cd ..
+          go build -o openpost-desktop.exe .
 
       - name: Upload Finished EXE
         uses: actions/upload-artifact@v4
         with:
-          name: openpost-windows-binary
-          path: openpost.exe
+          name: openpost-windows-standalone
+          path: ./*.exe
+          
