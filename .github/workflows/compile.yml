@@ -1,12 +1,15 @@
-name: Workflow for building app
+name: Compile OpenPost Windows Executable
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build Standalone Windows EXE
     runs-on: windows-latest
 
     steps:
@@ -16,25 +19,38 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-          cache: false
-
-      - name: Install pnpm Package Manager
-        uses: pnpm/action-setup@v4
+          go-version: '1.22' # Aligns with the project's required Go environment
+          cache: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          # Removed the cache settings completely to prevent path errors
+          node-version: '20'
 
+      - name: Install pnpm Package Manager
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      # Step 1: Navigate to frontend, install packages, and compile assets
       - name: Build Svelte Frontend
+        shell: bash
         run: |
           cd frontend
-          pnpm install
+          pnpm install --frozen-lockfile
           pnpm run build
 
+      # Step 2: Compile the backend binary directly from the root workspace
       - name: Embed UI & Build Standalone Windows EXE
+        shell: bash
         run: |
-          go build -o openpost-desktop.exe .
+          go build -v -o openpost-desktop.exe .
+
+      # Step 3: Bundle and save your built executable safely as a pipeline download
+      - name: Upload Windows Executable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpost-windows-x64
+          path: openpost-desktop.exe
+          if-no-files-found: error
           
