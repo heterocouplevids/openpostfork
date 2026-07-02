@@ -35,6 +35,7 @@ jobs:
 
       - name: Embed UI & Build Standalone Windows EXE
         run: |
+          cd backend
           go build -o openpost-desktop.exe .
 
       - name: Upload Windows Executable Artifact
