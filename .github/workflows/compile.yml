@@ -1,15 +1,13 @@
-name: Build and Release Standalone App
+name: Workflow for building app # Matches your active run header
 
 on:
   push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch: # Allows you to manually trigger the build from GitHub Actions tab
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-latest # Required based on your "Build Standalone Windows EXE" block
+    runs-on: windows-latest
 
     steps:
       - name: Checkout Code
@@ -18,34 +16,29 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22' # Adjust to match your project's Go runtime version
+          go-version: '1.22'
+          cache: false # Fixes the "go.sum not found" cache warning if Go isn't in root folder
 
       - name: Install pnpm Package Manager
         uses: pnpm/action-setup@v4
-        with:
-          version: 9 # Ensures pnpm command is available globally
+        # Removed the forced "version: 9" line. 
+        # This allows the action to automatically read and use the 11.7.0 version from your package.json.
 
-      - name: Set up Node.js (v22)
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22 # Explicitly fixes the EBADENGINE error matching your Capacitor configuration
+          node-version: 22
           cache: 'pnpm'
+          cache-dependency-path: 'frontend/pnpm-lock.yaml' # Directs cache tool to your nested frontend directory
 
       - name: Build Svelte Frontend
         run: |
           cd frontend
-          npm install --legacy-peer-deps
-          npm run build --if-present
+          pnpm install
+          pnpm run build
 
       - name: Embed UI & Build Standalone Windows EXE
         run: |
-          # Replace these lines with your specific Go build/bundling commands if necessary
-          go generate ./...
+          # Insert your actual build scripts/commands here if they differ
           go build -o openpost-desktop.exe .
-
-      - name: Upload Finished EXE
-        uses: actions/upload-artifact@v4
-        with:
-          name: openpost-windows-standalone
-          path: ./*.exe
           
