@@ -1,40 +1,45 @@
 name: Workflow for building app
 
 on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build:
+    runs-on: windows-latest
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: false
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
 
-      - name: Install pnpm Package Manager
-        uses: pnpm/action-setup@v4
+      - name: Install pnpm Package Manager
+        uses: pnpm/action-setup@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          # Removed the cache settings completely to prevent path errors
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-      - name: Build Svelte Frontend
-        run: |
-          cd frontend
-          pnpm install
-          pnpm run build
+      - name: Build Svelte Frontend
+        run: |
+          cd frontend
+          pnpm install
+          pnpm run build
 
-      - name: Embed UI & Build Standalone Windows EXE
-        run: |
-          go build -o openpost-desktop.exe .
-          
+      - name: Embed UI & Build Standalone Windows EXE
+        run: |
+          go build -o openpost-desktop.exe .
+
+      - name: Upload Windows Executable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpost-windows-x64
+          path: openpost-desktop.exe
+          if-no-files-found: error
