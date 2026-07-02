@@ -27,18 +27,19 @@ jobs:
         with:
           node-version: '22'
 
-      # Fixed: Upgraded action to v4 and targeted pnpm version 10 to satisfy engine limits
       - name: Install pnpm Package Manager
         uses: pnpm/action-setup@v4
         with:
           version: 10
 
-      # Tells pnpm to bypass engine validation blocks just in case other modules complain
       - name: Build Svelte Frontend
         shell: bash
+        env:
+          # Bypasses the packageManager field downgrade behavior to preserve pnpm v10
+          PNPM_CONFIG_MANAGE_PACKAGE_MANAGER_VERSIONS: 'false'
         run: |
           cd frontend
-          pnpm install --no-frozen-lockfile --ignore-engine
+          pnpm install --no-frozen-lockfile
           pnpm run build
 
       - name: Embed UI & Build Standalone Windows EXE
@@ -52,4 +53,3 @@ jobs:
           name: openpost-windows-x64
           path: openpost-desktop.exe
           if-no-files-found: error
-          
