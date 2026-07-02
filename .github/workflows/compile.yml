@@ -1,0 +1,39 @@
+name: Build OpenPost EXE
+on: workflow_dispatch # Gives you a manual click-to-run button
+
+jobs:
+  compile:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22'
+
+      - name: Build Svelte Frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+          cd ..
+
+      - name: Embed UI & Build Standalone Windows EXE
+        run: |
+          cd backend
+          go generate ./...
+          go build -o ../openpost.exe main.go
+          cd ..
+
+      - name: Upload Finished EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpost-windows-binary
+          path: openpost.exe
