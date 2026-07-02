@@ -22,17 +22,17 @@ jobs:
           go-version: '1.22'
           cache: true
 
+      # Fixed: Bumped Node.js from version 20 to 22 to satisfy Capacitor CLI constraints
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install pnpm Package Manager
         uses: pnpm/action-setup@v3
         with:
           version: 8
 
-      # Kept pnpm but bypassed the strict CI lockfile block
       - name: Build Svelte Frontend
         shell: bash
         run: |
