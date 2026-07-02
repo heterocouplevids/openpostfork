@@ -42,5 +42,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: openpost-windows-x64
-          path: openpost-desktop.exe
+          path: backend/openpost-desktop.exe
           if-no-files-found: error
