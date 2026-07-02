@@ -1,4 +1,4 @@
-name: Workflow for building app # Matches your active run header
+name: Workflow for building app
 
 on:
   push:
@@ -17,19 +17,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache: false # Fixes the "go.sum not found" cache warning if Go isn't in root folder
+          cache: false
 
       - name: Install pnpm Package Manager
         uses: pnpm/action-setup@v4
-        # Removed the forced "version: 9" line. 
-        # This allows the action to automatically read and use the 11.7.0 version from your package.json.
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml' # Directs cache tool to your nested frontend directory
+          # Removed the cache settings completely to prevent path errors
 
       - name: Build Svelte Frontend
         run: |
@@ -39,6 +36,5 @@ jobs:
 
       - name: Embed UI & Build Standalone Windows EXE
         run: |
-          # Insert your actual build scripts/commands here if they differ
           go build -o openpost-desktop.exe .
           
